@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import Depends
@@ -12,6 +13,8 @@ from homelab_monitor.models import User
 from homelab_monitor.settings import Settings, get_settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+PERMISSION_DENIED_MESSAGE = "You do not have permission to access this resource"
 
 
 def get_current_user(
@@ -33,3 +36,17 @@ def get_current_user(
     if not user.is_active:
         raise APIError(403, "user_inactive", "The user account is inactive")
     return user
+
+
+def require_roles(*roles: str) -> Callable[..., User]:
+    if not roles:
+        raise ValueError("require_roles requires at least one role")
+    allowed = frozenset(roles)
+
+    def check_roles(user: Annotated[User, Depends(get_current_user)]) -> User:
+        if user.role not in allowed:
+            raise APIError(403, "permission_denied", PERMISSION_DENIED_MESSAGE)
+        return user
+
+    check_roles.__name__ = f"require_roles_{'_'.join(roles)}"
+    return check_roles

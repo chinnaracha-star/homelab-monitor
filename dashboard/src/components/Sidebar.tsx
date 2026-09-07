@@ -1,5 +1,7 @@
 import { memo } from 'react'
 import { NavLink } from 'react-router-dom'
+import { NAV_ITEMS } from '../auth/permissions'
+import { useCan } from '../auth/useCan'
 import styles from './Layout.module.css'
 
 interface SidebarProps {
@@ -12,21 +14,25 @@ function navClassName({ isActive }: { isActive: boolean }) {
 }
 
 export const Sidebar = memo(function Sidebar({ open, onNavigate }: SidebarProps) {
+  const can = useCan()
+  const items = NAV_ITEMS.filter((item) => can(item.permission))
+
   return (
     <aside
       className={`${styles.sidebar} ${open ? styles.sidebarOpen : ''}`}
       id="app-sidebar"
     >
       <nav className={styles.navigation} aria-label="Primary navigation">
-        <NavLink className={navClassName} to="/dashboard" onClick={onNavigate}>
-          Overview
-        </NavLink>
-        <NavLink className={navClassName} to="/agents" onClick={onNavigate}>
-          Agents
-        </NavLink>
-        <NavLink className={navClassName} to="/alerts" onClick={onNavigate}>
-          Alerts
-        </NavLink>
+        {items.map((item) => (
+          <NavLink
+            className={navClassName}
+            key={item.to}
+            to={item.to}
+            onClick={onNavigate}
+          >
+            {item.label}
+          </NavLink>
+        ))}
       </nav>
     </aside>
   )

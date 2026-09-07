@@ -31,3 +31,10 @@ and the project will use [Semantic Versioning](https://semver.org/).
 - `POST /api/v1/auth/login` and `GET /api/v1/auth/me`.
 - JWT protection for dashboard, agent-read, and alert-read APIs.
 - React login page, route guards, logout, and navbar session display.
+- Role-based access control with a reusable `require_roles` dependency.
+- Admin-only user listing and admin/operator alert acknowledgement.
+- Dashboard navigation and route gates driven by a single `can()` helper.
+- Default `admin`, `operator`, and `viewer` accounts seeded by migration `0003`,
+  with missing defaults created at API startup without overwriting existing users.
+- Admin-only user management APIs and a Users page for create, edit, password
+  reset, enable/disable, and delete, with last-admin and self-account protections.

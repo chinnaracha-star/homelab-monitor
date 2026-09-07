@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from homelab_monitor.auth.dependencies import get_current_user
+from homelab_monitor.auth.dependencies import require_roles
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
 from homelab_monitor.models import Agent, Alert, MetricReport
@@ -13,6 +13,7 @@ from homelab_monitor.schemas import (
     AgentCountResponse,
     AgentDetailResponse,
     AgentSummaryResponse,
+    AlertAcknowledgeResponse,
     DashboardOverviewResponse,
     LatestMetricReportResponse,
     ReportCountResponse,
@@ -21,7 +22,7 @@ from homelab_monitor.schemas import (
 router = APIRouter(
     prefix="/api/v1",
     tags=["dashboard"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_roles("admin", "operator", "viewer"))],
 )
 
 
@@ -174,3 +175,19 @@ def list_active_alerts(
         )
         for alert, agent_name in rows
     ]
+
+
+@router.post(
+    "/alerts/{alert_id}/acknowledge",
+    response_model=AlertAcknowledgeResponse,
+    dependencies=[Depends(require_roles("admin", "operator"))],
+    summary="Acknowledge an active alert",
+)
+def acknowledge_alert(
+    alert_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> Alert:
+    alert = db.scalar(select(Alert).where(Alert.id == alert_id))
+    if alert is None:
+        raise APIError(404, "alert_not_found", "The requested alert does not exist")
+    return alert

@@ -195,6 +195,11 @@ def test_dashboard_routes_are_documented_in_openapi(client: TestClient) -> None:
     assert "/api/v1/agents/{agent_id}/latest-report" in paths
     assert "/api/v1/agents/{agent_id}/reports" in paths
     assert "/api/v1/alerts/active" in paths
+    assert "/api/v1/alerts/{alert_id}/acknowledge" in paths
+    assert "/api/v1/users" in paths
+    assert "/api/v1/users/{user_id}" in paths
+    assert "/api/v1/users/{user_id}/password" in paths
+    assert "/api/v1/users/{user_id}/status" in paths
 
 
 def test_agent_report_history_returns_newest_reports_first(

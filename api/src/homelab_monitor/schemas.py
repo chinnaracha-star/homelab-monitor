@@ -146,3 +146,38 @@ class CurrentUserResponse(BaseModel):
     full_name: str
     role: str
     is_active: bool
+
+
+class UserResponse(CurrentUserResponse):
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserCreateRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=30, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+    full_name: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=8, max_length=72)
+    role: Literal["admin", "operator", "viewer"]
+    is_active: bool = True
+
+
+class UserUpdateRequest(BaseModel):
+    full_name: str = Field(min_length=1, max_length=255)
+    role: Literal["admin", "operator", "viewer"]
+    is_active: bool
+
+
+class UserPasswordRequest(BaseModel):
+    password: str = Field(min_length=8, max_length=72)
+
+
+class UserStatusRequest(BaseModel):
+    is_active: bool
+
+
+class AlertAcknowledgeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    agent_id: str
+    status: str

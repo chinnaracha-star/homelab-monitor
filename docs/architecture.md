@@ -46,6 +46,7 @@ later without changing the server ingestion contract.
 - Only a SHA-256 digest of the high-entropy token is stored.
 - Each subsequent agent request uses its bearer token.
 - Dashboard authentication is separate from agent authentication.
+- Dashboard authorization is enforced by user roles (`admin`, `operator`, `viewer`).
 - Integration credentials must not be included in metric payloads or API responses.
 
 The intended deployment boundary for version 1 is a trusted HomeLab LAN with

@@ -5,8 +5,8 @@ Docker workloads, Immich, and QNAP. Lightweight Python agents collect local heal
 and send authenticated reports to a central FastAPI server for history, alerting,
 Telegram notifications, and a web dashboard.
 
-> Status: early development. Sprint 1–4 monitoring APIs and dashboard UI are in
-> place. Sprint 5.1 adds dashboard JWT authentication.
+> Status: early development. Sprint 5.2 enforces dashboard role-based access
+> control on top of JWT authentication.
 
 ## Architecture
 
@@ -56,8 +56,10 @@ Dashboard clients authenticate with a JWT and then read:
 - `/api/v1/agents/{agent_id}`
 - `/api/v1/agents/{agent_id}/latest-report`
 
-Default login after migration: `admin` / `admin123`. See
-[authentication](docs/authentication.md).
+Default logins after migration (or after the next API start on an older `0003`
+database): `admin` / `admin123`, `operator` / `operator123`, and
+`viewer` / `viewer123`. See [authentication](docs/authentication.md),
+[RBAC](docs/rbac.md), and [user management](docs/user-management.md).
 
 The server also persists active and resolved alert state for CPU, memory, disk,
 temperature, and offline agents. New alert transitions can be delivered through
@@ -104,7 +106,7 @@ Run tests and lint checks:
 - React dashboard
 - Docker Compose deployment
 
-UPS, Tailscale, Nginx, advanced SMART data, multi-user access, PostgreSQL,
+UPS, Tailscale, Nginx, advanced SMART data, PostgreSQL,
 Prometheus, Grafana, Kubernetes, WebSockets, and agent auto-update are deferred.
 
 ## License

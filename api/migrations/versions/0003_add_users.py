@@ -1,4 +1,4 @@
-"""Add dashboard users and seed the default administrator.
+"""Add dashboard users and seed default admin, operator, and viewer accounts.
 
 Revision ID: 0003
 Revises: 0002
@@ -11,6 +11,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from homelab_monitor.auth.bootstrap import DEFAULT_USERS
 from homelab_monitor.auth.passwords import hash_password
 
 revision: str = "0003"
@@ -57,12 +58,13 @@ def upgrade() -> None:
         [
             {
                 "id": str(uuid.uuid4()),
-                "username": "admin",
-                "password_hash": hash_password("admin123"),
-                "full_name": "Administrator",
-                "role": "admin",
+                "username": user.username,
+                "password_hash": hash_password(user.password),
+                "full_name": user.full_name,
+                "role": user.role,
                 "is_active": True,
             }
+            for user in DEFAULT_USERS
         ],
     )
 

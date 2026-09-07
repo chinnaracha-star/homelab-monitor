@@ -39,7 +39,9 @@ export const Navbar = memo(function Navbar({ sidebarOpen, onToggleSidebar }: Nav
         {user ? (
           <>
             <span className={styles.userName}>{user.username}</span>
-            <span className={styles.userRole}>{user.role}</span>
+            <span className={styles.userRole} aria-label={`Role ${user.role}`}>
+              {user.role}
+            </span>
             <button className={styles.logoutButton} type="button" onClick={handleLogout}>
               Logout
             </button>

@@ -38,6 +38,12 @@
   text-decoration: none;
 }
 
+.forbidden {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 32rem;
+}
+
 .statGrid,
 .metricGrid {
   display: grid;

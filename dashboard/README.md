@@ -1,6 +1,9 @@
 # HomeLab Monitor Dashboard
 
-Read-only React dashboard for the HomeLab Monitor API.
+Read-only React dashboard for the HomeLab Monitor API. Navigation and
+administration pages follow role-based access control: viewers and operators do
+Administrators can manage dashboard users from `/users`. See
+[user management](../docs/user-management.md). Administrators manage accounts on the Users page.
 
 ## Local development
 

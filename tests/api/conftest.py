@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-TEST_DATABASE_PATH = Path("/tmp/homelab-monitor-tests.db")
+TEST_DATABASE_PATH = Path(f"/tmp/homelab-monitor-tests-{os.getpid()}.db")
 os.environ["HOMELAB_REGISTRATION_KEY"] = "test-registration-key-at-least-24-chars"
 os.environ["HOMELAB_DATABASE_URL"] = f"sqlite:///{TEST_DATABASE_PATH}"
 os.environ["HOMELAB_LOG_LEVEL"] = "WARNING"
@@ -16,6 +16,12 @@ from homelab_monitor.auth.passwords import hash_password  # noqa: E402
 from homelab_monitor.database import Base, get_engine  # noqa: E402
 from homelab_monitor.main import app  # noqa: E402
 from homelab_monitor.models import User  # noqa: E402
+
+
+def _remove_sqlite(path: Path) -> None:
+    path.unlink(missing_ok=True)
+    Path(f"{path}-wal").unlink(missing_ok=True)
+    Path(f"{path}-shm").unlink(missing_ok=True)
 
 
 def seed_users() -> None:
@@ -57,12 +63,12 @@ def seed_users() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def database_schema() -> Iterator[None]:
-    TEST_DATABASE_PATH.unlink(missing_ok=True)
+    _remove_sqlite(TEST_DATABASE_PATH)
     Base.metadata.create_all(bind=get_engine())
     seed_users()
     yield
     Base.metadata.drop_all(bind=get_engine())
-    TEST_DATABASE_PATH.unlink(missing_ok=True)
+    _remove_sqlite(TEST_DATABASE_PATH)
 
 
 @pytest.fixture

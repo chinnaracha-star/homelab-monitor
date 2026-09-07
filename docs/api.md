@@ -82,7 +82,8 @@ curl --request POST http://127.0.0.1:8000/api/v1/auth/login \
   --data '{"username":"admin","password":"admin123"}'
 ```
 
-Use the returned `access_token` as `Authorization: Bearer <token>` for:
+The example uses the default administrator. Operator and viewer accounts are
+documented in [authentication.md](authentication.md).
 
 - `GET /api/v1/auth/me`
 - `GET /api/v1/dashboard/overview`
@@ -91,10 +92,17 @@ Use the returned `access_token` as `Authorization: Bearer <token>` for:
 - `GET /api/v1/agents/{agent_id}/latest-report`
 - `GET /api/v1/agents/{agent_id}/reports?limit=30`
 - `GET /api/v1/alerts/active`
+- `POST /api/v1/alerts/{alert_id}/acknowledge` (admin and operator)
+- `GET /api/v1/users` (admin)
+- `POST /api/v1/users` (admin)
+- `PUT /api/v1/users/{user_id}` (admin)
+- `PATCH /api/v1/users/{user_id}/password` (admin)
+- `PATCH /api/v1/users/{user_id}/status` (admin)
+- `DELETE /api/v1/users/{user_id}` (admin)
 
 `GET /health` and agent registration/check-in/report upload remain independent
-of dashboard JWTs. Full role and token behaviour is documented in
-[authentication.md](authentication.md).
+of dashboard JWTs. Roles are documented in
+[authentication.md](authentication.md) and [rbac.md](rbac.md).
 
 ## Dashboard API
 
@@ -111,6 +119,15 @@ a dashboard JWT:
   ordered from newest to oldest, for dashboard trend rendering.
 - `GET /api/v1/alerts/active` returns persisted active alerts with agent names
   for the dashboard alert banner.
+- `POST /api/v1/alerts/{alert_id}/acknowledge` is available to admins and
+  operators. It confirms the alert exists; persisted acknowledgement state can
+  be added later without changing the route or role list.
+- `GET /api/v1/users` lists dashboard accounts for administrators. Password
+  hashes are never returned.
+- `POST /api/v1/users`, `PUT /api/v1/users/{user_id}`,
+  `PATCH /api/v1/users/{user_id}/password`,
+  `PATCH /api/v1/users/{user_id}/status`, and `DELETE /api/v1/users/{user_id}`
+  provide admin-only user management. See [user-management.md](user-management.md).
 
 Missing agents and missing reports use the API's standard structured `404`
 responses. Complete response schemas and examples are available in OpenAPI.

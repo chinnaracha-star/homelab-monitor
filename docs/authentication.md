@@ -11,11 +11,11 @@ short-lived JWT access token.
 | Role | Purpose |
 | --- | --- |
 | `admin` | Full dashboard operator. Seeded by default in development. |
-| `operator` | Day-to-day monitoring access. |
+| `operator` | Day-to-day monitoring access, including alert acknowledgement. |
 | `viewer` | Read-only dashboard access. |
 
-Sprint 5.1 grants all active roles access to the protected read APIs. Finer
-role checks can be added later without changing the login contract.
+Role checks are enforced by `require_roles(...)`. See [rbac.md](rbac.md) and
+[user-management.md](user-management.md).
 
 ## Login flow
 
@@ -26,10 +26,17 @@ role checks can be added later without changing the login contract.
 5. `GET /api/v1/auth/me` returns the current user for the navbar.
 6. Logout deletes the stored token and returns to `/login`.
 
-Default seeded administrator (change after first login in any shared environment):
+Default seeded accounts (change these passwords in any shared environment):
 
-- username: `admin`
-- password: `admin123`
+| Username | Password | Role |
+| --- | --- | --- |
+| `admin` | `admin123` | admin |
+| `operator` | `operator123` | operator |
+| `viewer` | `viewer123` | viewer |
+
+A fresh `0003_add_users` migration inserts all three. If `0003` already ran with
+only `admin`, the API creates any missing default users at startup and never
+overwrites an existing username.
 
 ## JWT
 
@@ -47,6 +54,13 @@ These routes require a dashboard JWT:
 - `GET /api/v1/agents/{agent_id}/latest-report`
 - `GET /api/v1/agents/{agent_id}/reports`
 - `GET /api/v1/alerts/*`
+- `POST /api/v1/alerts/{alert_id}/acknowledge` (admin, operator)
+- `GET /api/v1/users` (admin)
+- `POST /api/v1/users` (admin)
+- `PUT /api/v1/users/{user_id}` (admin)
+- `PATCH /api/v1/users/{user_id}/password` (admin)
+- `PATCH /api/v1/users/{user_id}/status` (admin)
+- `DELETE /api/v1/users/{user_id}` (admin)
 - `GET /api/v1/auth/me`
 
 These routes remain available without a dashboard JWT:
@@ -61,7 +75,7 @@ These routes remain available without a dashboard JWT:
 
 - Passwords are hashed with bcrypt through passlib. Plain passwords are never stored.
 - Do not commit `HOMELAB_JWT_SECRET` or production passwords.
-- Replace the seeded `admin123` password before exposing the dashboard beyond a
+- Replace the seeded default passwords before exposing the dashboard beyond a
   trusted HomeLab network.
 - The dashboard JWT is stored in `localStorage` in v1. Treat the browser as a
   trusted operator workstation.
