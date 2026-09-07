@@ -1,13 +1,14 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
-from homelab_monitor.models import Agent, MetricReport
+from homelab_monitor.models import Agent, Alert, MetricReport
 from homelab_monitor.schemas import (
+    ActiveAlertResponse,
     AgentCountResponse,
     AgentDetailResponse,
     AgentSummaryResponse,
@@ -108,3 +109,63 @@ def get_latest_agent_report(
             "The requested agent has no metric reports",
         )
     return report
+
+
+@router.get(
+    "/agents/{agent_id}/reports",
+    response_model=list[LatestMetricReportResponse],
+    summary="Get recent metric reports for an agent",
+)
+def get_agent_report_history(
+    agent_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    limit: Annotated[int, Query(ge=2, le=100)] = 30,
+) -> list[MetricReport]:
+    if db.scalar(select(Agent.id).where(Agent.id == agent_id)) is None:
+        raise APIError(404, "agent_not_found", "The requested agent does not exist")
+
+    return list(
+        db.scalars(
+            select(MetricReport)
+            .where(MetricReport.agent_id == agent_id)
+            .order_by(
+                MetricReport.observed_at.desc(),
+                MetricReport.received_at.desc(),
+                MetricReport.id.desc(),
+            )
+            .limit(limit)
+        ).all()
+    )
+
+
+@router.get(
+    "/alerts/active",
+    response_model=list[ActiveAlertResponse],
+    summary="List active alerts",
+)
+def list_active_alerts(
+    db: Annotated[Session, Depends(get_db)],
+) -> list[ActiveAlertResponse]:
+    rows = db.execute(
+        select(Alert, Agent.name)
+        .join(Agent, Alert.agent_id == Agent.id)
+        .where(Alert.status == "active")
+        .order_by(Alert.opened_at.desc(), Alert.id.desc())
+    ).all()
+
+    return [
+        ActiveAlertResponse(
+            id=alert.id,
+            agent_id=alert.agent_id,
+            agent_name=agent_name,
+            kind=alert.kind,
+            resource=alert.resource,
+            severity=alert.severity,
+            current_value=alert.current_value,
+            threshold=alert.threshold,
+            message=alert.message,
+            opened_at=alert.opened_at,
+            last_observed_at=alert.last_observed_at,
+        )
+        for alert, agent_name in rows
+    ]

@@ -82,6 +82,10 @@ The read-only Dashboard API uses the existing agent and report data:
   current configuration revision.
 - `GET /api/v1/agents/{agent_id}/latest-report` returns the report with the
   newest observation timestamp.
+- `GET /api/v1/agents/{agent_id}/reports?limit=30` returns 2–100 recent reports,
+  ordered from newest to oldest, for dashboard trend rendering.
+- `GET /api/v1/alerts/active` returns persisted active alerts with agent names
+  for the dashboard alert banner.
 
 Missing agents and missing reports use the API's standard structured `404`
 responses. Complete response schemas and examples are available in OpenAPI.

@@ -111,3 +111,17 @@ class LatestMetricReportResponse(BaseModel):
     observed_at: datetime
     received_at: datetime
     payload: dict[str, Any]
+
+
+class ActiveAlertResponse(BaseModel):
+    id: str
+    agent_id: str
+    agent_name: str
+    kind: str
+    resource: str
+    severity: str
+    current_value: float | None
+    threshold: float | None
+    message: str
+    opened_at: datetime
+    last_observed_at: datetime

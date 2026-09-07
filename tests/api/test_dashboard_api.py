@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from homelab_monitor.settings import get_settings
+
 REGISTRATION_KEY = "test-registration-key-at-least-24-chars"
 
 
@@ -165,3 +167,68 @@ def test_dashboard_routes_are_documented_in_openapi(client: TestClient) -> None:
     assert "/api/v1/agents" in paths
     assert "/api/v1/agents/{agent_id}" in paths
     assert "/api/v1/agents/{agent_id}/latest-report" in paths
+    assert "/api/v1/agents/{agent_id}/reports" in paths
+    assert "/api/v1/alerts/active" in paths
+
+
+def test_agent_report_history_returns_newest_reports_first(client: TestClient) -> None:
+    agent_id, token = register_agent(client, "dashboard-history")
+    upload_report(
+        client,
+        token,
+        "history-oldest",
+        "2026-09-07T05:00:00Z",
+        10.0,
+    )
+    upload_report(
+        client,
+        token,
+        "history-newest",
+        "2026-09-07T07:00:00Z",
+        30.0,
+    )
+    upload_report(
+        client,
+        token,
+        "history-middle",
+        "2026-09-07T06:00:00Z",
+        20.0,
+    )
+
+    response = client.get(f"/api/v1/agents/{agent_id}/reports", params={"limit": 2})
+
+    assert response.status_code == 200
+    assert [report["report_id"] for report in response.json()] == [
+        "history-newest",
+        "history-middle",
+    ]
+
+
+def test_agent_report_history_validates_agent_and_limit(client: TestClient) -> None:
+    missing = client.get("/api/v1/agents/missing-agent/reports")
+    invalid_limit = client.get("/api/v1/agents/missing-agent/reports", params={"limit": 1})
+
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "agent_not_found"
+    assert invalid_limit.status_code == 422
+
+
+def test_active_alerts_include_agent_context(client: TestClient) -> None:
+    agent_id, token = register_agent(client, "dashboard-active-alert")
+    upload_report(
+        client,
+        token,
+        "dashboard-alert-report",
+        "2026-09-07T08:00:00Z",
+        100.0,
+    )
+
+    response = client.get("/api/v1/alerts/active")
+
+    assert response.status_code == 200
+    alert = next(item for item in response.json() if item["agent_id"] == agent_id)
+    assert alert["agent_name"] == "dashboard-active-alert"
+    assert alert["kind"] == "cpu_high"
+    assert alert["severity"] == "warning"
+    assert alert["current_value"] == 100
+    assert alert["threshold"] == get_settings().alert_cpu_threshold_percent
