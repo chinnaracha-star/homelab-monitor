@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from homelab_monitor.database import Base
@@ -28,6 +28,9 @@ class Agent(Base):
         back_populates="agent", cascade="all, delete-orphan", uselist=False
     )
     reports: Mapped[list["MetricReport"]] = relationship(
+        back_populates="agent", cascade="all, delete-orphan"
+    )
+    alerts: Mapped[list["Alert"]] = relationship(
         back_populates="agent", cascade="all, delete-orphan"
     )
 
@@ -63,3 +66,26 @@ class MetricReport(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
 
     agent: Mapped[Agent] = relationship(back_populates="reports")
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+    __table_args__ = (UniqueConstraint("agent_id", "kind", "resource"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(50))
+    resource: Mapped[str] = mapped_column(String(255), default="system")
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    severity: Mapped[str] = mapped_column(String(20), default="warning")
+    current_value: Mapped[float | None] = mapped_column(Float)
+    threshold: Mapped[float | None] = mapped_column(Float)
+    message: Mapped[str] = mapped_column(String(500))
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    agent: Mapped[Agent] = relationship(back_populates="alerts")

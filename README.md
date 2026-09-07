@@ -5,8 +5,8 @@ Docker workloads, Immich, and QNAP. Lightweight Python agents collect local heal
 and send authenticated reports to a central FastAPI server for history, alerting,
 Telegram notifications, and a web dashboard.
 
-> Status: early development. Sprint 1 central API is complete. Sprint 2 adds the
-> Ubuntu system agent and reliable offline delivery.
+> Status: early development. Sprint 1 central API and Sprint 2 Ubuntu agent are
+> complete. Sprint 3.1 adds read-only Dashboard API endpoints.
 
 ## Architecture
 
@@ -38,6 +38,17 @@ cp .env.example .env
 
 The API is available at `http://127.0.0.1:8000`, with OpenAPI documentation at
 `/docs` and the health endpoint at `/health`.
+
+Dashboard clients can read:
+
+- `/api/v1/dashboard/overview`
+- `/api/v1/agents`
+- `/api/v1/agents/{agent_id}`
+- `/api/v1/agents/{agent_id}/latest-report`
+
+The server also persists active and resolved alert state for CPU, memory, disk,
+temperature, and offline agents. New alert transitions can be delivered through
+the reusable [Telegram notifier](docs/telegram.md).
 
 ## Ubuntu agent
 

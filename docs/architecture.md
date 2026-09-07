@@ -65,3 +65,21 @@ The agent uses a separate local SQLite database as a bounded offline queue. It
 stores complete report payloads before retry, survives agent restarts, sends the
 oldest report first, and keeps the original report ID. This database is not the
 central metrics database.
+
+## Alert state
+
+The API evaluates accepted system reports for CPU, memory, disk, and temperature
+threshold breaches. Alert state is stored centrally and transitions between
+`active` and `resolved`; repeated breaches update the existing state rather than
+creating duplicate alerts.
+
+A periodic server task compares each agent's last contact with the configured
+offline threshold and persists an `agent_offline` alert. A successful check-in
+or report resolves that state. Alert evaluation and report persistence share the
+same database transaction.
+
+New and reopened alert transitions are delivered through a reusable Telegram
+notifier after alert state commits. Repeated active observations do not produce
+duplicate messages, and delivery failures do not roll back reports or alert
+state. A durable notification outbox and recovery notifications remain future
+work.

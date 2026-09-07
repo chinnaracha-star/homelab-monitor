@@ -68,3 +68,46 @@ class HealthResponse(BaseModel):
     version: str
     database: Literal["up", "down"]
     timestamp: datetime
+
+
+class AgentCountResponse(BaseModel):
+    total: int
+    online: int
+    offline: int
+
+
+class ReportCountResponse(BaseModel):
+    total: int
+
+
+class DashboardOverviewResponse(BaseModel):
+    agents: AgentCountResponse
+    reports: ReportCountResponse
+
+
+class AgentSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    hostname: str
+    version: str
+    status: str
+    last_seen_at: datetime | None
+
+
+class AgentDetailResponse(AgentSummaryResponse):
+    configuration_revision: int
+    capabilities: list[str]
+
+
+class LatestMetricReportResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    agent_id: str
+    report_id: str
+    schema_version: str
+    observed_at: datetime
+    received_at: datetime
+    payload: dict[str, Any]

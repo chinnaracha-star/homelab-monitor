@@ -23,6 +23,7 @@ def health(db: Annotated[Session, Depends(get_db)]) -> HealthResponse | JSONResp
     now = datetime.now(UTC)
     try:
         db.execute(text("SELECT COUNT(*) FROM agents"))
+        db.execute(text("SELECT COUNT(*) FROM alerts"))
     except SQLAlchemyError:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

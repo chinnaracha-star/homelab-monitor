@@ -72,6 +72,20 @@ different content returns HTTP `409`.
 
 Interactive OpenAPI documentation is available at `/docs`.
 
+## Dashboard API
+
+The read-only Dashboard API uses the existing agent and report data:
+
+- `GET /api/v1/dashboard/overview` returns agent status and report counts.
+- `GET /api/v1/agents` returns agents ordered by name.
+- `GET /api/v1/agents/{agent_id}` returns agent details, capabilities, and the
+  current configuration revision.
+- `GET /api/v1/agents/{agent_id}/latest-report` returns the report with the
+  newest observation timestamp.
+
+Missing agents and missing reports use the API's standard structured `404`
+responses. Complete response schemas and examples are available in OpenAPI.
+
 ## Ubuntu agent integration
 
 The packaged agent implements check-in and report upload automatically. Configure
