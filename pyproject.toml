@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "homelab-monitor-toolkit"
+version = "0.1.0"
+description = "Agent-server monitoring platform for HomeLab infrastructure"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "ChinDurex" }]
+dependencies = [
+  "alembic",
+  "fastapi",
+  "pydantic-settings",
+  "sqlalchemy",
+  "uvicorn[standard]",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx",
+  "pytest",
+  "pytest-cov",
+  "ruff",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["api/src/homelab_monitor"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests/api"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
