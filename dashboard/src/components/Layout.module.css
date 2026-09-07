@@ -61,6 +61,18 @@
   margin-left: auto;
 }
 
+.connectionStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .userName {
   color: var(--text-primary);
   font-weight: 700;

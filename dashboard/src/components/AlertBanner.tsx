@@ -1,12 +1,14 @@
 import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import { getActiveAlerts } from '../api/dashboard'
-import { usePolling } from '../hooks/usePolling'
+import { useLivePolling } from '../hooks/useDashboardSocket'
 import { alertLabels } from '../utils/metrics'
 import styles from './Components.module.css'
 
+const ALERT_EVENTS = ['overview_updated', 'alert_updated'] as const
+
 export const AlertBanner = memo(function AlertBanner() {
-  const { data: alerts } = usePolling(getActiveAlerts)
+  const { data: alerts } = useLivePolling(getActiveAlerts, ALERT_EVENTS)
 
   if (!alerts || alerts.length === 0) {
     return null

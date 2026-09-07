@@ -1,9 +1,9 @@
 # HomeLab Monitor Dashboard
 
 Read-only React dashboard for the HomeLab Monitor API. Navigation and
-administration pages follow role-based access control: viewers and operators do
-Administrators can manage dashboard users from `/users`. See
-[user management](../docs/user-management.md). Administrators manage accounts on the Users page.
+administration pages follow role-based access control. Administrators can
+manage dashboard users from `/users`. See
+[user management](../docs/user-management.md).
 
 ## Local development
 
@@ -13,7 +13,8 @@ npm install
 npm run dev
 ```
 
-The API server must be running and accessible from the browser.
+The API server must be running and accessible from the browser. Agent Detail
+includes history charts for CPU, memory, disk, and temperature.
 
 ## Configuration
 
@@ -26,7 +27,8 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8000
 ```
 
 For production, keep the relative base URL and route `/api` to the backend with
-the deployment reverse proxy.
+the deployment reverse proxy. The Vite `/api` proxy enables WebSocket upgrades
+for `GET /api/v1/ws/dashboard`.
 
 ## Quality checks
 

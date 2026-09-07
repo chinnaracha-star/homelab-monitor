@@ -1,21 +1,23 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getActiveAlerts } from '../api/dashboard'
 import { LastUpdated } from '../components/LastUpdated'
 import { RelativeTime } from '../components/RelativeTime'
 import { SectionError } from '../components/SectionError'
 import { TableSkeleton } from '../components/Skeleton'
+import { useLivePolling } from '../hooks/useDashboardSocket'
 import { useNow } from '../hooks/useNow'
-import { usePolling } from '../hooks/usePolling'
 import { alertLabels } from '../utils/metrics'
 import componentStyles from '../components/Components.module.css'
 import styles from './Pages.module.css'
 
-export function AlertsPage() {
+const ALERT_EVENTS = ['overview_updated', 'alert_updated'] as const
+
+export const AlertsPage = memo(function AlertsPage() {
   const now = useNow()
   const [resolvedOpen, setResolvedOpen] = useState(false)
   const { data: alerts, error, isRefreshing, lastUpdated, retry } =
-    usePolling(getActiveAlerts)
+    useLivePolling(getActiveAlerts, ALERT_EVENTS)
 
   const sortedAlerts = useMemo(
     () =>
@@ -83,4 +85,4 @@ export function AlertsPage() {
       </details>
     </section>
   )
-}
+})

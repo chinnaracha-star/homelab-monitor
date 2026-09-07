@@ -1,0 +1,87 @@
+name: homelab-monitor
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: homelab-monitor-api:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOMELAB_ENVIRONMENT: ${HOMELAB_ENVIRONMENT:-production}
+      HOMELAB_DATABASE_URL: sqlite:////var/lib/homelab-monitor/homelab-monitor.db
+      HOMELAB_LOG_DIR: /var/log/homelab-monitor
+      HOMELAB_LOG_LEVEL: ${HOMELAB_LOG_LEVEL:-INFO}
+      HOMELAB_REGISTRATION_KEY: ${HOMELAB_REGISTRATION_KEY}
+      HOMELAB_JWT_SECRET: ${HOMELAB_JWT_SECRET}
+      HOMELAB_JWT_EXPIRE_MINUTES: ${HOMELAB_JWT_EXPIRE_MINUTES:-60}
+      HOMELAB_AGENT_REPORT_INTERVAL_SECONDS: ${HOMELAB_AGENT_REPORT_INTERVAL_SECONDS:-60}
+      HOMELAB_MINIMUM_AGENT_VERSION: ${HOMELAB_MINIMUM_AGENT_VERSION:-0.1.0}
+      HOMELAB_LATEST_AGENT_VERSION: ${HOMELAB_LATEST_AGENT_VERSION:-0.1.0}
+      HOMELAB_ALERT_CPU_THRESHOLD_PERCENT: ${HOMELAB_ALERT_CPU_THRESHOLD_PERCENT:-90}
+      HOMELAB_ALERT_MEMORY_THRESHOLD_PERCENT: ${HOMELAB_ALERT_MEMORY_THRESHOLD_PERCENT:-90}
+      HOMELAB_ALERT_DISK_THRESHOLD_PERCENT: ${HOMELAB_ALERT_DISK_THRESHOLD_PERCENT:-90}
+      HOMELAB_ALERT_TEMPERATURE_THRESHOLD_CELSIUS: ${HOMELAB_ALERT_TEMPERATURE_THRESHOLD_CELSIUS:-85}
+      HOMELAB_AGENT_OFFLINE_AFTER_SECONDS: ${HOMELAB_AGENT_OFFLINE_AFTER_SECONDS:-180}
+      HOMELAB_ALERT_EVALUATION_INTERVAL_SECONDS: ${HOMELAB_ALERT_EVALUATION_INTERVAL_SECONDS:-30}
+      HOMELAB_FORWARDED_ALLOW_IPS: ${HOMELAB_FORWARDED_ALLOW_IPS:-*}
+      TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_REQUEST_TIMEOUT: ${TELEGRAM_REQUEST_TIMEOUT:-10}
+    volumes:
+      - homelab-data:/var/lib/homelab-monitor
+      - homelab-logs:/var/log/homelab-monitor
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    image: homelab-monitor-dashboard:local
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${HOMELAB_DASHBOARD_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+      - /var/cache/nginx:mode=1777
+      - /var/run:mode=1777
+      - /var/log/nginx:mode=1777
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  homelab-data:
+  homelab-logs:

@@ -5,9 +5,10 @@ import { getErrorMessage } from '../utils/errors'
 interface UsePollingOptions {
   enabled?: boolean
   intervalMs?: number
+  resetKey?: string | number
 }
 
-interface UsePollingResult<T> {
+export interface UsePollingResult<T> {
   data: T | null
   error: string | null
   isRefreshing: boolean
@@ -19,7 +20,7 @@ export function usePolling<T>(
   fetcher: () => Promise<T>,
   options: UsePollingOptions = {},
 ): UsePollingResult<T> {
-  const { enabled = true, intervalMs = REFRESH_INTERVAL_MS } = options
+  const { enabled = true, intervalMs = REFRESH_INTERVAL_MS, resetKey } = options
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -66,6 +67,13 @@ export function usePolling<T>(
     }
 
     void load()
+  }, [enabled, load, resetKey])
+
+  useEffect(() => {
+    if (!enabled || intervalMs <= 0) {
+      return
+    }
+
     const intervalId = window.setInterval(() => {
       void load()
     }, intervalMs)

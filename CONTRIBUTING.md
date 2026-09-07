@@ -9,8 +9,9 @@ agent-server trust boundary.
 1. Create a focused branch.
 2. Install the project with `python -m pip install -e ".[dev]"`.
 3. Add or update tests for every behaviour change.
-4. Run `alembic check`, `pytest`, `ruff check .`, and
-   `ruff format --check .`.
+4. Run `alembic check`, `pytest`, `ruff check .`,
+   `ruff format --check .`, and in `dashboard/` `npm run lint`,
+   `npm run test`, and `npm run build`.
 5. Remove private hostnames, addresses, tokens, and logs from examples.
 6. Open a pull request explaining the problem, approach, and test evidence.
 

@@ -92,6 +92,24 @@ export interface LatestMetricReport {
   }
 }
 
+export interface HistoryPoint {
+  timestamp: string
+  cpu_percent: number | null
+  memory_percent: number | null
+  disk_percent: number | null
+  temperature_celsius: number | null
+  network_rx_bytes: number | null
+  network_tx_bytes: number | null
+}
+
+export interface AgentHistory {
+  agent_id: string
+  interval: '1m' | '5m' | '15m' | '1h'
+  from: string
+  to: string
+  points: HistoryPoint[]
+}
+
 export interface ActiveAlert {
   id: string
   agent_id: string

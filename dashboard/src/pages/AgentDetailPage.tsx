@@ -1,15 +1,17 @@
 import { useCallback, useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getAgent, getLatestAgentReport } from '../api/dashboard'
+import { AgentHistorySection } from '../components/AgentHistorySection'
 import { EmptyState } from '../components/EmptyState'
+import { RenderGuard } from '../components/RenderGuard'
 import { LastUpdated } from '../components/LastUpdated'
 import { MetricCard } from '../components/MetricCard'
 import { MetricSkeleton } from '../components/Skeleton'
 import { RelativeTime } from '../components/RelativeTime'
 import { SectionError } from '../components/SectionError'
 import { StatusBadge } from '../components/StatusBadge'
+import { useLivePolling } from '../hooks/useDashboardSocket'
 import { useNow } from '../hooks/useNow'
-import { usePolling } from '../hooks/usePolling'
 import { isApiErrorCode } from '../utils/errors'
 import { formatBytes, formatUptime } from '../utils/format'
 import {
@@ -19,6 +21,8 @@ import {
   getUsageLevel,
 } from '../utils/metrics'
 import styles from './Pages.module.css'
+
+const AGENT_DETAIL_EVENTS = ['overview_updated', 'agent_updated'] as const
 
 export function AgentDetailPage() {
   const { id } = useParams()
@@ -31,12 +35,31 @@ export function AgentDetailPage() {
     )
   }
 
-  return <AgentDetailContent key={id} id={id} />
+  return (
+    <section className={styles.page}>
+      <RenderGuard key={id} fallback={<EmptyState message="Unable to render agent detail." />}>
+        <AgentDetailContent id={id} />
+      </RenderGuard>
+      <RenderGuard
+        key={`history-${id}`}
+        fallback={
+          <section className={styles.section} aria-labelledby="agent-history-title">
+            <h2 className={styles.sectionTitle} id="agent-history-title">
+              History
+            </h2>
+            <EmptyState message="Unable to render history." />
+          </section>
+        }
+      >
+        <AgentHistorySection agentId={id} agentName="agent" />
+      </RenderGuard>
+    </section>
+  )
 }
 
 function AgentDetailContent({ id }: { id: string }) {
   const now = useNow()
-  const agentPoll = usePolling(() => getAgent(id))
+  const agentPoll = useLivePolling(() => getAgent(id), AGENT_DETAIL_EVENTS, { agentId: id })
   const loadReport = useCallback(async () => {
     try {
       return await getLatestAgentReport(id)
@@ -47,7 +70,7 @@ function AgentDetailContent({ id }: { id: string }) {
       throw error
     }
   }, [id])
-  const reportPoll = usePolling(loadReport)
+  const reportPoll = useLivePolling(loadReport, AGENT_DETAIL_EVENTS, { agentId: id })
 
   const agent = agentPoll.data
   const report = reportPoll.data
@@ -63,7 +86,7 @@ function AgentDetailContent({ id }: { id: string }) {
       .sort((left, right) => right.getTime() - left.getTime())[0] ?? null
 
   return (
-    <section className={styles.page}>
+    <>
       <header className={styles.pageHeader}>
         <div>
           <p className={styles.eyebrow}>Agent detail</p>
@@ -248,6 +271,6 @@ function AgentDetailContent({ id }: { id: string }) {
           </>
         ) : null}
       </section>
-    </section>
+    </>
   )
 }

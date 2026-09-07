@@ -181,3 +181,23 @@ class AlertAcknowledgeResponse(BaseModel):
     id: str
     agent_id: str
     status: str
+
+
+class MetricHistoryPoint(BaseModel):
+    timestamp: datetime
+    cpu_percent: float | None
+    memory_percent: float | None
+    disk_percent: float | None
+    temperature_celsius: float | None
+    network_rx_bytes: float | None
+    network_tx_bytes: float | None
+
+
+class MetricHistoryResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    agent_id: str
+    interval: Literal["1m", "5m", "15m", "1h"]
+    from_time: datetime = Field(alias="from")
+    to_time: datetime = Field(alias="to")
+    points: list[MetricHistoryPoint]

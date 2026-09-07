@@ -10,6 +10,8 @@ htmlcov/
 .env
 .env.*
 !.env.example
+!.env.production.example
+backups/
 config/*.local.*
 config/secrets/
 

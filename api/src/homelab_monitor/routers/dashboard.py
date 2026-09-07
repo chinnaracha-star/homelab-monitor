@@ -8,6 +8,7 @@ from homelab_monitor.auth.dependencies import require_roles
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
 from homelab_monitor.models import Agent, Alert, MetricReport
+from homelab_monitor.realtime import hub
 from homelab_monitor.schemas import (
     ActiveAlertResponse,
     AgentCountResponse,
@@ -190,4 +191,5 @@ def acknowledge_alert(
     alert = db.scalar(select(Alert).where(Alert.id == alert_id))
     if alert is None:
         raise APIError(404, "alert_not_found", "The requested alert does not exist")
+    hub.publish("alert_updated", reason="acknowledge", agent_id=alert.agent_id)
     return alert

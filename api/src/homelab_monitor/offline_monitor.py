@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from homelab_monitor.alert_engine import AlertEngine
 from homelab_monitor.database import get_engine
+from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram import dispatch_alert_events
 
@@ -23,6 +24,8 @@ async def run_offline_monitor(settings: Settings) -> None:
 
 def evaluate_offline_agents(settings: Settings) -> None:
     with Session(get_engine()) as db:
-        events = AlertEngine(settings).evaluate_offline_agents(db)
+        events, status_changed = AlertEngine(settings).evaluate_offline_agents(db)
         db.commit()
+    if events or status_changed:
+        hub.notify_ingest(reason="offline_evaluation", agent_id=None)
     dispatch_alert_events(settings, events)

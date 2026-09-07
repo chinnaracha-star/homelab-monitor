@@ -139,6 +139,61 @@
   font-size: 0.85rem;
 }
 
+.historyToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.historyActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.chartGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.chartPanel {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.chartSurface {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 16rem;
+  min-height: 16rem;
+}
+
+.exportButton {
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  color: var(--text-primary);
+  background: var(--surface);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exportButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 @media (max-width: 1050px) {
   .statGrid,
   .metricGrid {
@@ -147,6 +202,10 @@
 
   .infoPanel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chartGrid {
+    grid-template-columns: 1fr;
   }
 }
 

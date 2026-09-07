@@ -1,25 +1,28 @@
-import { useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { getActiveAlerts, getAgents, getLatestAgentReport } from '../api/dashboard'
 import { AgentTable } from '../components/AgentTable'
 import { AgentToolbar } from '../components/AgentToolbar'
 import { LastUpdated } from '../components/LastUpdated'
 import { SectionError } from '../components/SectionError'
 import { TableSkeleton } from '../components/Skeleton'
+import { useLivePolling } from '../hooks/useDashboardSocket'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useNow } from '../hooks/useNow'
-import { usePolling } from '../hooks/usePolling'
 import { AGENT_FILTER_STORAGE_KEY, isAgentFilter, type AgentFilter } from '../utils/agents'
 import { isApiErrorCode } from '../utils/errors'
 import { getSystemMetrics } from '../utils/metrics'
 import styles from './Pages.module.css'
 
-export function AgentsPage() {
+const AGENT_EVENTS = ['overview_updated', 'agent_updated'] as const
+const ALERT_EVENTS = ['overview_updated', 'alert_updated'] as const
+
+export const AgentsPage = memo(function AgentsPage() {
   const now = useNow()
   const [query, setQuery] = useState('')
   const [storedFilter, setStoredFilter] = useLocalStorage(AGENT_FILTER_STORAGE_KEY, 'all')
   const filter: AgentFilter = isAgentFilter(storedFilter) ? storedFilter : 'all'
-  const agents = usePolling(getAgents)
-  const alerts = usePolling(getActiveAlerts)
+  const agents = useLivePolling(getAgents, AGENT_EVENTS)
+  const alerts = useLivePolling(getActiveAlerts, ALERT_EVENTS)
 
   const loadOsNames = useCallback(async () => {
     const currentAgents = agents.data ?? []
@@ -39,7 +42,7 @@ export function AgentsPage() {
     return Object.fromEntries(entries)
   }, [agents.data])
 
-  const osNames = usePolling(loadOsNames, { enabled: Boolean(agents.data) })
+  const osNames = useLivePolling(loadOsNames, AGENT_EVENTS, { enabled: Boolean(agents.data) })
 
   const alertCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -92,4 +95,4 @@ export function AgentsPage() {
       ) : null}
     </section>
   )
-}
+})

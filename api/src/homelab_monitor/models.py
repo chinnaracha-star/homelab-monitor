@@ -40,6 +40,9 @@ class Agent(Base):
     reports: Mapped[list["MetricReport"]] = relationship(
         back_populates="agent", cascade="all, delete-orphan"
     )
+    metric_history: Mapped[list["MetricHistory"]] = relationship(
+        back_populates="agent", cascade="all, delete-orphan"
+    )
     alerts: Mapped[list["Alert"]] = relationship(
         back_populates="agent", cascade="all, delete-orphan"
     )
@@ -76,6 +79,22 @@ class MetricReport(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
 
     agent: Mapped[Agent] = relationship(back_populates="reports")
+
+
+class MetricHistory(Base):
+    __tablename__ = "metric_history"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    cpu_percent: Mapped[float | None] = mapped_column(Float)
+    memory_percent: Mapped[float | None] = mapped_column(Float)
+    disk_percent: Mapped[float | None] = mapped_column(Float)
+    temperature_celsius: Mapped[float | None] = mapped_column(Float)
+    network_rx_bytes: Mapped[float | None] = mapped_column(Float)
+    network_tx_bytes: Mapped[float | None] = mapped_column(Float)
+
+    agent: Mapped[Agent] = relationship(back_populates="metric_history")
 
 
 class Alert(Base):

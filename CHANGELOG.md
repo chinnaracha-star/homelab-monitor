@@ -38,3 +38,14 @@ and the project will use [Semantic Versioning](https://semver.org/).
   with missing defaults created at API startup without overwriting existing users.
 - Admin-only user management APIs and a Users page for create, edit, password
   reset, enable/disable, and delete, with last-admin and self-account protections.
+- JWT-authenticated dashboard WebSocket at `GET /api/v1/ws/dashboard`.
+- Real-time broadcasts for agent check-in, report upload, alert changes, and
+  agent online/offline transitions.
+- Dashboard socket client with reconnect, heartbeat, connection status, and
+  polling fallback while disconnected.
+- `metric_history` table and Alembic migration `0004_add_metric_history`.
+- `GET /api/v1/history/agents/{agent_id}` time-series API with interval
+  aggregation and CSV export.
+- Agent Detail history charts for CPU, memory, disk, and temperature.
+- Docker images and Compose files for the API and nginx dashboard.
+- systemd units for the API and dashboard, plus SQLite/log/config backup scripts.

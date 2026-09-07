@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
+import { DashboardSocketProvider, useDashboardConnection } from '../hooks/useDashboardSocket'
 import { AlertBanner } from './AlertBanner'
 import styles from './Layout.module.css'
 import { Navbar } from './Navbar'
+import { RealtimeDisconnectedBanner } from './RealtimeDisconnectedBanner'
 import { Sidebar } from './Sidebar'
 
 export function Layout() {
+  return (
+    <DashboardSocketProvider>
+      <LayoutShell />
+    </DashboardSocketProvider>
+  )
+}
+
+function LayoutShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { status } = useDashboardConnection()
   const closeSidebar = useCallback(() => setSidebarOpen(false), [])
+  const toggleSidebar = useCallback(() => setSidebarOpen((open) => !open), [])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -24,10 +36,7 @@ export function Layout() {
 
   return (
     <section className={styles.shell}>
-      <Navbar
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen((open) => !open)}
-      />
+      <Navbar sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
       <section className={styles.body}>
         {sidebarOpen ? (
           <button
@@ -39,6 +48,7 @@ export function Layout() {
         ) : null}
         <Sidebar open={sidebarOpen} onNavigate={closeSidebar} />
         <main className={styles.main} id="main-content">
+          {status === 'disconnected' ? <RealtimeDisconnectedBanner /> : null}
           <AlertBanner />
           <Outlet />
         </main>

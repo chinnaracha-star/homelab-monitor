@@ -11,6 +11,14 @@ HTMLDialogElement.prototype.close = function close() {
   this.dispatchEvent(new Event('close'))
 }
 
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+window.ResizeObserver = ResizeObserverStub
+
 afterEach(() => {
   cleanup()
 })

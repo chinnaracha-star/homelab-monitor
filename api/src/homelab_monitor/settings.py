@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str = "sqlite:///./data/homelab-monitor.db"
     log_level: str = "INFO"
+    log_dir: str = ""
     registration_key: str = Field(min_length=24)
     agent_report_interval_seconds: int = Field(default=60, ge=15, le=3600)
     minimum_agent_version: str = "0.1.0"

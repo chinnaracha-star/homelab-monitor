@@ -1,6 +1,8 @@
 import { memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { useOptionalDashboardConnection } from '../hooks/useDashboardSocket'
+import { ConnectionStatusBadge } from './ConnectionStatusBadge'
 import styles from './Layout.module.css'
 
 interface NavbarProps {
@@ -10,6 +12,7 @@ interface NavbarProps {
 
 export const Navbar = memo(function Navbar({ sidebarOpen, onToggleSidebar }: NavbarProps) {
   const { user, logout } = useAuth()
+  const socket = useOptionalDashboardConnection()
   const navigate = useNavigate()
 
   function handleLogout() {
@@ -36,6 +39,7 @@ export const Navbar = memo(function Navbar({ sidebarOpen, onToggleSidebar }: Nav
         <span>HomeLab Monitor</span>
       </div>
       <div className={styles.session}>
+        {socket ? <ConnectionStatusBadge status={socket.status} /> : null}
         {user ? (
           <>
             <span className={styles.userName}>{user.username}</span>

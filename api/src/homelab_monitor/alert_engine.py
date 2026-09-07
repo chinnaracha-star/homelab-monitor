@@ -60,15 +60,18 @@ class AlertEngine:
         self,
         db: Session,
         now: datetime | None = None,
-    ) -> list[AlertEvent]:
+    ) -> tuple[list[AlertEvent], bool]:
         observed_at = now or datetime.now(UTC)
         events: list[AlertEvent] = []
+        status_changed = False
         for agent in db.scalars(select(Agent)).all():
             last_contact = agent.last_seen_at or agent.created_at
             if last_contact is None:
                 continue
             elapsed = (observed_at - self._as_utc(last_contact)).total_seconds()
             offline = elapsed > self.settings.agent_offline_after_seconds
+            if offline and agent.status != "offline":
+                status_changed = True
             if offline:
                 agent.status = "offline"
             event = self._set_threshold_state(
@@ -88,7 +91,7 @@ class AlertEngine:
             )
             if event is not None:
                 events.append(event)
-        return events
+        return events, status_changed
 
     def _evaluate_system_metrics(
         self,

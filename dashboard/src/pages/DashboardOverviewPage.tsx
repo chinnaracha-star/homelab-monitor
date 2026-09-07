@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { getActiveAlerts, getAgents, getDashboardOverview } from '../api/dashboard'
 import { ConnectionLost } from '../components/ConnectionLost'
 import { LastUpdated } from '../components/LastUpdated'
@@ -6,13 +6,17 @@ import { OverviewSkeleton } from '../components/Skeleton'
 import { SectionError } from '../components/SectionError'
 import { StatCard } from '../components/StatCard'
 import { StatusBadge } from '../components/StatusBadge'
-import { usePolling } from '../hooks/usePolling'
+import { useLivePolling } from '../hooks/useDashboardSocket'
 import styles from './Pages.module.css'
 
-export function DashboardOverviewPage() {
-  const overview = usePolling(getDashboardOverview)
-  const agents = usePolling(getAgents)
-  const alerts = usePolling(getActiveAlerts)
+const OVERVIEW_EVENTS = ['overview_updated'] as const
+const AGENT_EVENTS = ['overview_updated', 'agent_updated'] as const
+const ALERT_EVENTS = ['overview_updated', 'alert_updated'] as const
+
+export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
+  const overview = useLivePolling(getDashboardOverview, OVERVIEW_EVENTS)
+  const agents = useLivePolling(getAgents, AGENT_EVENTS)
+  const alerts = useLivePolling(getActiveAlerts, ALERT_EVENTS)
 
   const isRefreshing = overview.isRefreshing || agents.isRefreshing || alerts.isRefreshing
   const lastUpdated = [overview.lastUpdated, agents.lastUpdated, alerts.lastUpdated]
@@ -125,4 +129,4 @@ export function DashboardOverviewPage() {
       ) : null}
     </section>
   )
-}
+})

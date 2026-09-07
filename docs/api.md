@@ -100,6 +100,10 @@ documented in [authentication.md](authentication.md).
 - `PATCH /api/v1/users/{user_id}/status` (admin)
 - `DELETE /api/v1/users/{user_id}` (admin)
 
+- `GET /api/v1/ws/dashboard` (dashboard JWT, WebSocket)
+- `GET /api/v1/history/agents/{agent_id}`
+- `GET /api/v1/history/agents/{agent_id}/export`
+
 `GET /health` and agent registration/check-in/report upload remain independent
 of dashboard JWTs. Roles are documented in
 [authentication.md](authentication.md) and [rbac.md](rbac.md).
@@ -128,6 +132,15 @@ a dashboard JWT:
   `PATCH /api/v1/users/{user_id}/password`,
   `PATCH /api/v1/users/{user_id}/status`, and `DELETE /api/v1/users/{user_id}`
   provide admin-only user management. See [user-management.md](user-management.md).
+- `GET /api/v1/ws/dashboard` is a WebSocket for live dashboard updates. Pass the
+  JWT as `token` or `Authorization: Bearer`. Event types are `connection`,
+  `overview_updated`, `agent_updated`, and `alert_updated`. REST contracts are
+  unchanged; see [realtime.md](realtime.md).
+- `GET /api/v1/history/agents/{agent_id}?from=&to=&interval=` returns aggregated
+  metric history ordered by timestamp. Supported intervals are `1m`, `5m`,
+  `15m`, and `1h`.
+- `GET /api/v1/history/agents/{agent_id}/export` returns the same series as CSV.
+  See [history.md](history.md).
 
 Missing agents and missing reports use the API's standard structured `404`
 responses. Complete response schemas and examples are available in OpenAPI.

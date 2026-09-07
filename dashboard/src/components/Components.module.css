@@ -244,6 +244,26 @@
   cursor: pointer;
 }
 
+.realtimeBanner {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #fcd34d;
+  border-radius: 0.9rem;
+  color: #92400e;
+  background: #fffbeb;
+}
+
+.realtimeBannerTitle {
+  margin: 0;
+  font-weight: 700;
+}
+
+.realtimeBannerMessage {
+  margin: 0;
+}
+
 .lastUpdated {
   display: flex;
   align-items: center;
@@ -456,6 +476,20 @@
   border-radius: 0.55rem;
 }
 
+.skeletonChartGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.skeletonChart {
+  min-height: 16rem;
+  border-radius: 0.9rem;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -474,14 +508,16 @@
 
 @media (max-width: 1050px) {
   .skeletonGrid,
-  .skeletonMetricGrid {
+  .skeletonMetricGrid,
+  .skeletonChartGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
   .skeletonGrid,
-  .skeletonMetricGrid {
+  .skeletonMetricGrid,
+  .skeletonChartGrid {
     grid-template-columns: 1fr;
   }
 }

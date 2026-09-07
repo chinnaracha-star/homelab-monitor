@@ -3,6 +3,7 @@ import { apiClient } from './client'
 import type {
   ActiveAlert,
   AgentDetail,
+  AgentHistory,
   AgentSummary,
   DashboardOverview,
   LatestMetricReport,
@@ -40,4 +41,15 @@ export async function getActiveAlerts(): Promise<ActiveAlert[]> {
     }
     throw error
   }
+}
+
+export async function getAgentHistory(
+  agentId: string,
+  params: { from: string; to: string; interval: AgentHistory['interval'] },
+): Promise<AgentHistory> {
+  const response = await apiClient.get<AgentHistory>(
+    `/history/agents/${encodeURIComponent(agentId)}`,
+    { params },
+  )
+  return response.data
 }

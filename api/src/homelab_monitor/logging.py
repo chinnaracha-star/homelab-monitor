@@ -4,6 +4,7 @@ import sys
 import time
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -25,10 +26,19 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, separators=(",", ":"))
 
 
-def configure_logging(level: str) -> None:
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(JsonFormatter())
-    logging.basicConfig(level=level.upper(), handlers=[handler], force=True)
+def configure_logging(level: str, log_dir: str = "") -> None:
+    formatter = JsonFormatter()
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    handlers[0].setFormatter(formatter)
+
+    if log_dir:
+        log_path = Path(log_dir)
+        log_path.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_path / "api.jsonl", encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        handlers.append(file_handler)
+
+    logging.basicConfig(level=level.upper(), handlers=handlers, force=True)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 

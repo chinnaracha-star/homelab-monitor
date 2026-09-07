@@ -13,7 +13,9 @@ from homelab_monitor.alert_engine import AlertEngine
 from homelab_monitor.control import build_agent_control
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
+from homelab_monitor.history import record_metric_history
 from homelab_monitor.models import Agent, AgentConfiguration, MetricReport
+from homelab_monitor.realtime import hub
 from homelab_monitor.schemas import (
     AgentCheckInRequest,
     AgentControlResponse,
@@ -96,6 +98,7 @@ def check_in(
     AlertEngine(settings).mark_agent_online(db, agent, observed_at)
     db.commit()
     db.refresh(agent)
+    hub.notify_ingest(reason="check_in", agent_id=agent.id)
     return build_agent_control(agent, settings, payload.config_revision)
 
 
@@ -137,6 +140,7 @@ def upload_report(
         agent.status = "online"
         AlertEngine(settings).mark_agent_online(db, agent, observed_at)
         db.commit()
+        hub.notify_ingest(reason="report_duplicate", agent_id=agent.id)
         return MetricReportResponse(
             accepted=True,
             duplicate=True,
@@ -165,8 +169,15 @@ def upload_report(
         report_payload,
         payload.observed_at,
     )
+    record_metric_history(
+        db,
+        agent_id=agent.id,
+        payload=report_payload,
+        observed_at=payload.observed_at,
+    )
     db.commit()
     db.refresh(agent)
+    hub.notify_ingest(reason="report", agent_id=agent.id, alerts_changed=True)
     if alert_events:
         background_tasks.add_task(dispatch_alert_events, settings, alert_events)
 

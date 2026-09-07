@@ -53,6 +53,8 @@ These routes require a dashboard JWT:
 - `GET /api/v1/agents/{agent_id}`
 - `GET /api/v1/agents/{agent_id}/latest-report`
 - `GET /api/v1/agents/{agent_id}/reports`
+- `GET /api/v1/history/agents/{agent_id}`
+- `GET /api/v1/history/agents/{agent_id}/export`
 - `GET /api/v1/alerts/*`
 - `POST /api/v1/alerts/{alert_id}/acknowledge` (admin, operator)
 - `GET /api/v1/users` (admin)

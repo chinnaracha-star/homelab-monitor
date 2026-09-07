@@ -41,3 +41,13 @@ export const MetricSkeleton = memo(function MetricSkeleton() {
     </section>
   )
 })
+
+export const ChartSkeleton = memo(function ChartSkeleton() {
+  return (
+    <section className={styles.skeletonChartGrid} aria-label="Loading history">
+      {Array.from({ length: 4 }, (_, index) => (
+        <SkeletonBlock className={styles.skeletonChart} key={index} label="Loading chart" />
+      ))}
+    </section>
+  )
+})
