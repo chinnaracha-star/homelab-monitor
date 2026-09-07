@@ -13,29 +13,37 @@ authors = [{ name = "ChinDurex" }]
 dependencies = [
   "alembic",
   "fastapi",
+  "httpx",
+  "psutil",
   "pydantic-settings",
   "sqlalchemy",
   "uvicorn[standard]",
 ]
 
+[project.scripts]
+homelab-agent = "homelab_agent.cli:main"
+
 [project.optional-dependencies]
 dev = [
-  "httpx",
   "pytest",
   "pytest-cov",
   "ruff",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["api/src/homelab_monitor"]
+packages = [
+  "agent/src/homelab_agent",
+  "api/src/homelab_monitor",
+]
 
 [tool.pytest.ini_options]
 addopts = "-q"
-testpaths = ["tests/api"]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+src = ["agent/src", "api/src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]

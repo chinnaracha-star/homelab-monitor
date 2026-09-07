@@ -22,7 +22,7 @@ router = APIRouter(tags=["health"])
 def health(db: Annotated[Session, Depends(get_db)]) -> HealthResponse | JSONResponse:
     now = datetime.now(UTC)
     try:
-        db.execute(text("SELECT 1"))
+        db.execute(text("SELECT COUNT(*) FROM agents"))
     except SQLAlchemyError:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

@@ -1,0 +1,29 @@
+[Unit]
+Description=HomeLab Monitor Ubuntu Agent
+Documentation=https://github.com/chinnaracha-star/homelab-monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=homelab-monitor
+Group=homelab-monitor
+WorkingDirectory=/opt/homelab-monitor
+EnvironmentFile=/etc/homelab-monitor/agent.env
+ExecStart=/opt/homelab-monitor/.venv/bin/homelab-agent run
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+StateDirectory=homelab-monitor
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

@@ -7,20 +7,42 @@ project, apply migrations, and start Uvicorn as described in the root README.
 
 ## Register an agent
 
+With the API running, execute this from the repository root. The snippet reads
+`HOMELAB_REGISTRATION_KEY` directly from `.env`; it does not require exporting
+the key into the shell:
+
 ```bash
-curl --request POST http://127.0.0.1:8000/api/v1/agents/register \
-  --header "Content-Type: application/json" \
-  --header "X-Registration-Key: replace-with-the-registration-key" \
-  --data '{
-    "name": "home-server",
-    "hostname": "home-server.local",
-    "version": "0.1.0",
-    "capabilities": ["ubuntu", "docker", "immich", "qnap"]
-  }'
+AGENT_TOKEN="$(
+  .venv/bin/python - <<'PY'
+import socket
+
+import httpx
+from dotenv import dotenv_values
+
+config = dotenv_values(".env")
+registration_key = config.get("HOMELAB_REGISTRATION_KEY")
+if not registration_key:
+    raise SystemExit("HOMELAB_REGISTRATION_KEY is missing from .env")
+
+response = httpx.post(
+    "http://127.0.0.1:8000/api/v1/agents/register",
+    headers={"X-Registration-Key": registration_key},
+    json={
+        "name": socket.gethostname(),
+        "hostname": socket.gethostname(),
+        "version": "0.1.0",
+        "capabilities": ["ubuntu"],
+    },
+)
+response.raise_for_status()
+print(response.json()["agent_token"])
+PY
+)"
 ```
 
-The response contains `agent_token`. Store it with file mode `0600`; the server
-does not return it again.
+The one-time token is now available as `AGENT_TOKEN` in the current shell
+without being printed. Store it in the agent environment file with mode `0600`;
+the server does not return it again.
 
 ## Upload a report
 
@@ -49,3 +71,16 @@ Retrying an identical `report_id` and payload is idempotent. Reusing the ID with
 different content returns HTTP `409`.
 
 Interactive OpenAPI documentation is available at `/docs`.
+
+## Ubuntu agent integration
+
+The packaged agent implements check-in and report upload automatically. Configure
+it with the one-time registration token and run:
+
+```bash
+.venv/bin/homelab-agent --env-file ./agent.env run
+```
+
+The current agent sends a full system report each cycle. Buffered retries retain
+the original `report_id`, so the API's existing idempotency contract prevents
+duplicate database rows.

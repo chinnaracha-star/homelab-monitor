@@ -1,12 +1,12 @@
 # HomeLab Monitor Toolkit
 
 HomeLab Monitor Toolkit is an agent-server monitoring platform for Ubuntu hosts,
-Docker workloads, Immich, and QNAP. Lightweight agents collect local health data
+Docker workloads, Immich, and QNAP. Lightweight Python agents collect local health data
 and send authenticated reports to a central FastAPI server for history, alerting,
 Telegram notifications, and a web dashboard.
 
-> Status: early development. Sprint 1 implements the central API, agent registration,
-> metrics ingestion, SQLite persistence, and configuration sync.
+> Status: early development. Sprint 1 central API is complete. Sprint 2 adds the
+> Ubuntu system agent and reliable offline delivery.
 
 ## Architecture
 
@@ -38,6 +38,28 @@ cp .env.example .env
 
 The API is available at `http://127.0.0.1:8000`, with OpenAPI documentation at
 `/docs` and the health endpoint at `/health`.
+
+## Ubuntu agent
+
+Collect one local snapshot without connecting to the server:
+
+```bash
+.venv/bin/homelab-agent collect
+```
+
+Register the host through the API, copy the one-time token, and create an
+environment file from `deploy/systemd/agent.env.example`. Start the scheduled
+agent manually:
+
+```bash
+.venv/bin/homelab-agent --env-file ./agent.env run
+```
+
+The server controls the next reporting interval. Failed reports are retained in
+a bounded local SQLite queue and retried in order with their original report IDs.
+The [registration example](docs/api.md#register-an-agent) reads the bootstrap
+key directly from `.env` using `python-dotenv`; no shell export is required. See
+[the agent guide](docs/agent.md) for configuration, systemd, and troubleshooting.
 
 Run tests and lint checks:
 

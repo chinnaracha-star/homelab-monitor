@@ -1,4 +1,10 @@
+import json
+
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from homelab_monitor.routers.health import health
 
 REGISTRATION_KEY = "test-registration-key-at-least-24-chars"
 
@@ -24,6 +30,17 @@ def test_health_reports_database_status(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
     assert response.json()["database"] == "up"
+
+
+def test_health_is_degraded_when_migrations_are_missing() -> None:
+    engine = create_engine("sqlite://")
+
+    with Session(engine) as session:
+        response = health(session)
+
+    assert response.status_code == 503
+    assert json.loads(response.body)["status"] == "degraded"
+    assert json.loads(response.body)["database"] == "down"
 
 
 def test_registration_requires_valid_bootstrap_key(client: TestClient) -> None:

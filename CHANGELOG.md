@@ -14,3 +14,10 @@ and the project will use [Semantic Versioning](https://semver.org/).
 - One-time agent credential issuance with hashed token storage.
 - Authenticated agent check-in, configuration sync, and idempotent metrics upload.
 - Structured request logging, API tests, and GitHub Actions quality gates.
+- Python Ubuntu agent with `run` and `collect` commands.
+- CPU, memory, filesystem, load-average, uptime, OS, hostname, and optional
+  temperature collection.
+- Server-controlled reporting intervals and threshold configuration sync.
+- Bounded exponential retry and persistent SQLite offline report queue.
+- Graceful SIGINT/SIGTERM shutdown and hardened systemd service example.
+- Agent collector, transport, authentication, buffering, restart, and retry tests.

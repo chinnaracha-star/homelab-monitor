@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  api:
-    name: API quality gates
+  python:
+    name: API and agent quality gates
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:

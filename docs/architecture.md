@@ -2,14 +2,14 @@
 
 ## Version 1 boundary
 
-HomeLab Monitor Toolkit uses an agent-server architecture. Bash agents collect
+HomeLab Monitor Toolkit uses an agent-server architecture. Python agents collect
 host-local information while the central server owns persistence, policy,
 history, alert transitions, Telegram delivery, and the dashboard.
 
 ```text
 Ubuntu host                         Central server
 ┌────────────────────┐             ┌───────────────────────────┐
-│ Bash CLI and agent │ HTTPS POST  │ FastAPI                   │
+│ Python CLI/agent   │ HTTPS POST  │ FastAPI                   │
 │ System checks      ├────────────►│ Authentication            │
 │ Docker checks      │             │ Config service            │
 │ Immich checks      │◄────────────┤ Metrics and health score  │
@@ -35,6 +35,10 @@ Each accepted report response includes:
 
 Agent auto-update is not part of version 1.
 
+Sprint 2 sends a full system snapshot each cycle. The report and buffer
+interfaces preserve stable report IDs so changed-data reporting can be added
+later without changing the server ingestion contract.
+
 ## Trust boundaries
 
 - The bootstrap registration key only authorizes registration.
@@ -56,3 +60,8 @@ higher-write-volume requirements justify it.
 Reports use a client-generated report ID and server-computed content hash.
 Replaying the same report is safe; reusing an ID with different content is
 rejected.
+
+The agent uses a separate local SQLite database as a bounded offline queue. It
+stores complete report payloads before retry, survives agent restarts, sends the
+oldest report first, and keeps the original report ID. This database is not the
+central metrics database.
