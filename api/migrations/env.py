@@ -4,7 +4,13 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from homelab_monitor.database import Base
-from homelab_monitor.models import Agent, AgentConfiguration, Alert, MetricReport  # noqa: F401
+from homelab_monitor.models import (  # noqa: F401
+    Agent,
+    AgentConfiguration,
+    Alert,
+    MetricReport,
+    User,
+)
 from homelab_monitor.settings import get_settings
 
 config = context.config

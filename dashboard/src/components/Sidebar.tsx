@@ -18,7 +18,7 @@ export const Sidebar = memo(function Sidebar({ open, onNavigate }: SidebarProps)
       id="app-sidebar"
     >
       <nav className={styles.navigation} aria-label="Primary navigation">
-        <NavLink className={navClassName} to="/" end onClick={onNavigate}>
+        <NavLink className={navClassName} to="/dashboard" onClick={onNavigate}>
           Overview
         </NavLink>
         <NavLink className={navClassName} to="/agents" onClick={onNavigate}>

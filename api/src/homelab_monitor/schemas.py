@@ -125,3 +125,24 @@ class ActiveAlertResponse(BaseModel):
     message: str
     opened_at: datetime
     last_observed_at: datetime
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=72)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int
+
+
+class CurrentUserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    username: str
+    full_name: str
+    role: str
+    is_active: bool

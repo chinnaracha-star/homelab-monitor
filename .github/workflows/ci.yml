@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 10
     env:
       HOMELAB_REGISTRATION_KEY: ci-registration-key-at-least-24-chars
+      HOMELAB_JWT_SECRET: ci-jwt-secret-key-at-least-32-characters
       HOMELAB_DATABASE_URL: sqlite:////tmp/homelab-monitor-ci.db
       HOMELAB_LOG_LEVEL: WARNING
     steps:

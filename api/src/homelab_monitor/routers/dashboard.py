@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from homelab_monitor.auth.dependencies import get_current_user
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
 from homelab_monitor.models import Agent, Alert, MetricReport
@@ -17,7 +18,11 @@ from homelab_monitor.schemas import (
     ReportCountResponse,
 )
 
-router = APIRouter(prefix="/api/v1", tags=["dashboard"])
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["dashboard"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get(

@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from fastapi.testclient import TestClient
 
 from homelab_monitor.settings import get_settings
@@ -54,7 +56,10 @@ def upload_report(
     assert response.status_code == 200
 
 
-def test_dashboard_overview_and_agent_list(client: TestClient) -> None:
+def test_dashboard_overview_and_agent_list(
+    client: TestClient,
+    auth_header: Callable[..., dict[str, str]],
+) -> None:
     online_id, online_token = register_agent(client, "dashboard-online")
     register_agent(client, "dashboard-offline")
     check_in = client.post(
@@ -68,8 +73,8 @@ def test_dashboard_overview_and_agent_list(client: TestClient) -> None:
     )
     assert check_in.status_code == 200
 
-    agents_response = client.get("/api/v1/agents")
-    overview_response = client.get("/api/v1/dashboard/overview")
+    agents_response = client.get("/api/v1/agents", headers=auth_header())
+    overview_response = client.get("/api/v1/dashboard/overview", headers=auth_header())
 
     assert agents_response.status_code == 200
     assert overview_response.status_code == 200
@@ -94,14 +99,17 @@ def test_dashboard_overview_and_agent_list(client: TestClient) -> None:
     }
 
 
-def test_agent_detail_returns_configuration_and_capabilities(client: TestClient) -> None:
+def test_agent_detail_returns_configuration_and_capabilities(
+    client: TestClient,
+    auth_header: Callable[..., dict[str, str]],
+) -> None:
     agent_id, _ = register_agent(
         client,
         "dashboard-detail",
         capabilities=["ubuntu", "docker"],
     )
 
-    response = client.get(f"/api/v1/agents/{agent_id}")
+    response = client.get(f"/api/v1/agents/{agent_id}", headers=auth_header())
 
     assert response.status_code == 200
     assert response.json() == {
@@ -116,7 +124,10 @@ def test_agent_detail_returns_configuration_and_capabilities(client: TestClient)
     }
 
 
-def test_latest_report_uses_observation_time(client: TestClient) -> None:
+def test_latest_report_uses_observation_time(
+    client: TestClient,
+    auth_header: Callable[..., dict[str, str]],
+) -> None:
     agent_id, token = register_agent(client, "dashboard-reports")
     upload_report(
         client,
@@ -133,7 +144,10 @@ def test_latest_report_uses_observation_time(client: TestClient) -> None:
         10.0,
     )
 
-    response = client.get(f"/api/v1/agents/{agent_id}/latest-report")
+    response = client.get(
+        f"/api/v1/agents/{agent_id}/latest-report",
+        headers=auth_header(),
+    )
 
     assert response.status_code == 200
     assert response.json()["agent_id"] == agent_id
@@ -141,9 +155,13 @@ def test_latest_report_uses_observation_time(client: TestClient) -> None:
     assert response.json()["payload"]["modules"][0]["metrics"]["cpu"]["usage_percent"] == 20.0
 
 
-def test_dashboard_agent_not_found_responses(client: TestClient) -> None:
-    detail = client.get("/api/v1/agents/missing-agent")
-    latest = client.get("/api/v1/agents/missing-agent/latest-report")
+def test_dashboard_agent_not_found_responses(
+    client: TestClient,
+    auth_header: Callable[..., dict[str, str]],
+) -> None:
+    headers = auth_header()
+    detail = client.get("/api/v1/agents/missing-agent", headers=headers)
+    latest = client.get("/api/v1/agents/missing-agent/latest-report", headers=headers)
 
     assert detail.status_code == 404
     assert detail.json()["error"]["code"] == "agent_not_found"
@@ -151,10 +169,16 @@ def test_dashboard_agent_not_found_responses(client: TestClient) -> None:
     assert latest.json()["error"]["code"] == "agent_not_found"
 
 
-def test_latest_report_not_found_for_registered_agent(client: TestClient) -> None:
+def test_latest_report_not_found_for_registered_agent(
+    client: TestClient,
+    auth_header: Callable[..., dict[str, str]],
+) -> None:
     agent_id, _ = register_agent(client, "dashboard-no-reports")
 
-    response = client.get(f"/api/v1/agents/{agent_id}/latest-report")
+    response = client.get(
+        f"/api/v1/agents/{agent_id}/latest-report",
+        headers=auth_header(),
+    )
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "latest_report_not_found"
@@ -163,6 +187,8 @@ def test_latest_report_not_found_for_registered_agent(client: TestClient) -> Non
 def test_dashboard_routes_are_documented_in_openapi(client: TestClient) -> None:
     paths = client.get("/openapi.json").json()["paths"]
 
+    assert "/api/v1/auth/login" in paths
+    assert "/api/v1/auth/me" in paths
     assert "/api/v1/dashboard/overview" in paths
     assert "/api/v1/agents" in paths
     assert "/api/v1/agents/{agent_id}" in paths
@@ -171,7 +197,10 @@ def test_dashboard_routes_are_documented_in_openapi(client: TestClient) -> None:
     assert "/api/v1/alerts/active" in paths
 
 
-def test_agent_report_history_returns_newest_reports_first(client: TestClient) -> None:
+def test_agent_report_history_returns_newest_reports_first(
+    client: TestClient,
+    auth_header: Callable[..., dict[str, str]],
+) -> None:
     agent_id, token = register_agent(client, "dashboard-history")
     upload_report(
         client,
@@ -195,7 +224,11 @@ def test_agent_report_history_returns_newest_reports_first(client: TestClient) -
         20.0,
     )
 
-    response = client.get(f"/api/v1/agents/{agent_id}/reports", params={"limit": 2})
+    response = client.get(
+        f"/api/v1/agents/{agent_id}/reports",
+        params={"limit": 2},
+        headers=auth_header(),
+    )
 
     assert response.status_code == 200
     assert [report["report_id"] for report in response.json()] == [
@@ -204,16 +237,27 @@ def test_agent_report_history_returns_newest_reports_first(client: TestClient) -
     ]
 
 
-def test_agent_report_history_validates_agent_and_limit(client: TestClient) -> None:
-    missing = client.get("/api/v1/agents/missing-agent/reports")
-    invalid_limit = client.get("/api/v1/agents/missing-agent/reports", params={"limit": 1})
+def test_agent_report_history_validates_agent_and_limit(
+    client: TestClient,
+    auth_header: Callable[..., dict[str, str]],
+) -> None:
+    headers = auth_header()
+    missing = client.get("/api/v1/agents/missing-agent/reports", headers=headers)
+    invalid_limit = client.get(
+        "/api/v1/agents/missing-agent/reports",
+        params={"limit": 1},
+        headers=headers,
+    )
 
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "agent_not_found"
     assert invalid_limit.status_code == 422
 
 
-def test_active_alerts_include_agent_context(client: TestClient) -> None:
+def test_active_alerts_include_agent_context(
+    client: TestClient,
+    auth_header: Callable[..., dict[str, str]],
+) -> None:
     agent_id, token = register_agent(client, "dashboard-active-alert")
     upload_report(
         client,
@@ -223,7 +267,7 @@ def test_active_alerts_include_agent_context(client: TestClient) -> None:
         100.0,
     )
 
-    response = client.get("/api/v1/alerts/active")
+    response = client.get("/api/v1/alerts/active", headers=auth_header())
 
     assert response.status_code == 200
     alert = next(item for item in response.json() if item["agent_id"] == agent_id)

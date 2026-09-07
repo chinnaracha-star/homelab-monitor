@@ -1,4 +1,6 @@
 import { memo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../auth/AuthContext'
 import styles from './Layout.module.css'
 
 interface NavbarProps {
@@ -7,6 +9,14 @@ interface NavbarProps {
 }
 
 export const Navbar = memo(function Navbar({ sidebarOpen, onToggleSidebar }: NavbarProps) {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    logout()
+    void navigate('/login', { replace: true })
+  }
+
   return (
     <header className={styles.navbar}>
       <button
@@ -25,7 +35,17 @@ export const Navbar = memo(function Navbar({ sidebarOpen, onToggleSidebar }: Nav
         </span>
         <span>HomeLab Monitor</span>
       </div>
-      <span className={styles.environment}>Read-only dashboard</span>
+      <div className={styles.session}>
+        {user ? (
+          <>
+            <span className={styles.userName}>{user.username}</span>
+            <span className={styles.userRole}>{user.role}</span>
+            <button className={styles.logoutButton} type="button" onClick={handleLogout}>
+              Logout
+            </button>
+          </>
+        ) : null}
+      </div>
     </header>
   )
 })

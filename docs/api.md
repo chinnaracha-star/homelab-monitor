@@ -72,9 +72,34 @@ different content returns HTTP `409`.
 
 Interactive OpenAPI documentation is available at `/docs`.
 
+## Authentication
+
+Dashboard APIs require a JWT issued by `POST /api/v1/auth/login`:
+
+```bash
+curl --request POST http://127.0.0.1:8000/api/v1/auth/login \
+  --header "Content-Type: application/json" \
+  --data '{"username":"admin","password":"admin123"}'
+```
+
+Use the returned `access_token` as `Authorization: Bearer <token>` for:
+
+- `GET /api/v1/auth/me`
+- `GET /api/v1/dashboard/overview`
+- `GET /api/v1/agents`
+- `GET /api/v1/agents/{agent_id}`
+- `GET /api/v1/agents/{agent_id}/latest-report`
+- `GET /api/v1/agents/{agent_id}/reports?limit=30`
+- `GET /api/v1/alerts/active`
+
+`GET /health` and agent registration/check-in/report upload remain independent
+of dashboard JWTs. Full role and token behaviour is documented in
+[authentication.md](authentication.md).
+
 ## Dashboard API
 
-The read-only Dashboard API uses the existing agent and report data:
+The read-only Dashboard API uses the existing agent and report data and requires
+a dashboard JWT:
 
 - `GET /api/v1/dashboard/overview` returns agent status and report counts.
 - `GET /api/v1/agents` returns agents ordered by name.

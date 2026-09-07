@@ -27,3 +27,7 @@ and the project will use [Semantic Versioning](https://semver.org/).
   agent detection.
 - Reusable Telegram Bot API notifier for new and reopened alert transitions,
   with environment configuration and duplicate-notification suppression.
+- Dashboard user accounts, bcrypt password hashing, and HS256 JWT access tokens.
+- `POST /api/v1/auth/login` and `GET /api/v1/auth/me`.
+- JWT protection for dashboard, agent-read, and alert-read APIs.
+- React login page, route guards, logout, and navbar session display.

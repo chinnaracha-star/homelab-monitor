@@ -56,6 +56,8 @@ class Settings(BaseSettings):
             "HOMELAB_TELEGRAM_REQUEST_TIMEOUT",
         ),
     )
+    jwt_secret: SecretStr = Field(min_length=32)
+    jwt_expire_minutes: int = Field(default=60, ge=1, le=10_080)
 
 
 @lru_cache

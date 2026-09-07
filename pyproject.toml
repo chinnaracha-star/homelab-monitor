@@ -12,10 +12,13 @@ license = { text = "MIT" }
 authors = [{ name = "ChinDurex" }]
 dependencies = [
   "alembic",
+  "bcrypt>=4.0.0,<4.1.0",
   "fastapi",
   "httpx",
+  "passlib[bcrypt]",
   "psutil",
   "pydantic-settings",
+  "PyJWT",
   "sqlalchemy",
   "uvicorn[standard]",
 ]

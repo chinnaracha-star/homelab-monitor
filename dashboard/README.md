@@ -29,5 +29,6 @@ the deployment reverse proxy.
 
 ```bash
 npm run lint
+npm run test
 npm run build
 ```

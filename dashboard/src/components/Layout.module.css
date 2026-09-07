@@ -54,6 +54,38 @@
   font-size: 0.82rem;
 }
 
+.session {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+.userName {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.userRole {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.logoutButton {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  background: var(--surface);
+  cursor: pointer;
+}
+
 .body {
   display: grid;
   grid-template-columns: 15rem minmax(0, 1fr);

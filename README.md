@@ -5,8 +5,8 @@ Docker workloads, Immich, and QNAP. Lightweight Python agents collect local heal
 and send authenticated reports to a central FastAPI server for history, alerting,
 Telegram notifications, and a web dashboard.
 
-> Status: early development. Sprint 1 central API and Sprint 2 Ubuntu agent are
-> complete. Sprint 3.1 adds read-only Dashboard API endpoints.
+> Status: early development. Sprint 1–4 monitoring APIs and dashboard UI are in
+> place. Sprint 5.1 adds dashboard JWT authentication.
 
 ## Architecture
 
@@ -32,6 +32,7 @@ Requirements:
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 cp .env.example .env
+# Set HOMELAB_REGISTRATION_KEY and HOMELAB_JWT_SECRET in .env
 .venv/bin/alembic upgrade head
 .venv/bin/uvicorn homelab_monitor.main:app --reload
 ```
@@ -39,12 +40,24 @@ cp .env.example .env
 The API is available at `http://127.0.0.1:8000`, with OpenAPI documentation at
 `/docs` and the health endpoint at `/health`.
 
-Dashboard clients can read:
+The dashboard is a Vite app in `dashboard/`. After logging in at `/login` it
+calls the protected Dashboard API.
+
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+
+Dashboard clients authenticate with a JWT and then read:
 
 - `/api/v1/dashboard/overview`
 - `/api/v1/agents`
 - `/api/v1/agents/{agent_id}`
 - `/api/v1/agents/{agent_id}/latest-report`
+
+Default login after migration: `admin` / `admin123`. See
+[authentication](docs/authentication.md).
 
 The server also persists active and resolved alert state for CPU, memory, disk,
 temperature, and offline agents. New alert transitions can be delivered through
