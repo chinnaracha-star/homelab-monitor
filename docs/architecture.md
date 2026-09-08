@@ -82,6 +82,19 @@ CPU, memory, disk, temperature, and network counters. The dashboard reads
 aggregated history through `GET /api/v1/history/agents/{agent_id}` rather than
 scanning full JSON payloads. See [history.md](history.md).
 
+Named agent groups live in `agent_groups` with membership in
+`agent_group_members`. Group membership is independent of agent tokens and
+metric history. See [groups.md](groups.md).
+
+Read-only photo connectors sit behind `InfrastructureService`. Immich, QuMagie,
+and QNAP snapshots are aggregated for the dashboard; the existing NAS upload
+path is unchanged and the API never writes photos. See
+[photo-services.md](photo-services.md).
+
+A secondary QNAP TS-253 Pro is observed only as a backup destination. The
+backup connector is GET-only and never starts, stops, or deletes jobs. See
+[backup.md](backup.md).
+
 The agent uses a separate local SQLite database as a bounded offline queue. It
 stores complete report payloads before retry, survives agent restarts, sends the
 oldest report first, and keeps the original report ID. This database is not the
@@ -89,18 +102,19 @@ central metrics database.
 
 ## Alert state
 
-The API evaluates accepted system reports for CPU, memory, disk, and temperature
-threshold breaches. Alert state is stored centrally and transitions between
-`active` and `resolved`; repeated breaches update the existing state rather than
-creating duplicate alerts.
+The API evaluates accepted system reports through a metric evaluator and
+database-backed alert rules, then the existing alert engine opens, updates, or
+resolves rows in `alerts`. Event kinds remain `cpu_high`, `memory_high`,
+`disk_high`, `temperature_high`, and `agent_offline`. See
+[alert-rules.md](alert-rules.md).
 
-A periodic server task compares each agent's last contact with the configured
-offline threshold and persists an `agent_offline` alert. A successful check-in
-or report resolves that state. Alert evaluation and report persistence share the
-same database transaction.
+A periodic server task compares each agent's last contact with offline rules
+(or the environment offline threshold when no rules exist) and persists an
+`agent_offline` alert. A successful check-in or report resolves that state.
+Alert evaluation and report persistence share the same database transaction.
 
-New and reopened alert transitions are delivered through a reusable Telegram
-notifier after alert state commits. Repeated active observations do not produce
-duplicate messages, and delivery failures do not roll back reports or alert
-state. A durable notification outbox and recovery notifications remain future
-work.
+New and reopened alert transitions are delivered through the notification
+center after alert state commits. Telegram, Discord, Slack, and email are
+supported. Repeated active observations do not produce duplicate messages, and
+delivery failures do not roll back reports or alert state. See
+[notifications.md](notifications.md).

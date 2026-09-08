@@ -1,12 +1,16 @@
 import { memo } from 'react'
 import type { AgentFilter } from '../utils/agents'
+import type { GroupSummary } from '../types/dashboard'
 import styles from './Components.module.css'
 
 interface AgentToolbarProps {
   query: string
   filter: AgentFilter
+  groups: GroupSummary[]
+  groupId: string
   onQueryChange: (value: string) => void
   onFilterChange: (value: AgentFilter) => void
+  onGroupChange: (value: string) => void
 }
 
 const filters: { id: AgentFilter; label: string }[] = [
@@ -19,8 +23,11 @@ const filters: { id: AgentFilter; label: string }[] = [
 export const AgentToolbar = memo(function AgentToolbar({
   query,
   filter,
+  groups,
+  groupId,
   onQueryChange,
   onFilterChange,
+  onGroupChange,
 }: AgentToolbarProps) {
   return (
     <section className={styles.toolbar} aria-label="Agent search and filters">
@@ -34,6 +41,22 @@ export const AgentToolbar = memo(function AgentToolbar({
           placeholder="Search name, hostname, OS, or status"
           onChange={(event) => onQueryChange(event.target.value)}
         />
+      </label>
+      <label className={styles.searchLabel} htmlFor="agent-group-filter">
+        Group
+        <select
+          className={styles.searchInput}
+          id="agent-group-filter"
+          value={groupId}
+          onChange={(event) => onGroupChange(event.target.value)}
+        >
+          <option value="all">All groups</option>
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
       </label>
       <div className={styles.filterGroup} role="group" aria-label="Agent status filters">
         {filters.map((item) => (

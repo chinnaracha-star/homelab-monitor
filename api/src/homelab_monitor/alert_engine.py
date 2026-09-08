@@ -6,6 +6,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from homelab_monitor.alert_rules.evaluate import (
+    agent_group_ids,
+    evaluate_samples,
+    load_effective_rules,
+)
+from homelab_monitor.alert_rules.metrics import extract_system_samples, offline_sample
 from homelab_monitor.models import Agent, Alert
 from homelab_monitor.settings import Settings
 
@@ -35,12 +41,28 @@ class AlertEngine:
         payload: dict[str, Any],
         observed_at: datetime,
     ) -> list[AlertEvent]:
+        samples = extract_system_samples(payload)
+        if not samples:
+            return []
+        rules = load_effective_rules(db, self.settings)
+        group_ids = agent_group_ids(db, agent.id)
         events: list[AlertEvent] = []
-        for module in payload.get("modules", []):
-            if module.get("module") != "system":
-                continue
-            metrics = module.get("metrics", {})
-            events.extend(self._evaluate_system_metrics(db, agent, metrics, observed_at))
+        for evaluated in evaluate_samples(samples, rules, agent, group_ids):
+            event = self._set_threshold_state(
+                db,
+                agent,
+                kind=evaluated.kind,
+                resource=evaluated.resource,
+                value=evaluated.value,
+                threshold=evaluated.threshold,
+                breached=evaluated.breached,
+                observed_at=observed_at,
+                message=evaluated.message,
+                severity=evaluated.severity,
+                cooldown_seconds=evaluated.cooldown_seconds,
+            )
+            if event is not None:
+                events.append(event)
         return events
 
     def mark_agent_online(self, db: Session, agent: Agent, observed_at: datetime) -> None:
@@ -64,157 +86,46 @@ class AlertEngine:
         observed_at = now or datetime.now(UTC)
         events: list[AlertEvent] = []
         status_changed = False
+        rules = load_effective_rules(db, self.settings)
         for agent in db.scalars(select(Agent)).all():
             last_contact = agent.last_seen_at or agent.created_at
             if last_contact is None:
                 continue
             elapsed = (observed_at - self._as_utc(last_contact)).total_seconds()
-            offline = elapsed > self.settings.agent_offline_after_seconds
+            group_ids = agent_group_ids(db, agent.id)
+            evaluated_list = evaluate_samples(
+                [offline_sample(elapsed, agent.name)],
+                rules,
+                agent,
+                group_ids,
+            )
+            evaluated = evaluated_list[0]
+            offline = evaluated.breached
             if offline and agent.status != "offline":
                 status_changed = True
             if offline:
                 agent.status = "offline"
+            message = (
+                f"Agent {agent.name} has been offline for {int(max(0, elapsed))} seconds"
+                if offline
+                else f"Agent {agent.name} is online"
+            )
             event = self._set_threshold_state(
                 db,
                 agent,
                 kind="agent_offline",
                 resource="agent",
                 value=max(0, elapsed),
-                threshold=float(self.settings.agent_offline_after_seconds),
+                threshold=evaluated.threshold,
                 breached=offline,
                 observed_at=observed_at,
-                message=(
-                    f"Agent {agent.name} has been offline for {int(max(0, elapsed))} seconds"
-                    if offline
-                    else f"Agent {agent.name} is online"
-                ),
+                message=message,
+                severity=evaluated.severity,
+                cooldown_seconds=evaluated.cooldown_seconds,
             )
             if event is not None:
                 events.append(event)
         return events, status_changed
-
-    def _evaluate_system_metrics(
-        self,
-        db: Session,
-        agent: Agent,
-        metrics: dict[str, Any],
-        observed_at: datetime,
-    ) -> list[AlertEvent]:
-        events: list[AlertEvent] = []
-        cpu = self._usage_value(metrics, "cpu", "cpu_percent")
-        if cpu is not None:
-            event = self._evaluate_metric(
-                db,
-                agent,
-                "cpu_high",
-                "system",
-                cpu,
-                self.settings.alert_cpu_threshold_percent,
-                observed_at,
-                "CPU usage",
-                "%",
-            )
-            if event is not None:
-                events.append(event)
-
-        memory = self._usage_value(metrics, "memory", "memory_percent")
-        if memory is not None:
-            event = self._evaluate_metric(
-                db,
-                agent,
-                "memory_high",
-                "system",
-                memory,
-                self.settings.alert_memory_threshold_percent,
-                observed_at,
-                "Memory usage",
-                "%",
-            )
-            if event is not None:
-                events.append(event)
-
-        for disk in metrics.get("disks", []):
-            value = self._number(disk.get("usage_percent"))
-            resource = str(disk.get("mount_point") or disk.get("filesystem") or "unknown")
-            if value is not None:
-                event = self._evaluate_metric(
-                    db,
-                    agent,
-                    "disk_high",
-                    resource,
-                    value,
-                    self.settings.alert_disk_threshold_percent,
-                    observed_at,
-                    f"Disk usage on {resource}",
-                    "%",
-                )
-                if event is not None:
-                    events.append(event)
-
-        for sensor in metrics.get("temperatures", []):
-            value = self._number(sensor.get("current_celsius"))
-            source = str(sensor.get("source") or "sensor")
-            label = str(sensor.get("label") or source)
-            if value is not None:
-                event = self._evaluate_metric(
-                    db,
-                    agent,
-                    "temperature_high",
-                    f"{source}:{label}",
-                    value,
-                    self.settings.alert_temperature_threshold_celsius,
-                    observed_at,
-                    f"Temperature for {label}",
-                    "°C",
-                )
-                if event is not None:
-                    events.append(event)
-        return events
-
-    def _evaluate_metric(
-        self,
-        db: Session,
-        agent: Agent,
-        kind: str,
-        resource: str,
-        value: float,
-        threshold: float,
-        observed_at: datetime,
-        label: str,
-        unit: str,
-    ) -> AlertEvent | None:
-        breached = value > threshold
-        relation = "exceeded" if breached else "is within"
-        return self._set_threshold_state(
-            db,
-            agent,
-            kind=kind,
-            resource=resource,
-            value=value,
-            threshold=threshold,
-            breached=breached,
-            observed_at=observed_at,
-            message=f"{label} {value:g}{unit} {relation} threshold {threshold:g}{unit}",
-        )
-
-    @staticmethod
-    def _usage_value(
-        metrics: dict[str, Any],
-        nested_key: str,
-        legacy_key: str,
-    ) -> float | None:
-        nested = metrics.get(nested_key)
-        if isinstance(nested, dict):
-            value = AlertEngine._number(nested.get("usage_percent"))
-            if value is not None:
-                return value
-        return AlertEngine._number(metrics.get(legacy_key))
-
-    @staticmethod
-    def _number(value: Any) -> float | None:
-        if isinstance(value, bool) or not isinstance(value, int | float):
-            return None
-        return float(value)
 
     @staticmethod
     def _as_utc(value: datetime) -> datetime:
@@ -234,6 +145,8 @@ class AlertEngine:
         breached: bool,
         observed_at: datetime,
         message: str,
+        severity: str = "warning",
+        cooldown_seconds: int = 0,
     ) -> AlertEvent | None:
         alert = db.scalar(
             select(Alert).where(
@@ -249,7 +162,7 @@ class AlertEngine:
                     kind=kind,
                     resource=resource,
                     status="active",
-                    severity="warning",
+                    severity=severity,
                     current_value=value,
                     threshold=threshold,
                     message=message,
@@ -271,32 +184,40 @@ class AlertEngine:
                     message=message,
                     observed_at=observed_at,
                 )
+            if alert.status == "resolved":
+                resolved_at = alert.resolved_at
+                if (
+                    cooldown_seconds > 0
+                    and resolved_at is not None
+                    and (observed_at - AlertEngine._as_utc(resolved_at)).total_seconds()
+                    < cooldown_seconds
+                ):
+                    return None
+                alert.status = "active"
+                alert.severity = severity
+                alert.opened_at = observed_at
+                alert.resolved_at = None
+                logger.warning(
+                    "alert_reopened",
+                    extra={"agent_id": agent.id, "kind": kind, "resource": resource},
+                )
+                event = AlertEvent(
+                    agent_id=agent.id,
+                    agent_name=agent.name,
+                    kind=kind,
+                    resource=resource,
+                    value=value,
+                    threshold=threshold,
+                    message=message,
+                    observed_at=observed_at,
+                )
             else:
-                if alert.status == "resolved":
-                    alert.status = "active"
-                    alert.opened_at = observed_at
-                    alert.resolved_at = None
-                    logger.warning(
-                        "alert_reopened",
-                        extra={"agent_id": agent.id, "kind": kind, "resource": resource},
-                    )
-                    event = AlertEvent(
-                        agent_id=agent.id,
-                        agent_name=agent.name,
-                        kind=kind,
-                        resource=resource,
-                        value=value,
-                        threshold=threshold,
-                        message=message,
-                        observed_at=observed_at,
-                    )
-                else:
-                    event = None
-                alert.current_value = value
-                alert.threshold = threshold
-                alert.message = message
-                alert.last_observed_at = observed_at
-                return event
+                event = None
+            alert.current_value = value
+            alert.threshold = threshold
+            alert.message = message
+            alert.last_observed_at = observed_at
+            return event
 
         if alert is not None and alert.status == "active":
             alert.status = "resolved"

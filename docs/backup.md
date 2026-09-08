@@ -1,9 +1,30 @@
-# Backup and restore
+# Backup
+
+HomeLab Monitor treats a secondary QNAP **TS-253 Pro** as a read-only backup
+target. The dashboard never starts, stops, deletes, moves, or uploads backup
+jobs. Hybrid Backup / replication status is observed through `BackupConnector`
+behind `InfrastructureService`.
+
+```text
+Phone → Qfile Pro → QNAP TS-453Be → Shared Folder → Immich / QuMagie
+InfrastructureService → Backup (TS-253 Pro) → GET /api/v1/backup → Dashboard
+```
+
+`GET /api/v1/backup` requires a dashboard JWT (admin, operator, viewer). Mock
+mode is the default and shows a TS-253 Pro job with Healthy status, Last Backup
+02:00, 18 minute duration, ~1.8 TB size, Running 43% progress, and Backup
+History (Yesterday Success, Today Running, Last Week Failed). Live mode issues
+GET `{HOMELAB_BACKUP_URL}/api/backup/status` only and records snapshots for
+history windows.
+
+Realtime uses existing `overview_updated` with `reason=backup_updated`.
+
+# Backup and restore (application data)
 
 Scripts live in `scripts/`. They copy SQLite, logs, and configuration. They do
 not dump running container filesystems.
 
-## Backup
+## Application backup
 
 ```bash
 ./scripts/backup.sh

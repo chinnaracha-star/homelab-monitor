@@ -49,3 +49,24 @@ and the project will use [Semantic Versioning](https://semver.org/).
 - Agent Detail history charts for CPU, memory, disk, and temperature.
 - Docker images and Compose files for the API and nginx dashboard.
 - systemd units for the API and dashboard, plus SQLite/log/config backup scripts.
+- Agent groups (`agent_groups`, `agent_group_members`) and Alembic migration
+  `0005_add_agent_groups`.
+- Group CRUD, membership, and summary APIs, plus overview `groups` and
+  `group_stats` fields.
+- Groups and Group Detail pages, group filter on Agents, bulk assign dialog,
+  and overview group cards.
+- Notification dispatcher with Telegram, Discord, Slack, and email providers.
+- Alembic migration `0006_add_notifications` plus delivery history and
+  dashboard notification settings.
+- Configurable alert rules (`alert_rules`) and Alembic migration
+  `0007_add_alert_rules`.
+- Alert Rules page for create, edit, delete, enable/disable, search, and filter.
+- Read-only infrastructure connectors (QNAP, Docker, Immich, QuMagie, backup)
+  with mock mode, aggregated snapshots, and an Infrastructure dashboard page.
+- Read-only Photo Services snapshots (Immich, QuMagie, QNAP storage) with live
+  GET collectors when configured, aggregated statistics, and a Photo Services
+  dashboard page.
+- Read-only Backup monitoring for a TS-253 Pro target (`GET /api/v1/backup`),
+  Backup page, Overview backup cards, Backup Progress, and Backup History.
+- Photo Services Storage History and Photo Growth, plus `ops_snapshots`
+  (Alembic `0008`) for live trend windows.

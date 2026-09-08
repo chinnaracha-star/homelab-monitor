@@ -1,13 +1,16 @@
 import { memo, useMemo } from 'react'
-import { getActiveAlerts, getAgents, getDashboardOverview } from '../api/dashboard'
+import { getActiveAlerts, getAgents, getBackupStatus, getDashboardOverview } from '../api/dashboard'
 import { ConnectionLost } from '../components/ConnectionLost'
+import { GroupCard } from '../components/GroupCard'
 import { LastUpdated } from '../components/LastUpdated'
 import { OverviewSkeleton } from '../components/Skeleton'
 import { SectionError } from '../components/SectionError'
 import { StatCard } from '../components/StatCard'
 import { StatusBadge } from '../components/StatusBadge'
 import { useLivePolling } from '../hooks/useDashboardSocket'
+import { formatPercent } from '../utils/bytes'
 import styles from './Pages.module.css'
+import groupStyles from './GroupsPage.module.css'
 
 const OVERVIEW_EVENTS = ['overview_updated'] as const
 const AGENT_EVENTS = ['overview_updated', 'agent_updated'] as const
@@ -17,6 +20,7 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
   const overview = useLivePolling(getDashboardOverview, OVERVIEW_EVENTS)
   const agents = useLivePolling(getAgents, AGENT_EVENTS)
   const alerts = useLivePolling(getActiveAlerts, ALERT_EVENTS)
+  const backup = useLivePolling(getBackupStatus, OVERVIEW_EVENTS)
 
   const isRefreshing = overview.isRefreshing || agents.isRefreshing || alerts.isRefreshing
   const lastUpdated = [overview.lastUpdated, agents.lastUpdated, alerts.lastUpdated]
@@ -62,9 +66,70 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
             <StatCard label="Online" value={overview.data.agents.online} />
             <StatCard label="Offline" value={overview.data.agents.offline} />
             <StatCard label="Total Reports" value={overview.data.reports.total} />
+            <StatCard label="Total Groups" value={overview.data.groups.total} />
           </section>
         ) : null}
       </section>
+
+      <section className={styles.section} aria-labelledby="overview-backup-title">
+        <h2 className={styles.sectionTitle} id="overview-backup-title">
+          Backup
+        </h2>
+        {backup.error ? (
+          <SectionError title="Backup API failed" onRetry={backup.retry} />
+        ) : null}
+        {backup.data ? (
+          <section className={styles.statGrid} aria-label="Backup summary">
+            <article className={styles.infoItem} aria-label={`Backup ${backup.data.destination.model}`}>
+              <p className={styles.infoLabel}>Backup</p>
+              <p className={styles.infoValue}>{backup.data.destination.model || 'TS-253 Pro'}</p>
+            </article>
+            <article className={styles.infoItem} aria-label={`Healthy ${backup.data.backup_health || backup.data.status}`}>
+              <p className={styles.infoLabel}>Healthy</p>
+              <p className={styles.infoValue}>{backup.data.backup_health || backup.data.status}</p>
+            </article>
+            <article
+              className={styles.infoItem}
+              aria-label={`Last Backup ${backup.data.last_backup || 'unknown'}`}
+            >
+              <p className={styles.infoLabel}>Last Backup</p>
+              <p className={styles.infoValue}>
+                {backup.data.last_backup ? new Date(backup.data.last_backup).toLocaleString() : 'unknown'}
+              </p>
+            </article>
+            <article
+              className={styles.infoItem}
+              aria-label={`Running % ${formatPercent(backup.data.progress_percent)}`}
+            >
+              <p className={styles.infoLabel}>Running %</p>
+              <p className={styles.infoValue}>{formatPercent(backup.data.progress_percent)}</p>
+            </article>
+          </section>
+        ) : null}
+      </section>
+
+      {overview.data && overview.data.group_stats.length > 0 ? (
+        <section className={styles.section} aria-labelledby="overview-groups-title">
+          <h2 className={styles.sectionTitle} id="overview-groups-title">
+            Groups
+          </h2>
+          <section className={groupStyles.groupGrid} aria-label="Agents and online counts per group">
+            {overview.data.group_stats.map((group) => (
+              <GroupCard
+                group={{
+                  id: group.id,
+                  name: group.name,
+                  description: '',
+                  agents: group.agents,
+                  online: group.online,
+                  agent_ids: [],
+                }}
+                key={group.id}
+              />
+            ))}
+          </section>
+        </section>
+      ) : null}
 
       <section className={styles.section} aria-labelledby="overview-agents-title">
         <h2 className={styles.sectionTitle} id="overview-agents-title">

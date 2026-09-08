@@ -7,6 +7,17 @@ export interface DashboardOverview {
   reports: {
     total: number
   }
+  groups: {
+    total: number
+  }
+  group_stats: GroupOverviewStat[]
+}
+
+export interface GroupOverviewStat {
+  id: string
+  name: string
+  agents: number
+  online: number
 }
 
 export interface AgentSummary {
@@ -122,4 +133,207 @@ export interface ActiveAlert {
   message: string
   opened_at: string
   last_observed_at: string
+}
+
+export interface GroupSummary {
+  id: string
+  name: string
+  description: string
+  agents: number
+  online: number
+  agent_ids: string[]
+}
+
+export interface GroupDetail extends GroupSummary {
+  created_at: string
+  updated_at: string
+  members: AgentSummary[]
+}
+
+export interface GroupSummaryList {
+  total: number
+  groups: GroupSummary[]
+}
+
+export type NotificationChannel = 'telegram' | 'discord' | 'slack' | 'email'
+export type NotificationStatus = 'pending' | 'sent' | 'failed'
+
+export interface NotificationDelivery {
+  id: string
+  alert_id: string | null
+  channel: NotificationChannel
+  recipient: string
+  status: NotificationStatus
+  error_message: string
+  sent_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface NotificationList {
+  total: number
+  notifications: NotificationDelivery[]
+}
+
+export interface TelegramNotificationSettings {
+  enabled: boolean
+  configured: boolean
+  api_base_url: string
+  chat_id: string
+  bot_token_set: boolean
+  last_test: string | null
+}
+
+export interface WebhookNotificationSettings {
+  enabled: boolean
+  configured: boolean
+  webhook_url_set: boolean
+}
+
+export interface EmailNotificationSettings {
+  enabled: boolean
+  configured: boolean
+  host: string
+  port: number
+  username: string
+  from_address: string
+  to_address: string
+  use_tls: boolean
+  password_set: boolean
+}
+
+export interface NotificationSettings {
+  telegram: TelegramNotificationSettings
+  discord: WebhookNotificationSettings
+  slack: WebhookNotificationSettings
+  email: EmailNotificationSettings
+}
+
+export type AlertMetric =
+  | 'cpu_percent'
+  | 'memory_percent'
+  | 'disk_percent'
+  | 'temperature_celsius'
+  | 'agent_offline'
+
+export type AlertOperator = '>' | '>=' | '<' | '<=' | '==' | '!='
+export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low'
+export type AlertAppliesTo = 'all' | 'group' | 'agent'
+
+export interface AlertRule {
+  id: string
+  name: string
+  description: string
+  metric: AlertMetric
+  operator: AlertOperator
+  threshold: number
+  severity: AlertSeverity
+  enabled: boolean
+  cooldown_seconds: number
+  applies_to: AlertAppliesTo
+  group_id: string | null
+  agent_id: string | null
+  preview: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AlertRulePayload {
+  name: string
+  description: string
+  metric: AlertMetric
+  operator: AlertOperator
+  threshold: number
+  severity: AlertSeverity
+  enabled: boolean
+  cooldown_seconds: number
+  applies_to: AlertAppliesTo
+  group_id?: string | null
+  agent_id?: string | null
+}
+
+export type InfrastructureStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
+
+export interface InfrastructureSnapshot {
+  service: string
+  status: InfrastructureStatus
+  version: string
+  updated_at: string
+  summary: Record<string, string | number | boolean | null>
+}
+
+export interface InfrastructureSummary {
+  collected_at: string
+  services: InfrastructureSnapshot[]
+}
+
+export interface PhotoGrowth {
+  today: number
+  yesterday: number
+  this_week: number
+}
+
+export interface StorageHistory {
+  today: number
+  yesterday: number
+  last_week: number
+}
+
+export interface PhotoStats {
+  indexed_photos: number
+  indexed_videos: number
+  albums: number
+  users: number
+  storage_used: number
+  storage_free: number
+  storage_percent: number
+  thumbnail_queue: number
+  face_queue: number
+  last_scan: string
+  capacity_bytes: number
+  storage_health: string
+  storage_percent_metric: number
+  thumbnail_queue_metric: number
+  face_queue_metric: number
+  immich_health: number
+  qumagie_health: number
+  storage_history: StorageHistory
+  photo_growth: PhotoGrowth
+}
+
+export interface PhotoServicesSummary {
+  collected_at: string
+  read_only: boolean
+  services: InfrastructureSnapshot[]
+  stats: PhotoStats
+}
+
+export interface BackupDestination {
+  hostname: string
+  ip: string
+  model: string
+}
+
+export interface BackupHistoryPeriod {
+  period: string
+  label: string
+  status: string
+}
+
+export interface BackupStatus {
+  read_only: boolean
+  status: string
+  backup_health: string
+  job_name: string
+  job_type: string
+  progress_percent: number
+  last_backup: string
+  next_backup: string
+  duration_seconds: number
+  backup_size_bytes: number
+  last_error: string
+  last_success: string
+  updated_at: string
+  destination: BackupDestination
+  history: BackupHistoryPeriod[]
 }

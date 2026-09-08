@@ -93,7 +93,35 @@ documented in [authentication.md](authentication.md).
 - `GET /api/v1/agents/{agent_id}/reports?limit=30`
 - `GET /api/v1/alerts/active`
 - `POST /api/v1/alerts/{alert_id}/acknowledge` (admin and operator)
+- `GET /api/v1/groups`
+- `GET /api/v1/groups/summary`
+- `GET /api/v1/groups/{group_id}`
+- `POST /api/v1/groups` (admin and operator)
+- `PUT /api/v1/groups/{group_id}` (admin and operator)
+- `DELETE /api/v1/groups/{group_id}` (admin and operator)
+- `POST /api/v1/groups/{group_id}/agents` (admin and operator)
+- `DELETE /api/v1/groups/{group_id}/agents/{agent_id}` (admin and operator)
 - `GET /api/v1/users` (admin)
+- `GET /api/v1/notifications`
+- `GET /api/v1/notifications/{notification_id}`
+- `POST /api/v1/notifications/test` (admin and operator)
+- `POST /api/v1/notifications/{notification_id}/retry` (admin and operator)
+- `GET /api/v1/settings/notifications`
+- `PUT /api/v1/settings/notifications` (admin)
+- `GET /api/v1/alert-rules`
+- `GET /api/v1/alert-rules/{rule_id}`
+- `POST /api/v1/alert-rules` (admin)
+- `PUT /api/v1/alert-rules/{rule_id}` (admin)
+- `PATCH /api/v1/alert-rules/{rule_id}/enable` (admin)
+- `DELETE /api/v1/alert-rules/{rule_id}` (admin)
+- `GET /api/v1/infrastructure`
+- `GET /api/v1/infrastructure/qnap`
+- `GET /api/v1/infrastructure/docker`
+- `GET /api/v1/infrastructure/immich`
+- `GET /api/v1/infrastructure/qumagie`
+- `GET /api/v1/infrastructure/backup`
+- `GET /api/v1/photo-services`
+- `GET /api/v1/backup`
 - `POST /api/v1/users` (admin)
 - `PUT /api/v1/users/{user_id}` (admin)
 - `PATCH /api/v1/users/{user_id}/password` (admin)
@@ -113,7 +141,9 @@ of dashboard JWTs. Roles are documented in
 The read-only Dashboard API uses the existing agent and report data and requires
 a dashboard JWT:
 
-- `GET /api/v1/dashboard/overview` returns agent status and report counts.
+- `GET /api/v1/dashboard/overview` returns agent status, report counts, total
+  groups, and per-group agent/online stats. Existing `agents` and `reports`
+  fields are unchanged.
 - `GET /api/v1/agents` returns agents ordered by name.
 - `GET /api/v1/agents/{agent_id}` returns agent details, capabilities, and the
   current configuration revision.
@@ -126,6 +156,10 @@ a dashboard JWT:
 - `POST /api/v1/alerts/{alert_id}/acknowledge` is available to admins and
   operators. It confirms the alert exists; persisted acknowledgement state can
   be added later without changing the route or role list.
+- Group APIs list, create, update, delete, and assign agents. See
+  [groups.md](groups.md).
+- Notification APIs list delivery history, send tests, retry failures, and
+  read/update channel settings. See [notifications.md](notifications.md).
 - `GET /api/v1/users` lists dashboard accounts for administrators. Password
   hashes are never returned.
 - `POST /api/v1/users`, `PUT /api/v1/users/{user_id}`,

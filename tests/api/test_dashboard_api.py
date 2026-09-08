@@ -87,6 +87,8 @@ def test_dashboard_overview_and_agent_list(
         overview["agents"]["total"] - overview["agents"]["online"]
     )
     assert isinstance(overview["reports"]["total"], int)
+    assert overview["groups"]["total"] == 0
+    assert overview["group_stats"] == []
 
     listed_agent = next(agent for agent in agents if agent["id"] == online_id)
     assert set(listed_agent) == {
@@ -200,6 +202,25 @@ def test_dashboard_routes_are_documented_in_openapi(client: TestClient) -> None:
     assert "/api/v1/users/{user_id}" in paths
     assert "/api/v1/users/{user_id}/password" in paths
     assert "/api/v1/users/{user_id}/status" in paths
+    assert "/api/v1/groups" in paths
+    assert "/api/v1/groups/summary" in paths
+    assert "/api/v1/groups/{group_id}" in paths
+    assert "/api/v1/groups/{group_id}/agents" in paths
+    assert "/api/v1/groups/{group_id}/agents/{agent_id}" in paths
+    assert "/api/v1/history/agents/{agent_id}" in paths
+    assert "/api/v1/history/agents/{agent_id}/export" in paths
+    assert "/api/v1/notifications" in paths
+    assert "/api/v1/notifications/{notification_id}" in paths
+    assert "/api/v1/notifications/test" in paths
+    assert "/api/v1/notifications/{notification_id}/retry" in paths
+    assert "/api/v1/settings/notifications" in paths
+    assert "/api/v1/alert-rules" in paths
+    assert "/api/v1/alert-rules/{rule_id}" in paths
+    assert "/api/v1/alert-rules/{rule_id}/enable" in paths
+    assert "/api/v1/infrastructure" in paths
+    assert "/api/v1/infrastructure/{service}" in paths
+    assert "/api/v1/photo-services" in paths
+    assert "/api/v1/backup" in paths
 
 
 def test_agent_report_history_returns_newest_reports_first(

@@ -5,8 +5,10 @@ Docker workloads, Immich, and QNAP. Lightweight Python agents collect local heal
 and send authenticated reports to a central FastAPI server for history, alerting,
 Telegram notifications, and a web dashboard.
 
-> Status: early development. Sprint 6.3 packages the stack for Docker Compose
-> and systemd production installs.
+> Status: early development. Phase 8.3 adds read-only backup monitoring for a
+> TS-253 Pro target. Agent protocol, alert engine, alert rules, notifications,
+> JWT, groups, history, existing REST APIs, and WebSocket event types remain in
+> place.
 
 ## Architecture
 
@@ -15,7 +17,7 @@ Ubuntu agents --HTTPS POST--> nginx -- /api --> FastAPI --SQLite--> History and 
                                       |
                                       +--> React dashboard (static)
                                       +--> /api/v1/ws/dashboard (WebSocket)
-                                      +--> Telegram
+                                      +--> Telegram / Discord / Slack / email
 ```
 
 Agents initiate outbound connections every 60 seconds by default. They do not
@@ -61,6 +63,9 @@ Dashboard clients authenticate with a JWT and then read:
 - `/api/v1/agents`
 - `/api/v1/agents/{agent_id}`
 - `/api/v1/agents/{agent_id}/latest-report`
+- `/api/v1/groups`
+- `/api/v1/groups/summary`
+- `/api/v1/groups/{group_id}`
 
 Default logins after migration (or after the next API start on an older `0003`
 database): `admin` / `admin123`, `operator` / `operator123`, and
@@ -77,9 +82,22 @@ Agent Detail also loads `GET /api/v1/history/agents/{agent_id}` for the selected
 time range and charts CPU, memory, disk, and temperature. See
 [history](docs/history.md).
 
+Agents can be organized into groups. Admins and operators create groups and
+assign membership; viewers can list groups and open group detail. See
+[groups](docs/groups.md).
+
 The server also persists active and resolved alert state for CPU, memory, disk,
-temperature, and offline agents. New alert transitions can be delivered through
-the reusable [Telegram notifier](docs/telegram.md).
+temperature, and offline agents. Thresholds come from
+[configurable alert rules](docs/alert-rules.md). Alert transitions are delivered
+through the [notification center](docs/notifications.md) (Telegram, Discord,
+Slack, email). Telegram environment variables still work as a fallback; see
+[telegram](docs/telegram.md).
+
+Read-only [infrastructure connectors](docs/infrastructure.md) expose QNAP,
+Docker, Immich, QuMagie, and backup snapshots to the dashboard. The
+[Photo Services](docs/photo-services.md) page is a read-only view of Immich,
+QuMagie, and QNAP storage. The [Backup](docs/backup.md) page observes
+replication to a TS-253 Pro target and never controls jobs.
 
 ## Ubuntu agent
 

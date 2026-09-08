@@ -27,8 +27,24 @@ def test_all_roles_can_read_dashboard_and_alerts(
         headers = auth_header(username, password)
         overview = client.get("/api/v1/dashboard/overview", headers=headers)
         alerts = client.get("/api/v1/alerts/active", headers=headers)
+        groups = client.get("/api/v1/groups", headers=headers)
+        summary = client.get("/api/v1/groups/summary", headers=headers)
+        notifications = client.get("/api/v1/notifications", headers=headers)
+        notify_settings = client.get("/api/v1/settings/notifications", headers=headers)
+        rules = client.get("/api/v1/alert-rules", headers=headers)
+        infrastructure = client.get("/api/v1/infrastructure", headers=headers)
+        photos = client.get("/api/v1/photo-services", headers=headers)
+        backup = client.get("/api/v1/backup", headers=headers)
         assert overview.status_code == 200
         assert alerts.status_code == 200
+        assert groups.status_code == 200
+        assert summary.status_code == 200
+        assert notifications.status_code == 200
+        assert notify_settings.status_code == 200
+        assert rules.status_code == 200
+        assert infrastructure.status_code == 200
+        assert photos.status_code == 200
+        assert backup.status_code == 200
 
 
 def test_admin_is_allowed_to_list_users(

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from homelab_monitor.auth.dependencies import require_roles
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
-from homelab_monitor.models import Agent, Alert, MetricReport
+from homelab_monitor.models import Agent, AgentGroup, AgentGroupMember, Alert, MetricReport
 from homelab_monitor.realtime import hub
 from homelab_monitor.schemas import (
     ActiveAlertResponse,
@@ -16,6 +16,8 @@ from homelab_monitor.schemas import (
     AgentSummaryResponse,
     AlertAcknowledgeResponse,
     DashboardOverviewResponse,
+    GroupCountResponse,
+    GroupOverviewItem,
     LatestMetricReportResponse,
     ReportCountResponse,
 )
@@ -40,6 +42,23 @@ def get_dashboard_overview(
         db.scalar(select(func.count()).select_from(Agent).where(Agent.status == "online")) or 0
     )
     total_reports = db.scalar(select(func.count()).select_from(MetricReport)) or 0
+    total_groups = db.scalar(select(func.count()).select_from(AgentGroup)) or 0
+    group_rows = db.execute(
+        select(AgentGroup.id, AgentGroup.name).order_by(AgentGroup.name.asc())
+    ).all()
+    memberships = db.execute(
+        select(AgentGroupMember.group_id, Agent.status).join(
+            Agent, Agent.id == AgentGroupMember.agent_id
+        )
+    ).all()
+    counts: dict[str, list[int]] = {group_id: [0, 0] for group_id, _ in group_rows}
+    for group_id, agent_status in memberships:
+        pair = counts.get(group_id)
+        if pair is None:
+            continue
+        pair[0] += 1
+        if agent_status == "online":
+            pair[1] += 1
 
     return DashboardOverviewResponse(
         agents=AgentCountResponse(
@@ -48,6 +67,16 @@ def get_dashboard_overview(
             offline=total_agents - online_agents,
         ),
         reports=ReportCountResponse(total=total_reports),
+        groups=GroupCountResponse(total=total_groups),
+        group_stats=[
+            GroupOverviewItem(
+                id=group_id,
+                name=name,
+                agents=counts[group_id][0],
+                online=counts[group_id][1],
+            )
+            for group_id, name in group_rows
+        ],
     )
 
 

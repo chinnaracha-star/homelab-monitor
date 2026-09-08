@@ -7,9 +7,12 @@ from fastapi.testclient import TestClient
 from homelab_monitor.alert_engine import AlertEvent
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram import (
+    TelegramNotificationError,
     TelegramNotifier,
     dispatch_alert_events,
     format_alert_message,
+    format_telegram_test_message,
+    telegram_config_error,
 )
 
 REGISTRATION_KEY = "test-registration-key-at-least-24-chars"
@@ -134,3 +137,126 @@ def test_report_upload_notifies_only_on_alert_transition(
 
     assert len(event_batches) == 1
     assert [event.kind for event in event_batches[0]] == ["cpu_high"]
+
+
+def test_telegram_test_message_includes_required_fields() -> None:
+    message = format_telegram_test_message(
+        server="production",
+        version="8.3.5",
+        observed_at=datetime(2026, 9, 8, 2, 0, tzinfo=UTC),
+    )
+    assert message.startswith("🚀 Homelab Monitor Test")
+    assert "Time: 2026-09-08T02:00:00+00:00" in message
+    assert "Server: production" in message
+    assert "Version: 8.3.5" in message
+    assert "Status: ok" in message
+
+
+def test_telegram_config_error_names_missing_fields() -> None:
+    assert "bot token" in telegram_config_error("https://api.telegram.org", "", "-100")
+    assert "chat ID" in telegram_config_error("https://api.telegram.org", "token", "")
+
+
+def _notifier(handler) -> TelegramNotifier:
+    return TelegramNotifier(
+        api_base_url="https://telegram.example.test",
+        bot_token="123456:AAHsecretTokenValue",
+        chat_id="-100123",
+        timeout=2,
+        client=httpx.Client(transport=httpx.MockTransport(handler), timeout=2),
+    )
+
+
+def test_verify_connection_calls_get_me() -> None:
+    captured: httpx.Request | None = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal captured
+        captured = request
+        return httpx.Response(200, json={"ok": True, "result": {"id": 1}})
+
+    notifier = _notifier(handler)
+    me = notifier.verify_connection()
+    assert captured is not None
+    assert captured.method == "GET"
+    assert str(captured.url).endswith("/bot123456:AAHsecretTokenValue/getMe")
+    assert notifier.last_http_status == 200
+    assert me["result"]["id"] == 1
+    notifier.close()
+
+
+def test_invalid_token_and_chat_id_errors() -> None:
+    def unauthorized(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            401,
+            json={"ok": False, "error_code": 401, "description": "Unauthorized"},
+        )
+
+    notifier = _notifier(unauthorized)
+    with pytest.raises(TelegramNotificationError, match="bot token"):
+        notifier.send_text("hello")
+    notifier.close()
+
+    def missing_chat(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            json={"ok": False, "error_code": 400, "description": "Bad Request: chat not found"},
+        )
+
+    notifier = _notifier(missing_chat)
+    with pytest.raises(TelegramNotificationError, match="chat ID"):
+        notifier.send_text("hello")
+    notifier.close()
+
+
+def test_http_error_redacts_bot_token() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            json={
+                "ok": False,
+                "description": "failed for 123456:AAHsecretTokenValue",
+            },
+        )
+
+    notifier = _notifier(handler)
+    with pytest.raises(TelegramNotificationError) as error:
+        notifier.send_text("hello")
+    assert "AAHsecretTokenValue" not in str(error.value)
+    notifier.close()
+
+
+def test_http_429_retries_after_retry_after() -> None:
+    attempts = {"count": 0}
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            return httpx.Response(
+                429,
+                json={
+                    "ok": False,
+                    "error_code": 429,
+                    "description": "Too Many Requests: retry after 1",
+                    "parameters": {"retry_after": 0},
+                },
+            )
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 9}})
+
+    notifier = _notifier(handler)
+    body = notifier.send_text("hello")
+    assert attempts["count"] == 2
+    assert notifier.last_http_status == 200
+    assert body["result"]["message_id"] == 9
+    notifier.close()
+
+
+def test_network_failure_is_telegram_error() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    notifier = _notifier(handler)
+    with pytest.raises(TelegramNotificationError, match="network failure"):
+        notifier.send_text("hello")
+    notifier.close()
+    notifier.close()

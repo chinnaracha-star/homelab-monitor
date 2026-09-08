@@ -9,10 +9,23 @@ from homelab_monitor import __version__
 from homelab_monitor.auth.bootstrap import ensure_default_users
 from homelab_monitor.database import get_engine
 from homelab_monitor.errors import APIError, api_error_handler
+from homelab_monitor.infrastructure_monitor import run_infrastructure_monitor
 from homelab_monitor.logging import RequestLoggingMiddleware, configure_logging
 from homelab_monitor.offline_monitor import run_offline_monitor
 from homelab_monitor.realtime import hub
-from homelab_monitor.routers import agents, auth, dashboard, health, history, realtime, users
+from homelab_monitor.routers import (
+    agents,
+    alert_rules,
+    auth,
+    dashboard,
+    groups,
+    health,
+    history,
+    infrastructure,
+    notifications,
+    realtime,
+    users,
+)
 from homelab_monitor.settings import get_settings
 
 
@@ -21,14 +34,18 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     with Session(get_engine()) as db:
         ensure_default_users(db)
     hub.bind_loop(asyncio.get_running_loop())
-    task = asyncio.create_task(run_offline_monitor(get_settings()))
+    tasks = [
+        asyncio.create_task(run_offline_monitor(get_settings())),
+        asyncio.create_task(run_infrastructure_monitor(get_settings())),
+    ]
     try:
         yield
     finally:
         hub.stop()
-        task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
+        for task in tasks:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 def create_app() -> FastAPI:
@@ -51,6 +68,10 @@ def create_app() -> FastAPI:
     application.include_router(dashboard.router)
     application.include_router(history.router)
     application.include_router(users.router)
+    application.include_router(groups.router)
+    application.include_router(notifications.router)
+    application.include_router(alert_rules.router)
+    application.include_router(infrastructure.router)
     application.include_router(realtime.router)
     return application
 

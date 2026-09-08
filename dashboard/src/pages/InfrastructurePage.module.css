@@ -1,0 +1,76 @@
+.connectorGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.connectorCard {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.15rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.connectorHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.connectorName {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.summaryList {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.summaryList div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+}
+
+.summaryList dt {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.summaryList dd {
+  margin: 0;
+  font-weight: 650;
+}
+
+.retryRow {
+  display: flex;
+  justify-content: start;
+}
+
+@media (max-width: 1050px) {
+  .connectorGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .connectorGrid {
+    grid-template-columns: 1fr;
+  }
+}

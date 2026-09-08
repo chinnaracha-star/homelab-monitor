@@ -19,13 +19,13 @@ Every message includes `id`, `type`, `timestamp`, and `payload`.
 | Type | When |
 | --- | --- |
 | `connection` | After accept (`status: connected`) and on server heartbeat (`status: heartbeat`) |
-| `overview_updated` | Successful agent check-in, report upload, or offline evaluation that changed state |
-| `agent_updated` | Same ingest paths, including online/offline status changes |
-| `alert_updated` | Alert evaluation after ingest, offline evaluation, or alert acknowledgement |
+| `overview_updated` | Successful agent check-in, report upload, offline evaluation that changed state, group mutation, infrastructure refresh, photo-services refresh, or backup refresh |
+| `agent_updated` | Same ingest paths, including online/offline status changes, plus group membership changes |
+| `alert_updated` | Alert evaluation after ingest, offline evaluation, alert acknowledgement, or alert-rule mutation |
 
 Payload fields:
 
-- `reason`: `check_in`, `report`, `report_duplicate`, `offline_evaluation`, `acknowledge`, `connected`, or `heartbeat`
+- `reason`: `check_in`, `report`, `report_duplicate`, `offline_evaluation`, `acknowledge`, `group_updated`, `notification_updated`, `rule_updated`, `infrastructure_updated`, `photo_services_updated`, `backup_updated`, `connected`, or `heartbeat`. Connector snapshot refresh publishes `photo_services_updated` and `backup_updated` on the existing `overview_updated` event type.
 - `agent_id`: present when the change is tied to one agent
 - `status`: connection lifecycle only
 
@@ -49,6 +49,6 @@ application event loop so synchronous FastAPI routes stay unchanged.
 - reconnect with exponential backoff (1s, doubling to 30s)
 - client heartbeat pings every 20 seconds
 - duplicate event IDs are ignored
-- Overview, Agents, Agent Detail, and Alerts refetch immediately on matching events
+- Overview, Agents, Agent Detail, Groups, Group Detail, Alerts, Notifications, Infrastructure, and Photo Services refetch immediately on matching events
 - navbar shows 🟢 Connected, 🟡 Connecting, or 🔴 Disconnected
 - on disconnect, existing data stays on screen, a banner is shown, and 30-second polling resumes until the socket reconnects

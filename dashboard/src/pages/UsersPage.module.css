@@ -60,6 +60,10 @@
   box-shadow: var(--shadow);
 }
 
+.wideDialog {
+  width: min(100%, 36rem);
+}
+
 .dialog::backdrop {
   background: rgb(15 23 42 / 45%);
 }

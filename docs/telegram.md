@@ -12,17 +12,38 @@ Create a bot with BotFather, identify the destination chat, and configure `.env`
 TELEGRAM_API_BASE_URL=https://api.telegram.org
 TELEGRAM_BOT_TOKEN=replace-with-the-bot-token
 TELEGRAM_CHAT_ID=replace-with-the-chat-id
-TELEGRAM_REQUEST_TIMEOUT=10
+TELEGRAM_REQUEST_TIMEOUT=30
 ```
 
 The Bot API base URL is configurable and is not embedded in the notifier.
 `TELEGRAM_BOT_TOKEN` is loaded as a secret value. HTTP client logging is held at
 warning level so the token-bearing Telegram request path is never written to
-normal application logs.
+normal application logs. GET `/api/v1/settings/notifications` returns
+`bot_token_set` and never the token itself.
 
 Leave both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` empty to disable delivery.
 If only one is configured, the server records a configuration error without
-failing agent report ingestion.
+failing agent report ingestion. Incomplete dashboard Telegram settings produce
+the same validation messages (missing bot token, chat ID, or API base URL).
+
+## Test message
+
+`POST /api/v1/notifications/test` with `channel: "telegram"` sends a single
+message:
+
+```text
+🚀 Homelab Monitor Test
+Time: <ISO timestamp>
+Server: <environment / hostname>
+Version: <application version>
+Status: ok
+```
+
+The Settings page (admin) shows Configured or Not configured, Last test, and a
+Test Message button. Delivery failures (timeout, network, HTTP, invalid token,
+invalid chat ID) become `DeliveryError` and are stored as `failed` history rows.
+Successful deliveries are stored as `sent`. The dispatcher retries three times
+without changing its architecture.
 
 ## Delivery behavior
 
@@ -31,8 +52,9 @@ Offline-agent alerts are sent after the periodic liveness transaction commits.
 Telegram failures are logged and do not roll back reports or alert state.
 
 Notification delivery is reusable through `TelegramNotifier.send_alert()` and
-`dispatch_alert_events()`. Tests replace the HTTP transport and never contact
+`dispatch_alert_events()`, which now records history and fans out to other
+configured channels. Tests replace the HTTP transport and never contact
 the public Telegram service.
 
-Recovery notifications and a durable notification outbox are not implemented
-yet.
+See [notifications.md](notifications.md) for Discord, Slack, email, retries,
+and the dashboard Settings page.

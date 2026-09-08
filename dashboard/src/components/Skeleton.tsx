@@ -13,16 +13,20 @@ function SkeletonBlock({ className, label }: SkeletonBlockProps) {
 export const OverviewSkeleton = memo(function OverviewSkeleton() {
   return (
     <section className={styles.skeletonGrid} aria-label="Loading overview">
-      {['Total Agents', 'Online', 'Offline', 'Total Reports'].map((label) => (
+      {['Total Agents', 'Online', 'Offline', 'Total Reports', 'Total Groups'].map((label) => (
         <SkeletonBlock className={styles.skeletonCard} key={label} label={`Loading ${label}`} />
       ))}
     </section>
   )
 })
 
-export const TableSkeleton = memo(function TableSkeleton() {
+export const TableSkeleton = memo(function TableSkeleton({
+  label = 'Loading agents',
+}: {
+  label?: string
+}) {
   return (
-    <section className={styles.tableWrapper} aria-busy="true" aria-label="Loading agents">
+    <section className={styles.tableWrapper} aria-busy="true" aria-label={label}>
       <div className={styles.skeletonTable}>
         {Array.from({ length: 5 }, (_, index) => (
           <div className={styles.skeletonRow} key={index} />

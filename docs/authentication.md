@@ -57,6 +57,10 @@ These routes require a dashboard JWT:
 - `GET /api/v1/history/agents/{agent_id}/export`
 - `GET /api/v1/alerts/*`
 - `POST /api/v1/alerts/{alert_id}/acknowledge` (admin, operator)
+- `GET /api/v1/groups`, `GET /api/v1/groups/summary`, `GET /api/v1/groups/{group_id}`
+- `POST /api/v1/groups`, `PUT /api/v1/groups/{group_id}`,
+  `DELETE /api/v1/groups/{group_id}`, `POST /api/v1/groups/{group_id}/agents`,
+  `DELETE /api/v1/groups/{group_id}/agents/{agent_id}` (admin, operator)
 - `GET /api/v1/users` (admin)
 - `POST /api/v1/users` (admin)
 - `PUT /api/v1/users/{user_id}` (admin)
@@ -64,6 +68,13 @@ These routes require a dashboard JWT:
 - `PATCH /api/v1/users/{user_id}/status` (admin)
 - `DELETE /api/v1/users/{user_id}` (admin)
 - `GET /api/v1/auth/me`
+
+- `GET /api/v1/notifications`
+- `GET /api/v1/notifications/{notification_id}`
+- `POST /api/v1/notifications/test` (admin, operator)
+- `POST /api/v1/notifications/{notification_id}/retry` (admin, operator)
+- `GET /api/v1/settings/notifications`
+- `PUT /api/v1/settings/notifications` (admin)
 
 These routes remain available without a dashboard JWT:
 

@@ -6,9 +6,10 @@ interface DialogProps {
   title: string
   children: ReactNode
   onClose: () => void
+  wide?: boolean
 }
 
-export function ModalDialog({ open, title, children, onClose }: DialogProps) {
+export function ModalDialog({ open, title, children, onClose, wide = false }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = `user-dialog-${title.replaceAll(' ', '-').toLowerCase()}`
 
@@ -27,7 +28,7 @@ export function ModalDialog({ open, title, children, onClose }: DialogProps) {
 
   return (
     <dialog
-      className={styles.dialog}
+      className={`${styles.dialog} ${wide ? styles.wideDialog : ''}`}
       ref={dialogRef}
       aria-labelledby={titleId}
       onCancel={(event) => {

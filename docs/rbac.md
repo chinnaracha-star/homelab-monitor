@@ -10,9 +10,9 @@ not contain inline role checks.
 
 | Role | Access |
 | --- | --- |
-| `admin` | Full dashboard, alerts, user management, and system settings. |
-| `operator` | Dashboard, agents, reports, alerts, and alert acknowledgement. Cannot manage users or change settings. |
-| `viewer` | Read-only dashboard, agents, reports, and alerts. No POST, PUT, PATCH, or DELETE. |
+| `admin` | Full dashboard, alerts, alert rules, groups, notifications, user management, and system settings. |
+| `operator` | Dashboard, agents, reports, alerts, alert acknowledgement, groups, notification tests/retries, and read-only alert rules. Cannot manage users, settings, or alert rules. |
+| `viewer` | Read-only dashboard, agents, reports, alerts, alert rules, groups, infrastructure, photo services, and notification history. No POST, PUT, PATCH, or DELETE. |
 
 ## Backend
 
@@ -39,8 +39,24 @@ The standard error envelope also includes `details` and `request_id`.
 
 Current assignments:
 
-- `GET /api/v1/dashboard/*`, `GET /api/v1/agents/*`, `GET /api/v1/alerts/*`: admin, operator, viewer
+- `GET /api/v1/dashboard/*`, `GET /api/v1/agents/*`, `GET /api/v1/alerts/*`,
+  `GET /api/v1/groups`, `GET /api/v1/groups/summary`, `GET /api/v1/groups/{group_id}`:
+  admin, operator, viewer
 - `POST /api/v1/alerts/{alert_id}/acknowledge`: admin, operator
+- `POST /api/v1/groups`, `PUT /api/v1/groups/{group_id}`,
+  `DELETE /api/v1/groups/{group_id}`, `POST /api/v1/groups/{group_id}/agents`,
+  `DELETE /api/v1/groups/{group_id}/agents/{agent_id}`: admin, operator
+- `GET /api/v1/notifications`, `GET /api/v1/notifications/{notification_id}`,
+  `GET /api/v1/settings/notifications`: admin, operator, viewer
+- `POST /api/v1/notifications/test`, `POST /api/v1/notifications/{notification_id}/retry`:
+  admin, operator
+- `PUT /api/v1/settings/notifications`: admin
+- `GET /api/v1/alert-rules`, `GET /api/v1/alert-rules/{rule_id}`: admin, operator, viewer
+- `POST /api/v1/alert-rules`, `PUT /api/v1/alert-rules/{rule_id}`,
+  `PATCH /api/v1/alert-rules/{rule_id}/enable`,
+  `DELETE /api/v1/alert-rules/{rule_id}`: admin
+- `GET /api/v1/infrastructure`, `GET /api/v1/infrastructure/{service}`,
+  `GET /api/v1/photo-services`, `GET /api/v1/backup`: admin, operator, viewer
 - `GET /api/v1/users`: admin
 - `POST /api/v1/users`, `PUT /api/v1/users/{user_id}`,
   `PATCH /api/v1/users/{user_id}/password`,
@@ -58,7 +74,14 @@ auth context. Navigation and route gates call one helper:
 ```ts
 can(role, "users")
 can(role, "settings")
+can(role, "groups")
+can(role, "manage_groups")
 can(role, "alerts")
+can(role, "alert_rules")
+can(role, "manage_alert_rules")
+can(role, "infrastructure")
+can(role, "photo_services")
+can(role, "backup")
 ```
 
 Components use `useCan()` instead of comparing role strings. Viewers do not see

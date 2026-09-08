@@ -1,0 +1,30 @@
+.channelGrid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .channelGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.channelCard {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.15rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.channelTitle {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.channelHint {
+  margin: 0;
+  color: var(--text-muted);
+}

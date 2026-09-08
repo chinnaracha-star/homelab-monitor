@@ -7,8 +7,13 @@ from homelab_monitor.database import Base
 from homelab_monitor.models import (  # noqa: F401
     Agent,
     AgentConfiguration,
+    AgentGroup,
+    AgentGroupMember,
     Alert,
+    MetricHistory,
     MetricReport,
+    Notification,
+    NotificationSettings,
     User,
 )
 from homelab_monitor.settings import get_settings

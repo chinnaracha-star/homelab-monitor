@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from 'react'
-import { getActiveAlerts, getAgents, getLatestAgentReport } from '../api/dashboard'
+import { getActiveAlerts, getAgents, getGroups, getLatestAgentReport } from '../api/dashboard'
 import { AgentTable } from '../components/AgentTable'
 import { AgentToolbar } from '../components/AgentToolbar'
 import { LastUpdated } from '../components/LastUpdated'
@@ -19,9 +19,11 @@ const ALERT_EVENTS = ['overview_updated', 'alert_updated'] as const
 export const AgentsPage = memo(function AgentsPage() {
   const now = useNow()
   const [query, setQuery] = useState('')
+  const [groupId, setGroupId] = useState('all')
   const [storedFilter, setStoredFilter] = useLocalStorage(AGENT_FILTER_STORAGE_KEY, 'all')
   const filter: AgentFilter = isAgentFilter(storedFilter) ? storedFilter : 'all'
   const agents = useLivePolling(getAgents, AGENT_EVENTS)
+  const groups = useLivePolling(getGroups, AGENT_EVENTS)
   const alerts = useLivePolling(getActiveAlerts, ALERT_EVENTS)
 
   const loadOsNames = useCallback(async () => {
@@ -52,9 +54,20 @@ export const AgentsPage = memo(function AgentsPage() {
     return counts
   }, [alerts.data])
 
-  const isRefreshing = agents.isRefreshing || alerts.isRefreshing || osNames.isRefreshing
+  const visibleAgents = useMemo(() => {
+    if (!agents.data) {
+      return []
+    }
+    if (groupId === 'all') {
+      return agents.data
+    }
+    const memberIds = new Set(groups.data?.find((group) => group.id === groupId)?.agent_ids ?? [])
+    return agents.data.filter((agent) => memberIds.has(agent.id))
+  }, [agents.data, groupId, groups.data])
+
+  const isRefreshing = agents.isRefreshing || alerts.isRefreshing || osNames.isRefreshing || groups.isRefreshing
   const lastUpdated =
-    [agents.lastUpdated, alerts.lastUpdated, osNames.lastUpdated]
+    [agents.lastUpdated, alerts.lastUpdated, osNames.lastUpdated, groups.lastUpdated]
       .filter((value): value is Date => value !== null)
       .sort((left, right) => right.getTime() - left.getTime())[0] ?? null
 
@@ -71,8 +84,11 @@ export const AgentsPage = memo(function AgentsPage() {
 
       <AgentToolbar
         filter={filter}
+        groups={groups.data ?? []}
+        groupId={groupId}
         query={query}
         onFilterChange={(value) => setStoredFilter(value)}
+        onGroupChange={setGroupId}
         onQueryChange={setQuery}
       />
 
@@ -85,7 +101,7 @@ export const AgentsPage = memo(function AgentsPage() {
       {!agents.data && !agents.error ? <TableSkeleton /> : null}
       {agents.data ? (
         <AgentTable
-          agents={agents.data}
+          agents={visibleAgents}
           alertCounts={alertCounts}
           filter={filter}
           now={now}
