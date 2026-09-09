@@ -114,7 +114,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     label: 'Developer',
     permission: 'developer',
-    children: [{ to: '/developer', label: 'Mission Control', permission: 'developer' }],
+    children: [
+      { to: '/developer', label: 'Mission Control', permission: 'developer' },
+      { to: '/developer/production-health', label: 'Production Health', permission: 'developer' },
+    ],
   },
 ]
 

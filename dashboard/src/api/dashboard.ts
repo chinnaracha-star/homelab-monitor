@@ -52,6 +52,11 @@ import type {
   PredictionOverview,
   PredictionMetric,
   RemoteAccess,
+  ProductionHealth,
+  ProductionHealthOverview,
+  ProductionNetwork,
+  ProductionRuntime,
+  ProductionStorage,
 } from '../types/dashboard'
 
 export async function getDashboardOverview(): Promise<DashboardOverview> {
@@ -344,6 +349,21 @@ export async function getDeveloperOverview(): Promise<DeveloperOverview> {
 export async function getRemoteAccess(): Promise<RemoteAccess> {
   const response = await apiClient.get<RemoteAccess>('/system/remote-access')
   return response.data
+}
+
+export async function getProductionHealthOverview(): Promise<ProductionHealthOverview> {
+  const [health, runtime, storage, network] = await Promise.all([
+    apiClient.get<ProductionHealth>('/system/health'),
+    apiClient.get<ProductionRuntime>('/system/runtime'),
+    apiClient.get<ProductionStorage>('/system/storage'),
+    apiClient.get<ProductionNetwork>('/system/network'),
+  ])
+  return {
+    health: health.data,
+    runtime: runtime.data,
+    storage: storage.data,
+    network: network.data,
+  }
 }
 
 export async function getInsightsOverview(): Promise<InsightOverview> {

@@ -82,6 +82,7 @@ class Settings(BaseSettings):
     tailscale_bin: str = "tailscale"
     tailscale_socket: str = "/var/run/tailscale/tailscaled.sock"
     tailscale_timeout_seconds: float = Field(default=2.0, gt=0, le=15)
+    dashboard_health_url: str = ""
 
 
 @lru_cache

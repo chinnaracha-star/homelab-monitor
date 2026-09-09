@@ -810,3 +810,92 @@ export interface RemoteAccess {
   public: boolean
   status: RemoteAccessStatus
 }
+
+export type ProductionHealthStatus = 'healthy' | 'warning' | 'critical' | 'unknown'
+
+export interface ProductionHealthCheck {
+  component: string
+  status: ProductionHealthStatus
+  last_check: string
+  latency_ms: number | null
+  message: string
+  warning: string | null
+  error: string | null
+  possible_cause: string | null
+  recommended_action: string | null
+}
+
+export interface ProductionHealth {
+  generated_at: string
+  score: number
+  status: 'excellent' | 'good' | 'warning' | 'critical'
+  checks: ProductionHealthCheck[]
+}
+
+export interface ProductionRuntime {
+  agent: {
+    state: string
+    restart_count: number | null
+    last_heartbeat: string | null
+    last_report: string | null
+    last_metrics_upload: string | null
+  }
+  docker_available: boolean
+  containers: {
+    container: string
+    status: string
+    health: string
+    restart_count: number | null
+    image: string
+    running_since: string | null
+  }[]
+  telegram: {
+    bot_connected: boolean | null
+    last_successful_send: string | null
+    last_failed_send: string | null
+    failure_reason: string | null
+    retry_queue: number
+  }
+  tailscale: {
+    connected: boolean
+    tailnet: string | null
+    magic_dns: boolean | null
+    connection_type: string
+    exit_node: string | null
+    remote_access_url: string | null
+    hostname: string | null
+    ip: string | null
+    https: boolean
+  }
+}
+
+export interface ProductionStorage {
+  filesystem: string
+  disk_usage_percent: number | null
+  free_space_bytes: number | null
+  database_size_bytes: number | null
+  log_size_bytes: number | null
+  disk_read_bytes: number | null
+  disk_write_bytes: number | null
+  io_wait_percent: number | null
+  status: ProductionHealthStatus
+}
+
+export interface ProductionNetwork {
+  lan_ip: string | null
+  tailscale_ip: string | null
+  gateway: string | null
+  internet: ProductionHealthStatus
+  latency_ms: number | null
+  dns: ProductionHealthStatus
+  upload_bytes: number | null
+  download_bytes: number | null
+  network_errors: number | null
+}
+
+export interface ProductionHealthOverview {
+  health: ProductionHealth
+  runtime: ProductionRuntime
+  storage: ProductionStorage
+  network: ProductionNetwork
+}

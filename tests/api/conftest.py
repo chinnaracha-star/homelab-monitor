@@ -1,4 +1,5 @@
 import os
+import tempfile
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -6,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-TEST_DATABASE_PATH = Path(f"/tmp/homelab-monitor-tests-{os.getpid()}.db")
+TEST_DATABASE_PATH = Path(tempfile.gettempdir()) / f"homelab-monitor-tests-{os.getpid()}.db"
 os.environ["HOMELAB_REGISTRATION_KEY"] = "test-registration-key-at-least-24-chars"
 os.environ["HOMELAB_DATABASE_URL"] = f"sqlite:///{TEST_DATABASE_PATH}"
 os.environ["HOMELAB_LOG_LEVEL"] = "WARNING"
@@ -74,6 +75,7 @@ def database_schema() -> Iterator[None]:
     seed_users()
     yield
     Base.metadata.drop_all(bind=get_engine())
+    get_engine().dispose()
     _remove_sqlite(TEST_DATABASE_PATH)
 
 

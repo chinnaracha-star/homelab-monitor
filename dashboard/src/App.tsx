@@ -22,6 +22,7 @@ import { AlertTimelinePage } from './pages/AlertTimelinePage'
 import { IncidentsPage } from './pages/IncidentsPage'
 import { NotificationCenterPage } from './pages/NotificationCenterPage'
 import { PredictionsPage } from './pages/PredictionsPage'
+import { ProductionHealthPage } from './pages/ProductionHealthPage'
 import { TrendsPage } from './pages/TrendsPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotificationsPage } from './pages/NotificationsPage'
@@ -81,6 +82,7 @@ function App() {
               </Route>
               <Route element={<PermissionRoute permission="developer" />}>
                 <Route path="developer" element={<DeveloperPage />} />
+                <Route path="developer/production-health" element={<ProductionHealthPage />} />
               </Route>
               <Route path="*" element={<Navigate replace to="/dashboard" />} />
             </Route>

@@ -26,6 +26,7 @@ const NAV_ICONS: Record<string, IconName> = {
   '/users': 'users',
   '/settings': 'settings',
   '/developer': 'mission',
+  '/developer/production-health': 'infrastructure',
 }
 
 interface SidebarProps {

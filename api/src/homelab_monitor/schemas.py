@@ -82,6 +82,94 @@ class RemoteAccessResponse(BaseModel):
     status: Literal["connected", "disconnected", "not_installed", "unknown"] = "unknown"
 
 
+class ProductionHealthCheck(BaseModel):
+    component: str
+    status: Literal["healthy", "warning", "critical", "unknown"] = "unknown"
+    last_check: datetime
+    latency_ms: float | None = None
+    message: str = ""
+    warning: str | None = None
+    error: str | None = None
+    possible_cause: str | None = None
+    recommended_action: str | None = None
+
+
+class ProductionHealthResponse(BaseModel):
+    generated_at: datetime
+    score: int
+    status: Literal["excellent", "good", "warning", "critical"]
+    checks: list[ProductionHealthCheck] = []
+
+
+class AgentRuntimeResponse(BaseModel):
+    state: str = "unknown"
+    restart_count: int | None = None
+    last_heartbeat: datetime | None = None
+    last_report: datetime | None = None
+    last_metrics_upload: datetime | None = None
+
+
+class DockerContainerResponse(BaseModel):
+    container: str
+    status: str = "unknown"
+    health: str = "unknown"
+    restart_count: int | None = None
+    image: str = ""
+    running_since: str | None = None
+
+
+class TelegramRuntimeResponse(BaseModel):
+    bot_connected: bool | None = None
+    last_successful_send: datetime | None = None
+    last_failed_send: datetime | None = None
+    failure_reason: str | None = None
+    retry_queue: int = 0
+
+
+class TailscaleRuntimeResponse(BaseModel):
+    connected: bool = False
+    tailnet: str | None = None
+    magic_dns: bool | None = None
+    connection_type: str = "unknown"
+    exit_node: str | None = None
+    remote_access_url: str | None = None
+    hostname: str | None = None
+    ip: str | None = None
+    https: bool = False
+
+
+class ProductionRuntimeResponse(BaseModel):
+    agent: AgentRuntimeResponse = AgentRuntimeResponse()
+    docker_available: bool = False
+    containers: list[DockerContainerResponse] = []
+    telegram: TelegramRuntimeResponse = TelegramRuntimeResponse()
+    tailscale: TailscaleRuntimeResponse = TailscaleRuntimeResponse()
+
+
+class ProductionStorageResponse(BaseModel):
+    filesystem: str = ""
+    disk_usage_percent: float | None = None
+    free_space_bytes: int | None = None
+    database_size_bytes: int | None = None
+    log_size_bytes: int | None = None
+    disk_read_bytes: int | None = None
+    disk_write_bytes: int | None = None
+    io_wait_percent: float | None = None
+    status: Literal["healthy", "warning", "critical", "unknown"] = "unknown"
+
+
+class ProductionNetworkResponse(BaseModel):
+    lan_ip: str | None = None
+    tailscale_ip: str | None = None
+    gateway: str | None = None
+    internet: Literal["healthy", "warning", "critical", "unknown"] = "unknown"
+    latency_ms: float | None = None
+    dns: Literal["healthy", "warning", "critical", "unknown"] = "unknown"
+    upload_bytes: int | None = None
+    download_bytes: int | None = None
+    network_errors: int | None = None
+
+
 class AgentCountResponse(BaseModel):
     total: int
     online: int

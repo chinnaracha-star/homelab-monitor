@@ -70,7 +70,7 @@ describe('Notification Center page', () => {
   it('renders cards, timeline, and filters', async () => {
     render(<NotificationCenterPage />)
     expect(await screen.findByRole('heading', { name: 'Notification Center' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Unread 1')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Unread 1')).toBeInTheDocument()
     expect(screen.getByLabelText('Notification timeline')).toBeInTheDocument()
     expect(screen.getByLabelText('Notification filters')).toBeInTheDocument()
     expect(screen.getByText('Hourly Report')).toBeInTheDocument()

@@ -94,8 +94,12 @@ class DeveloperDashboardService:
             activity=self._activity(db),
             health=health,
             capacity_score=capacity.overall_score,
-            agent_service=self._agent_service(db, settings),
+            agent_service=self.agent_service(db),
         )
+
+    def agent_service(self, db: Session) -> DeveloperAgentService:
+        """Return the existing systemd and agent-presence runtime snapshot."""
+        return self._agent_service(db, get_settings())
 
     def _runtime(self, db: Session, settings) -> DeveloperRuntimeStatus:
         database = "healthy"
