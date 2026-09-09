@@ -306,7 +306,7 @@ class TelegramReportService:
                 f"• {ALERT_LABELS.get(item.alert_type, item.alert_type)}" for item in alerts
             )
         else:
-            lines.append("Everything looks healthy.")
+            lines.append("✅ Everything looks healthy.")
         return "\n".join(lines)
 
     def build_test_report(self, db: Session, *, now: datetime | None = None) -> str:
@@ -315,56 +315,33 @@ class TelegramReportService:
         tz = report_timezone(str(reports_payload(load_payload(db))["timezone"]))
         local = clock.astimezone(tz)
         footer = (
-            "Everything looks healthy."
+            "✅ Everything looks healthy."
             if not data["alerts"]
             else "Active alerts are listed in the live dashboard."
         )
         return "\n".join(
             [
                 "🏠 HomeLab Test Report",
+                "━━━━━━━━━━━━━━━━",
+                "✅ Status: Telegram connected",
+                f"🕒 Time: {_english_date(local)} {local.strftime('%H:%M:%S')}",
+                "━━━━━━━━━━━━━━━━",
                 "",
-                "━━━━━━━━━━━━━━",
+                "📡 Agent",
+                f"• Status: {_agent_badge(data['overview'])}",
                 "",
-                "✅ Telegram connection successful",
+                "📊 System Metrics",
+                f"• ⚙️ CPU: {_pct(data['cpu'].current)}",
+                f"• 🧠 Memory: {_pct(data['memory'].current)}",
+                f"• 💾 Storage: {_pct(data['storage'].used_percent)}",
+                f"• 🌡 Temperature: {_num(data['temperature'].current)}°C",
                 "",
-                "Generated",
+                "❤️ Health",
+                f"• Score: {round(data['score'])} / 100",
+                f"• Result: {footer}",
                 "",
-                _english_date(local),
-                "",
-                local.strftime("%H:%M:%S"),
-                "",
-                "━━━━━━━━━━━━━━",
-                "",
-                "Agent",
-                "",
-                _agent_badge(data["overview"]),
-                "",
-                "CPU",
-                "",
-                _pct(data["cpu"].current),
-                "",
-                "Memory",
-                "",
-                _pct(data["memory"].current),
-                "",
-                "Storage",
-                "",
-                _pct(data["storage"].used_percent),
-                "",
-                "Temperature",
-                "",
-                f"{_num(data['temperature'].current)}°C",
-                "",
-                "Health Score",
-                "",
-                f"{round(data['score'])} / 100",
-                "",
-                "━━━━━━━━━━━━━━",
-                "",
-                footer,
-                "",
-                "This message was generated manually from",
-                "Settings → Send Test Report.",
+                "━━━━━━━━━━━━━━━━",
+                "Settings → Send Test Report",
             ]
         )
 

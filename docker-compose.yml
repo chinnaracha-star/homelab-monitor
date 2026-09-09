@@ -107,5 +107,4 @@ volumes:
 
 networks:
   backend:
-    internal: true
   egress:
