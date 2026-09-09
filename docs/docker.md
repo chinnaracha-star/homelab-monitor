@@ -26,7 +26,10 @@ api volumes
   homelab-logs  -> /var/log/homelab-monitor   (api.jsonl)
 ```
 
-Only the dashboard port is published. The API listens on the compose network.
+Only the dashboard port is published. The dashboard and API share an internal
+`backend` network. The API additionally joins `egress` so notification providers
+and monitored services remain reachable; nginx has no outbound network beyond
+the API network.
 
 ## Run
 
@@ -61,6 +64,7 @@ Differences:
 - API container root filesystem is read-only (data and log volumes stay writable)
 - json-file log rotation
 - `cap_drop: ALL` and `no-new-privileges` on both services
+- explicit internal nginx-to-API network; API-only egress network
 
 ## Security defaults
 

@@ -66,6 +66,9 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    networks:
+      - backend
+      - egress
 
   dashboard:
     build:
@@ -94,7 +97,14 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    networks:
+      - backend
 
 volumes:
   homelab-data:
   homelab-logs:
+
+networks:
+  backend:
+    internal: true
+  egress:
