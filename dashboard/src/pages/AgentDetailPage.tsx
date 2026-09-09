@@ -10,6 +10,7 @@ import { MetricSkeleton } from '../components/Skeleton'
 import { RelativeTime } from '../components/RelativeTime'
 import { SectionError } from '../components/SectionError'
 import { StatusBadge } from '../components/StatusBadge'
+import { LIVE_PAGE_POLL } from '../constants'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import { useNow } from '../hooks/useNow'
 import { isApiErrorCode } from '../utils/errors'
@@ -22,7 +23,7 @@ import {
 } from '../utils/metrics'
 import styles from './Pages.module.css'
 
-const AGENT_DETAIL_EVENTS = ['overview_updated', 'agent_updated'] as const
+const AGENT_DETAIL_EVENTS = ['overview_updated', 'agent_updated', 'alert_updated'] as const
 
 export function AgentDetailPage() {
   const { id } = useParams()
@@ -59,7 +60,7 @@ export function AgentDetailPage() {
 
 function AgentDetailContent({ id }: { id: string }) {
   const now = useNow()
-  const agentPoll = useLivePolling(() => getAgent(id), AGENT_DETAIL_EVENTS, { agentId: id })
+  const agentPoll = useLivePolling(() => getAgent(id), AGENT_DETAIL_EVENTS, { ...LIVE_PAGE_POLL, agentId: id })
   const loadReport = useCallback(async () => {
     try {
       return await getLatestAgentReport(id)
@@ -70,7 +71,7 @@ function AgentDetailContent({ id }: { id: string }) {
       throw error
     }
   }, [id])
-  const reportPoll = useLivePolling(loadReport, AGENT_DETAIL_EVENTS, { agentId: id })
+  const reportPoll = useLivePolling(loadReport, AGENT_DETAIL_EVENTS, { ...LIVE_PAGE_POLL, agentId: id })
 
   const agent = agentPoll.data
   const report = reportPoll.data

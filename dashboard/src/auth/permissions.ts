@@ -17,11 +17,14 @@ export type Permission =
   | 'infrastructure'
   | 'photo_services'
   | 'backup'
+  | 'analytics'
+  | 'developer'
 
 export interface NavItem {
-  to: string
+  to?: string
   label: string
   permission: Permission
+  children?: readonly NavItem[]
 }
 
 const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
@@ -42,6 +45,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'infrastructure',
     'photo_services',
     'backup',
+    'analytics',
+    'developer',
   ],
   operator: [
     'dashboard',
@@ -57,6 +62,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'infrastructure',
     'photo_services',
     'backup',
+    'analytics',
   ],
   viewer: [
     'dashboard',
@@ -69,21 +75,47 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'infrastructure',
     'photo_services',
     'backup',
+    'analytics',
   ],
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/dashboard', label: 'Overview', permission: 'dashboard' },
+  {
+    label: 'Analytics',
+    permission: 'analytics',
+    children: [
+      { to: '/analytics', label: 'Overview', permission: 'analytics' },
+      { to: '/analytics/trends', label: 'Trends', permission: 'analytics' },
+      { to: '/analytics/capacity', label: 'Capacity Planning', permission: 'analytics' },
+      { to: '/analytics/insights', label: 'AI Insights', permission: 'analytics' },
+      { to: '/analytics/predictions', label: 'Predictive Alerting', permission: 'analytics' },
+    ],
+  },
   { to: '/agents', label: 'Agents', permission: 'agents' },
   { to: '/groups', label: 'Groups', permission: 'groups' },
   { to: '/infrastructure', label: 'Infrastructure', permission: 'infrastructure' },
   { to: '/photo-services', label: 'Photo Services', permission: 'photo_services' },
   { to: '/backup', label: 'Backup', permission: 'backup' },
-  { to: '/alerts', label: 'Alerts', permission: 'alerts' },
+  {
+    label: 'Monitoring',
+    permission: 'alerts',
+    children: [
+      { to: '/alerts', label: 'Alerts', permission: 'alerts' },
+      { to: '/monitoring/alerts/history', label: 'Alert Timeline', permission: 'alerts' },
+      { to: '/monitoring/incidents', label: 'Incidents', permission: 'alerts' },
+      { to: '/monitoring/notifications', label: 'Notification Center', permission: 'notifications' },
+    ],
+  },
   { to: '/alert-rules', label: 'Alert Rules', permission: 'alert_rules' },
   { to: '/notifications', label: 'Notifications', permission: 'notifications' },
   { to: '/users', label: 'Users', permission: 'users' },
   { to: '/settings', label: 'Settings', permission: 'settings' },
+  {
+    label: 'Developer',
+    permission: 'developer',
+    children: [{ to: '/developer', label: 'Mission Control', permission: 'developer' }],
+  },
 ]
 
 function isRole(value: string): value is Role {

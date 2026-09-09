@@ -5,6 +5,7 @@ import { AgentToolbar } from '../components/AgentToolbar'
 import { LastUpdated } from '../components/LastUpdated'
 import { SectionError } from '../components/SectionError'
 import { TableSkeleton } from '../components/Skeleton'
+import { LIVE_PAGE_POLL } from '../constants'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useNow } from '../hooks/useNow'
@@ -13,8 +14,8 @@ import { isApiErrorCode } from '../utils/errors'
 import { getSystemMetrics } from '../utils/metrics'
 import styles from './Pages.module.css'
 
-const AGENT_EVENTS = ['overview_updated', 'agent_updated'] as const
-const ALERT_EVENTS = ['overview_updated', 'alert_updated'] as const
+const AGENT_EVENTS = ['overview_updated', 'agent_updated', 'alert_updated'] as const
+const ALERT_EVENTS = ['overview_updated', 'agent_updated', 'alert_updated'] as const
 
 export const AgentsPage = memo(function AgentsPage() {
   const now = useNow()
@@ -22,9 +23,9 @@ export const AgentsPage = memo(function AgentsPage() {
   const [groupId, setGroupId] = useState('all')
   const [storedFilter, setStoredFilter] = useLocalStorage(AGENT_FILTER_STORAGE_KEY, 'all')
   const filter: AgentFilter = isAgentFilter(storedFilter) ? storedFilter : 'all'
-  const agents = useLivePolling(getAgents, AGENT_EVENTS)
-  const groups = useLivePolling(getGroups, AGENT_EVENTS)
-  const alerts = useLivePolling(getActiveAlerts, ALERT_EVENTS)
+  const agents = useLivePolling(getAgents, AGENT_EVENTS, LIVE_PAGE_POLL)
+  const groups = useLivePolling(getGroups, AGENT_EVENTS, LIVE_PAGE_POLL)
+  const alerts = useLivePolling(getActiveAlerts, ALERT_EVENTS, LIVE_PAGE_POLL)
 
   const loadOsNames = useCallback(async () => {
     const currentAgents = agents.data ?? []

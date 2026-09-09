@@ -26,6 +26,7 @@
 .primaryButton,
 .secondaryButton,
 .dangerButton {
+  min-height: 2.75rem;
   padding: 0.4rem 0.7rem;
   border-radius: 0.5rem;
   font-weight: 700;

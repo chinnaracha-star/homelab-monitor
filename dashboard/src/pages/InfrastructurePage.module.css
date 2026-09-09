@@ -9,9 +9,30 @@
   gap: 0.75rem;
   padding: 1.15rem;
   border: 1px solid var(--border);
-  border-radius: 0.9rem;
+  border-top: 3px solid var(--tone, var(--accent));
+  border-radius: 1rem;
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.connectorCard[data-service='qnap'] {
+  --tone: var(--color-qnap);
+}
+
+.connectorCard[data-service='docker'] {
+  --tone: var(--color-docker);
+}
+
+.connectorCard[data-service='immich'] {
+  --tone: var(--color-immich);
+}
+
+.connectorCard[data-service='qumagie'] {
+  --tone: var(--color-qumagie);
+}
+
+.connectorCard[data-service='backup'] {
+  --tone: var(--color-backup);
 }
 
 .connectorHeader {
@@ -23,6 +44,9 @@
 }
 
 .connectorName {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   margin: 0;
   font-size: 1.1rem;
 }
@@ -31,6 +55,7 @@
   margin: 0;
   color: var(--text-muted);
   font-size: 0.9rem;
+  white-space: pre-line;
 }
 
 .summaryList {

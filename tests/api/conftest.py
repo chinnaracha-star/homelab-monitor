@@ -11,6 +11,12 @@ os.environ["HOMELAB_REGISTRATION_KEY"] = "test-registration-key-at-least-24-char
 os.environ["HOMELAB_DATABASE_URL"] = f"sqlite:///{TEST_DATABASE_PATH}"
 os.environ["HOMELAB_LOG_LEVEL"] = "WARNING"
 os.environ["HOMELAB_JWT_SECRET"] = "test-jwt-secret-key-at-least-32-chars"
+os.environ["TELEGRAM_BOT_TOKEN"] = ""
+os.environ["TELEGRAM_CHAT_ID"] = ""
+os.environ["HOMELAB_TELEGRAM_BOT_TOKEN"] = ""
+os.environ["HOMELAB_TELEGRAM_CHAT_ID"] = ""
+os.environ["HOMELAB_TELEGRAM_ENABLED"] = "true"
+os.environ["TELEGRAM_ENABLED"] = "true"
 
 from homelab_monitor.auth.passwords import hash_password  # noqa: E402
 from homelab_monitor.database import Base, get_engine  # noqa: E402

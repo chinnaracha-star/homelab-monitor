@@ -57,6 +57,13 @@ class Settings(BaseSettings):
             "HOMELAB_TELEGRAM_REQUEST_TIMEOUT",
         ),
     )
+    telegram_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "TELEGRAM_ENABLED",
+            "HOMELAB_TELEGRAM_ENABLED",
+        ),
+    )
     jwt_secret: SecretStr = Field(min_length=32)
     jwt_expire_minutes: int = Field(default=60, ge=1, le=10_080)
     infrastructure_mock: bool = True
@@ -72,6 +79,9 @@ class Settings(BaseSettings):
     qumagie_url: str = ""
     qumagie_api_key: SecretStr | None = None
     backup_url: str = ""
+    tailscale_bin: str = "tailscale"
+    tailscale_socket: str = "/var/run/tailscale/tailscaled.sock"
+    tailscale_timeout_seconds: float = Field(default=2.0, gt=0, le=15)
 
 
 @lru_cache

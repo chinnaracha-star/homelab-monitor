@@ -35,6 +35,16 @@ def test_all_roles_can_read_dashboard_and_alerts(
         infrastructure = client.get("/api/v1/infrastructure", headers=headers)
         photos = client.get("/api/v1/photo-services", headers=headers)
         backup = client.get("/api/v1/backup", headers=headers)
+        analytics = client.get("/api/v1/analytics/overview", headers=headers)
+        trends = client.get("/api/v1/trends/overview", headers=headers)
+        capacity = client.get("/api/v1/capacity/overview", headers=headers)
+        insights = client.get("/api/v1/insights/overview", headers=headers)
+        history = client.get("/api/v1/alerts/history", headers=headers)
+        incidents = client.get("/api/v1/incidents", headers=headers)
+        notify_history = client.get("/api/v1/notifications/history", headers=headers)
+        predictions = client.get("/api/v1/predictions/overview", headers=headers)
+        remote_access = client.get("/api/v1/system/remote-access", headers=headers)
+        developer = client.get("/api/v1/developer/overview", headers=headers)
         assert overview.status_code == 200
         assert alerts.status_code == 200
         assert groups.status_code == 200
@@ -45,6 +55,19 @@ def test_all_roles_can_read_dashboard_and_alerts(
         assert infrastructure.status_code == 200
         assert photos.status_code == 200
         assert backup.status_code == 200
+        assert analytics.status_code == 200
+        assert trends.status_code == 200
+        assert capacity.status_code == 200
+        assert insights.status_code == 200
+        assert history.status_code == 200
+        assert incidents.status_code == 200
+        assert notify_history.status_code == 200
+        assert predictions.status_code == 200
+        assert remote_access.status_code == 200
+        if username == "admin":
+            assert developer.status_code == 200
+        else:
+            _permission_denied(developer)
 
 
 def test_admin_is_allowed_to_list_users(

@@ -8,6 +8,7 @@ import { LastUpdated } from '../components/LastUpdated'
 import { SectionError } from '../components/SectionError'
 import { OverviewSkeleton } from '../components/Skeleton'
 import { ModalDialog } from '../components/UserDialogs'
+import { LIVE_PAGE_POLL } from '../constants'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import { getErrorMessage } from '../utils/errors'
 import componentStyles from '../components/Components.module.css'
@@ -19,8 +20,8 @@ const GROUP_EVENTS = ['overview_updated', 'agent_updated'] as const
 
 export function GroupsPage() {
   const canManage = useCan()('manage_groups')
-  const groups = useLivePolling(getGroups, GROUP_EVENTS)
-  const agents = useLivePolling(getAgents, GROUP_EVENTS)
+  const groups = useLivePolling(getGroups, GROUP_EVENTS, LIVE_PAGE_POLL)
+  const agents = useLivePolling(getAgents, GROUP_EVENTS, LIVE_PAGE_POLL)
   const [dialog, setDialog] = useState<'create' | 'assign' | null>(null)
   const [query, setQuery] = useState('')
   const [name, setName] = useState('')

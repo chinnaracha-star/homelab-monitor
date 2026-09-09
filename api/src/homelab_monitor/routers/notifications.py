@@ -1,6 +1,7 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,11 @@ from homelab_monitor.auth.dependencies import require_roles
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
 from homelab_monitor.models import Notification
+from homelab_monitor.notification_center import (
+    list_notification_center,
+    notification_center_statistics,
+)
+from homelab_monitor.notifications import REPORT_RECIPIENTS
 from homelab_monitor.notifications.config import (
     apply_updates,
     load_payload,
@@ -16,13 +22,17 @@ from homelab_monitor.notifications.config import (
 )
 from homelab_monitor.notifications.dispatcher import retry_notification, send_test_notification
 from homelab_monitor.schemas import (
+    NotificationHistoryResponse,
     NotificationListResponse,
     NotificationResponse,
     NotificationSettingsResponse,
     NotificationSettingsUpdateRequest,
+    NotificationStatisticsResponse,
+    NotificationTestReportResponse,
     NotificationTestRequest,
 )
 from homelab_monitor.settings import Settings, get_settings
+from homelab_monitor.telegram_reports import send_manual_test_report
 
 router = APIRouter(prefix="/api/v1", tags=["notifications"])
 
@@ -45,6 +55,8 @@ def _to_update_dict(payload: NotificationSettingsUpdateRequest) -> dict:
         if section is None:
             continue
         data[channel] = section.model_dump(exclude_unset=True)
+    if payload.reports is not None:
+        data["reports"] = payload.reports.model_dump(exclude_unset=True)
     return data
 
 
@@ -100,6 +112,63 @@ def test_notification(
     )
 
 
+@router.post(
+    "/notifications/test-report",
+    response_model=NotificationTestReportResponse,
+    dependencies=[CONFIGURE],
+    summary="Send a Telegram test report immediately",
+)
+def test_telegram_report(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> NotificationTestReportResponse | JSONResponse:
+    row = send_manual_test_report(db, settings)
+    if row.status == "skipped":
+        return JSONResponse(status_code=409, content={"status": "telegram_not_configured"})
+    return NotificationTestReportResponse(
+        status=row.status,
+        notification_id=row.id,
+        sent_at=row.sent_at,
+        provider="telegram",
+    )
+
+
+@router.get(
+    "/notifications/history",
+    response_model=NotificationHistoryResponse,
+    dependencies=[READ],
+    summary="List notification center history",
+)
+def notification_history(
+    db: Annotated[Session, Depends(get_db)],
+    severity: str | None = None,
+    source: str | None = None,
+    agent_id: str | None = None,
+    date: str | None = None,
+    read_state: str | None = None,
+) -> NotificationHistoryResponse:
+    return list_notification_center(
+        db,
+        severity=severity,
+        source=source,
+        agent_id=agent_id,
+        date=date,
+        read_state=read_state,
+    )
+
+
+@router.get(
+    "/notifications/statistics",
+    response_model=NotificationStatisticsResponse,
+    dependencies=[READ],
+    summary="Notification center statistics",
+)
+def notification_statistics(
+    db: Annotated[Session, Depends(get_db)],
+) -> NotificationStatisticsResponse:
+    return notification_center_statistics(db)
+
+
 @router.get(
     "/notifications/{notification_id}",
     response_model=NotificationResponse,
@@ -141,11 +210,31 @@ def _public_notification_settings(
     public = public_settings(settings, payload if payload is not None else load_payload(db))
     last_test = db.scalar(
         select(Notification.created_at)
-        .where(Notification.channel == "telegram", Notification.alert_id.is_(None))
+        .where(
+            Notification.channel == "telegram",
+            Notification.alert_id.is_(None),
+            Notification.recipient.notin_(REPORT_RECIPIENTS),
+        )
         .order_by(Notification.created_at.desc())
         .limit(1)
     )
     public["telegram"]["last_test"] = last_test
+    reports = public.get("reports")
+    if isinstance(reports, dict):
+        for kind, key in (
+            ("hourly_report", "hourly"),
+            ("daily_report", "daily"),
+            ("weekly_report", "weekly"),
+        ):
+            row = db.scalar(
+                select(Notification)
+                .where(Notification.recipient == kind)
+                .order_by(Notification.created_at.desc())
+                .limit(1)
+            )
+            card = reports.get(key)
+            if isinstance(card, dict) and row is not None and card.get("enabled"):
+                card["status"] = row.status
     return NotificationSettingsResponse.model_validate(public)
 
 

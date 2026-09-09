@@ -9,12 +9,11 @@ Type=simple
 User=homelab-monitor
 Group=homelab-monitor
 WorkingDirectory=/opt/homelab-monitor
-EnvironmentFile=/etc/homelab-monitor/agent.env
+EnvironmentFile=/opt/homelab-monitor/state/agent.env
 ExecStart=/opt/homelab-monitor/.venv/bin/homelab-agent run
-Restart=on-failure
-RestartSec=10s
+Restart=always
+RestartSec=5
 TimeoutStopSec=30s
-StateDirectory=homelab-monitor
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
@@ -24,6 +23,7 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
+ReadWritePaths=/opt/homelab-monitor/state /var/lib/homelab-monitor
 
 [Install]
 WantedBy=multi-user.target

@@ -224,13 +224,20 @@ export function useOptionalDashboardConnection(): DashboardSocketValue | undefin
 export function useLivePolling<T>(
   fetcher: () => Promise<T>,
   eventTypes: readonly DashboardEventType[],
-  options: { enabled?: boolean; agentId?: string; resetKey?: string | number } = {},
+  options: {
+    enabled?: boolean
+    agentId?: string
+    resetKey?: string | number
+    keepPolling?: boolean
+    intervalMs?: number
+  } = {},
 ): UsePollingResult<T> {
-  const { enabled = true, agentId, resetKey } = options
+  const { enabled = true, agentId, resetKey, keepPolling = false, intervalMs: intervalOverride } = options
   const connection = useOptionalDashboardConnection()
   const status = connection?.status ?? 'disconnected'
   const lastEvent = connection?.lastEvent ?? null
-  const intervalMs = status === 'connected' ? 0 : REFRESH_INTERVAL_MS
+  const intervalMs =
+    intervalOverride ?? (keepPolling || status !== 'connected' ? REFRESH_INTERVAL_MS : 0)
   const polling = usePolling(fetcher, { enabled, intervalMs, resetKey })
   const retry = polling.retry
   const eventTypesRef = useRef(eventTypes)

@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ACCESS_TOKEN_KEY } from '../auth/storage'
+import { REFRESH_INTERVAL_MS } from '../constants'
 import {
   DashboardSocketProvider,
   INITIAL_RECONNECT_MS,
@@ -70,8 +71,16 @@ function ProviderStatusProbe() {
   )
 }
 
-function LiveDataProbe({ fetcher }: { fetcher: () => Promise<string> }) {
-  const { data } = useLivePolling(fetcher, ['agent_updated', 'overview_updated'])
+function LiveDataProbe({
+  fetcher,
+  keepPolling = false,
+}: {
+  fetcher: () => Promise<string>
+  keepPolling?: boolean
+}) {
+  const { data } = useLivePolling(fetcher, ['agent_updated', 'overview_updated', 'alert_updated'], {
+    keepPolling,
+  })
   return <p data-testid="live-data">{data ?? 'empty'}</p>
 }
 
@@ -181,6 +190,53 @@ describe('useDashboardSocket', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('live-data')).toHaveTextContent('updated')
+    })
+  })
+
+  it('keeps polling while the websocket is connected when keepPolling is set', async () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval')
+    const fetcher = vi.fn(async () => 'tick')
+
+    render(
+      <DashboardSocketProvider>
+        <LiveDataProbe fetcher={fetcher} keepPolling />
+      </DashboardSocketProvider>,
+    )
+
+    act(() => {
+      MockWebSocket.instances[0]?.open()
+    })
+    expect(await screen.findByTestId('live-data')).toHaveTextContent('tick')
+    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), REFRESH_INTERVAL_MS)
+    setIntervalSpy.mockRestore()
+  })
+
+  it('refreshes live data after alert_updated', async () => {
+    const fetcher = vi.fn(async () => 'initial')
+
+    render(
+      <DashboardSocketProvider>
+        <LiveDataProbe fetcher={fetcher} />
+      </DashboardSocketProvider>,
+    )
+
+    act(() => {
+      MockWebSocket.instances[0]?.open()
+    })
+    expect(await screen.findByTestId('live-data')).toHaveTextContent('initial')
+    fetcher.mockResolvedValue('from-alert')
+
+    act(() => {
+      MockWebSocket.instances[0]?.emit({
+        id: 'evt-alert',
+        type: 'alert_updated',
+        timestamp: '2026-09-07T14:02:00Z',
+        payload: { reason: 'threshold' },
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('live-data')).toHaveTextContent('from-alert')
     })
   })
 })

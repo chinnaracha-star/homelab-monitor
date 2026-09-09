@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from homelab_monitor.database import get_engine
@@ -22,6 +23,10 @@ def test_notification_settings_and_test_dispatch(
         sent.append((self.channel, message))
 
     monkeypatch.setattr(WebhookProvider, "send", fake_send)
+
+    with Session(get_engine()) as db:
+        db.execute(delete(Notification))
+        db.commit()
 
     listed = client.get("/api/v1/notifications", headers=auth_header("viewer", "viewer123"))
     assert listed.status_code == 200

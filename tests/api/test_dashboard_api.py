@@ -197,6 +197,8 @@ def test_dashboard_routes_are_documented_in_openapi(client: TestClient) -> None:
     assert "/api/v1/agents/{agent_id}/latest-report" in paths
     assert "/api/v1/agents/{agent_id}/reports" in paths
     assert "/api/v1/alerts/active" in paths
+    assert "/api/v1/alerts/history" in paths
+    assert "/api/v1/alerts/statistics" in paths
     assert "/api/v1/alerts/{alert_id}/acknowledge" in paths
     assert "/api/v1/users" in paths
     assert "/api/v1/users/{user_id}" in paths
@@ -210,8 +212,11 @@ def test_dashboard_routes_are_documented_in_openapi(client: TestClient) -> None:
     assert "/api/v1/history/agents/{agent_id}" in paths
     assert "/api/v1/history/agents/{agent_id}/export" in paths
     assert "/api/v1/notifications" in paths
+    assert "/api/v1/notifications/history" in paths
+    assert "/api/v1/notifications/statistics" in paths
     assert "/api/v1/notifications/{notification_id}" in paths
     assert "/api/v1/notifications/test" in paths
+    assert "/api/v1/notifications/test-report" in paths
     assert "/api/v1/notifications/{notification_id}/retry" in paths
     assert "/api/v1/settings/notifications" in paths
     assert "/api/v1/alert-rules" in paths
@@ -221,6 +226,15 @@ def test_dashboard_routes_are_documented_in_openapi(client: TestClient) -> None:
     assert "/api/v1/infrastructure/{service}" in paths
     assert "/api/v1/photo-services" in paths
     assert "/api/v1/backup" in paths
+    assert "/api/v1/incidents" in paths
+    assert "/api/v1/incidents/statistics" in paths
+    assert "/api/v1/incidents/{incident_id}" in paths
+    assert "/api/v1/predictions/overview" in paths
+    assert "/api/v1/predictions/storage" in paths
+    assert "/api/v1/predictions/system" in paths
+    assert "/api/v1/predictions/photos" in paths
+    assert "/api/v1/predictions/backup" in paths
+    assert "/api/v1/system/remote-access" in paths
 
 
 def test_agent_report_history_returns_newest_reports_first(

@@ -1,7 +1,7 @@
 import re
 import socket
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
 import httpx
 
@@ -11,14 +11,40 @@ from homelab_monitor.settings import Settings
 
 ALERT_TITLES = {
     "agent_offline": "Agent Offline",
-    "cpu_high": "CPU Warning",
-    "memory_high": "Memory Warning",
-    "disk_high": "Disk Warning",
-    "temperature_high": "Temperature Warning",
+    "cpu_high": "CPU Usage High",
+    "memory_high": "Memory Usage High",
+    "disk_high": "Disk Usage High",
+    "temperature_high": "Temperature High",
 }
+
+ALERT_RECOVERED_TITLES = {
+    "agent_offline": "Agent Recovered",
+    "cpu_high": "CPU Usage Recovered",
+    "memory_high": "Memory Usage Recovered",
+    "disk_high": "Disk Usage Recovered",
+    "temperature_high": "Temperature Recovered",
+}
+
+PERCENT_KINDS = {"cpu_high", "memory_high", "disk_high"}
 
 _TOKEN_PATTERN = re.compile(r"\d+:[A-Za-z0-9_-]+")
 DEFAULT_TELEGRAM_API_BASE_URL = "https://api.telegram.org"
+BANGKOK = timezone(timedelta(hours=7))
+THAI_MONTHS = (
+    "",
+    "มกราคม",
+    "กุมภาพันธ์",
+    "มีนาคม",
+    "เมษายน",
+    "พฤษภาคม",
+    "มิถุนายน",
+    "กรกฎาคม",
+    "สิงหาคม",
+    "กันยายน",
+    "ตุลาคม",
+    "พฤศจิกายน",
+    "ธันวาคม",
+)
 
 
 class TelegramNotificationError(Exception):
@@ -60,6 +86,8 @@ class TelegramNotifier:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "TelegramNotifier | None":
+        if not settings.telegram_enabled:
+            return None
         token = (
             settings.telegram_bot_token.get_secret_value() if settings.telegram_bot_token else ""
         )
@@ -130,17 +158,24 @@ def telegram_config_error(api_base_url: str, bot_token: str, chat_id: str) -> st
     return "Telegram API base URL, bot token, and chat ID must be configured together"
 
 
+def format_thai_datetime(value: datetime | None = None) -> str:
+    stamp = value or datetime.now(UTC)
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=UTC)
+    local = stamp.astimezone(BANGKOK)
+    return f"{local.day} {THAI_MONTHS[local.month]} {local.year + 543} {local.strftime('%H:%M')} น."
+
+
 def format_telegram_test_message(
     *,
     server: str | None = None,
     version: str | None = None,
     observed_at: datetime | None = None,
 ) -> str:
-    stamp = (observed_at or datetime.now(UTC)).isoformat()
     return "\n".join(
         (
             "🚀 Homelab Monitor Test",
-            f"Time: {stamp}",
+            f"Time: {format_thai_datetime(observed_at)}",
             f"Server: {server or socket.gethostname()}",
             f"Version: {version or __version__}",
             "Status: ok",
@@ -148,15 +183,80 @@ def format_telegram_test_message(
     )
 
 
+def format_bangkok_clock(value: datetime | None) -> str:
+    if value is None:
+        return "—"
+    stamp = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    return stamp.astimezone(BANGKOK).strftime("%H:%M")
+
+
+def format_duration_short(seconds: int | None) -> str:
+    if seconds is None:
+        return "—"
+    if seconds < 60:
+        return "1 sec" if seconds == 1 else f"{seconds} sec"
+    minutes = seconds // 60
+    if minutes < 60:
+        return "1 min" if minutes == 1 else f"{minutes} min"
+    hours = minutes // 60
+    return "1 hour" if hours == 1 else f"{hours} hours"
+
+
+def format_duration_long(seconds: int | None) -> str:
+    if seconds is None:
+        return "—"
+    if seconds < 60:
+        return "1 second" if seconds == 1 else f"{seconds} seconds"
+    minutes = seconds // 60
+    if minutes < 60:
+        return "1 minute" if minutes == 1 else f"{minutes} minutes"
+    hours = minutes // 60
+    return "1 hour" if hours == 1 else f"{hours} hours"
+
+
+def format_metric_value(kind: str, value: float | None) -> str:
+    if value is None:
+        return "—"
+    if kind in PERCENT_KINDS:
+        return f"{int(value)}%" if float(value).is_integer() else f"{value}%"
+    if kind == "temperature_high":
+        return f"{int(value)}°C" if float(value).is_integer() else f"{value}°C"
+    return str(int(value) if float(value).is_integer() else value)
+
+
 def format_alert_message(event: AlertEvent) -> str:
+    recovered = event.transition == "recovered"
+    if recovered:
+        title = ALERT_RECOVERED_TITLES.get(event.kind, "Alert Recovered")
+        return "\n".join(
+            (
+                f"🟢 {title}",
+                "",
+                "Recovered after",
+                "",
+                format_duration_long(event.duration_seconds),
+                "",
+                "Current:",
+                format_metric_value(event.kind, event.value),
+            )
+        )
     title = ALERT_TITLES.get(event.kind, "HomeLab Warning")
+    started = event.started_at or event.observed_at
     return "\n".join(
         (
-            f"HomeLab Monitor: {title}",
-            f"Agent: {event.agent_name}",
-            f"Resource: {event.resource}",
-            event.message,
-            f"Observed: {event.observed_at.isoformat()}",
+            f"🔴 {title}",
+            "",
+            "Current:",
+            format_metric_value(event.kind, event.value),
+            "",
+            "Threshold:",
+            format_metric_value(event.kind, event.threshold),
+            "",
+            "Started:",
+            format_bangkok_clock(started),
+            "",
+            "Duration:",
+            format_duration_short(event.duration_seconds),
         )
     )
 

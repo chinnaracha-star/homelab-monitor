@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from homelab_monitor.agent_presence import latest_report_time, presence_of
 from homelab_monitor.alert_rules.evaluate import (
     agent_group_ids,
     evaluate_samples,
@@ -28,6 +29,29 @@ class AlertEvent:
     threshold: float
     message: str
     observed_at: datetime
+    transition: str = "activated"
+    started_at: datetime | None = None
+    recovered_at: datetime | None = None
+    duration_seconds: int | None = None
+
+
+def as_alert_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def alert_duration_seconds(
+    started_at: datetime | None,
+    recovered_at: datetime | None,
+    now: datetime,
+    *,
+    recovered: bool,
+) -> int | None:
+    if started_at is None:
+        return None
+    end = recovered_at if recovered and recovered_at is not None else now
+    return max(0, int((as_alert_utc(end) - as_alert_utc(started_at)).total_seconds()))
 
 
 class AlertEngine:
@@ -65,8 +89,10 @@ class AlertEngine:
                 events.append(event)
         return events
 
-    def mark_agent_online(self, db: Session, agent: Agent, observed_at: datetime) -> None:
-        self._set_threshold_state(
+    def mark_agent_online(
+        self, db: Session, agent: Agent, observed_at: datetime
+    ) -> AlertEvent | None:
+        return self._set_threshold_state(
             db,
             agent,
             kind="agent_offline",
@@ -86,12 +112,20 @@ class AlertEngine:
         observed_at = now or datetime.now(UTC)
         events: list[AlertEvent] = []
         status_changed = False
+        timeout = self.settings.agent_offline_after_seconds
         rules = load_effective_rules(db, self.settings)
         for agent in db.scalars(select(Agent)).all():
-            last_contact = agent.last_seen_at or agent.created_at
-            if last_contact is None:
+            db.expire(agent)
+            db.refresh(agent)
+            presence = presence_of(
+                agent.last_seen_at,
+                latest_report_time(db, agent.id),
+                now=observed_at,
+                timeout_seconds=timeout,
+            )
+            if presence.contact_at is None:
                 continue
-            elapsed = (observed_at - self._as_utc(last_contact)).total_seconds()
+            elapsed = (observed_at - self._as_utc(presence.contact_at)).total_seconds()
             group_ids = agent_group_ids(db, agent.id)
             evaluated_list = evaluate_samples(
                 [offline_sample(elapsed, agent.name)],
@@ -100,11 +134,15 @@ class AlertEngine:
                 group_ids,
             )
             evaluated = evaluated_list[0]
-            offline = evaluated.breached
-            if offline and agent.status != "offline":
-                status_changed = True
+            offline = presence.status == "offline"
             if offline:
+                if agent.status != "offline":
+                    status_changed = True
                 agent.status = "offline"
+            else:
+                if agent.status != "online":
+                    status_changed = True
+                agent.status = "online"
             message = (
                 f"Agent {agent.name} has been offline for {int(max(0, elapsed))} seconds"
                 if offline
@@ -174,15 +212,16 @@ class AlertEngine:
                     "alert_opened",
                     extra={"agent_id": agent.id, "kind": kind, "resource": resource},
                 )
-                return AlertEvent(
-                    agent_id=agent.id,
-                    agent_name=agent.name,
+                return AlertEngine._lifecycle_event(
+                    agent,
+                    alert,
                     kind=kind,
                     resource=resource,
                     value=value,
                     threshold=threshold,
                     message=message,
                     observed_at=observed_at,
+                    transition="activated",
                 )
             if alert.status == "resolved":
                 resolved_at = alert.resolved_at
@@ -201,15 +240,16 @@ class AlertEngine:
                     "alert_reopened",
                     extra={"agent_id": agent.id, "kind": kind, "resource": resource},
                 )
-                event = AlertEvent(
-                    agent_id=agent.id,
-                    agent_name=agent.name,
+                event = AlertEngine._lifecycle_event(
+                    agent,
+                    alert,
                     kind=kind,
                     resource=resource,
                     value=value,
                     threshold=threshold,
                     message=message,
                     observed_at=observed_at,
+                    transition="activated",
                 )
             else:
                 event = None
@@ -230,4 +270,51 @@ class AlertEngine:
                 "alert_resolved",
                 extra={"agent_id": agent.id, "kind": kind, "resource": resource},
             )
+            return AlertEngine._lifecycle_event(
+                agent,
+                alert,
+                kind=kind,
+                resource=resource,
+                value=value,
+                threshold=threshold,
+                message=message,
+                observed_at=observed_at,
+                transition="recovered",
+            )
         return None
+
+    @staticmethod
+    def _lifecycle_event(
+        agent: Agent,
+        alert: Alert,
+        *,
+        kind: str,
+        resource: str,
+        value: float,
+        threshold: float,
+        message: str,
+        observed_at: datetime,
+        transition: str,
+    ) -> AlertEvent:
+        recovered = transition == "recovered"
+        started_at = alert.opened_at
+        recovered_at = alert.resolved_at if recovered else None
+        return AlertEvent(
+            agent_id=agent.id,
+            agent_name=agent.name,
+            kind=kind,
+            resource=resource,
+            value=value,
+            threshold=threshold,
+            message=message,
+            observed_at=observed_at,
+            transition=transition,
+            started_at=started_at,
+            recovered_at=recovered_at,
+            duration_seconds=alert_duration_seconds(
+                started_at,
+                recovered_at,
+                observed_at,
+                recovered=recovered,
+            ),
+        )

@@ -45,6 +45,7 @@ def record_photo_snapshot(stats: dict, *, observed_at: datetime | None = None) -
     payload = {
         "indexed_photos": as_int(stats.get("indexed_photos")),
         "storage_used": as_int(stats.get("storage_used")),
+        "capacity_bytes": as_int(stats.get("capacity_bytes")),
     }
     _record("photo", payload, observed_at=observed_at)
 
@@ -56,6 +57,10 @@ def record_backup_snapshot(snapshot: ConnectorSnapshot) -> None:
         "backup_status": as_str(summary.get("backup_status")),
         "backup_health": as_str(summary.get("backup_health")),
         "progress_percent": summary.get("progress_percent") or 0,
+        "last_backup": as_str(summary.get("last_backup")),
+        "last_success": as_str(summary.get("last_success") or summary.get("last_backup")),
+        "duration_seconds": as_int(summary.get("duration_seconds")),
+        "backup_size_bytes": as_int(summary.get("backup_size_bytes")),
     }
     _record("backup", payload, observed_at=snapshot.updated_at)
 

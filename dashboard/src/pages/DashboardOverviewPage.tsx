@@ -3,24 +3,35 @@ import { getActiveAlerts, getAgents, getBackupStatus, getDashboardOverview } fro
 import { ConnectionLost } from '../components/ConnectionLost'
 import { GroupCard } from '../components/GroupCard'
 import { LastUpdated } from '../components/LastUpdated'
+import { OfflineBanner } from '../components/OfflineBanner'
 import { OverviewSkeleton } from '../components/Skeleton'
+import { PwaInstallButton } from '../components/PwaInstallButton'
 import { SectionError } from '../components/SectionError'
 import { StatCard } from '../components/StatCard'
 import { StatusBadge } from '../components/StatusBadge'
+import { LIVE_PAGE_POLL } from '../constants'
 import { useLivePolling } from '../hooks/useDashboardSocket'
+import { useOptionalPwa } from '../pwa/PwaProvider'
 import { formatPercent } from '../utils/bytes'
+import { formatThaiDateTime } from '../utils/thaiDate'
 import styles from './Pages.module.css'
 import groupStyles from './GroupsPage.module.css'
 
-const OVERVIEW_EVENTS = ['overview_updated'] as const
-const AGENT_EVENTS = ['overview_updated', 'agent_updated'] as const
-const ALERT_EVENTS = ['overview_updated', 'alert_updated'] as const
+const OVERVIEW_EVENTS = ['overview_updated', 'agent_updated', 'alert_updated'] as const
+const AGENT_EVENTS = ['overview_updated', 'agent_updated', 'alert_updated'] as const
+const ALERT_EVENTS = ['overview_updated', 'agent_updated', 'alert_updated'] as const
 
 export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
-  const overview = useLivePolling(getDashboardOverview, OVERVIEW_EVENTS)
-  const agents = useLivePolling(getAgents, AGENT_EVENTS)
-  const alerts = useLivePolling(getActiveAlerts, ALERT_EVENTS)
-  const backup = useLivePolling(getBackupStatus, OVERVIEW_EVENTS)
+  const overview = useLivePolling(getDashboardOverview, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const agents = useLivePolling(getAgents, AGENT_EVENTS, LIVE_PAGE_POLL)
+  const alerts = useLivePolling(getActiveAlerts, ALERT_EVENTS, LIVE_PAGE_POLL)
+  const backup = useLivePolling(getBackupStatus, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const pwa = useOptionalPwa()
+  const cached =
+    Boolean(overview.data && overview.error) ||
+    Boolean(agents.data && agents.error) ||
+    Boolean(alerts.data && alerts.error)
+  const hasCachedShell = Boolean(overview.data || agents.data || alerts.data)
 
   const isRefreshing = overview.isRefreshing || agents.isRefreshing || alerts.isRefreshing
   const lastUpdated = [overview.lastUpdated, agents.lastUpdated, alerts.lastUpdated]
@@ -45,8 +56,15 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
           <h1 className={styles.title}>Dashboard</h1>
           <p className={styles.description}>Current monitoring coverage at a glance.</p>
         </div>
-        <LastUpdated refreshing={isRefreshing} value={lastUpdated} />
+        <div className={styles.headerActions}>
+          <LastUpdated refreshing={isRefreshing} value={lastUpdated} />
+          <PwaInstallButton />
+        </div>
       </header>
+
+      {pwa?.offline || cached ? (
+        <OfflineBanner lastUpdated={lastUpdated} cached={cached || Boolean(pwa?.offline && hasCachedShell)} />
+      ) : null}
 
       <section className={styles.section} aria-labelledby="overview-summary-title">
         <h2 className={styles.sectionTitle} id="overview-summary-title">
@@ -94,7 +112,7 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
             >
               <p className={styles.infoLabel}>Last Backup</p>
               <p className={styles.infoValue}>
-                {backup.data.last_backup ? new Date(backup.data.last_backup).toLocaleString() : 'unknown'}
+                {backup.data.last_backup ? formatThaiDateTime(backup.data.last_backup, false) : 'unknown'}
               </p>
             </article>
             <article
@@ -183,7 +201,7 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
         ) : null}
       </section>
 
-      {overview.error && agents.error && alerts.error ? (
+      {overview.error && agents.error && alerts.error && !hasCachedShell ? (
         <ConnectionLost
           onRetry={() => {
             overview.retry()

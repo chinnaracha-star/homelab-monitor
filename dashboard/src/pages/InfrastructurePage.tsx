@@ -4,15 +4,16 @@ import { InfrastructureCard } from '../components/InfrastructureCard'
 import { LastUpdated } from '../components/LastUpdated'
 import { SectionError } from '../components/SectionError'
 import { OverviewSkeleton } from '../components/Skeleton'
+import { LIVE_PAGE_POLL } from '../constants'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import userStyles from './UsersPage.module.css'
 import pageStyles from './Pages.module.css'
 import styles from './InfrastructurePage.module.css'
 
-const INFRA_EVENTS = ['overview_updated'] as const
+const INFRA_EVENTS = ['overview_updated', 'agent_updated', 'alert_updated'] as const
 
 export function InfrastructurePage() {
-  const snapshot = useLivePolling(getInfrastructure, INFRA_EVENTS)
+  const snapshot = useLivePolling(getInfrastructure, INFRA_EVENTS, LIVE_PAGE_POLL)
   const services = snapshot.data?.services ?? []
 
   return (

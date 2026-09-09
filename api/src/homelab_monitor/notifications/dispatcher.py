@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 from homelab_monitor.alert_engine import AlertEvent
 from homelab_monitor.database import get_engine
 from homelab_monitor.models import Alert, Notification
-from homelab_monitor.notifications import RETRY_ATTEMPTS, RETRY_DELAY_SECONDS, channel_payload
+from homelab_monitor.notifications import (
+    REPORT_RECIPIENTS,
+    RETRY_ATTEMPTS,
+    RETRY_DELAY_SECONDS,
+    channel_payload,
+)
 from homelab_monitor.notifications.config import build_telegram_notifier, load_payload
 from homelab_monitor.notifications.email import EmailProvider
 from homelab_monitor.notifications.telegram import TelegramProvider
@@ -103,19 +108,63 @@ def _record(
     channel: str,
     recipient: str,
     error: str,
+    status: str | None = None,
 ) -> Notification:
     now = datetime.now(UTC)
+    resolved = "sent" if not error else "failed"
+    if status is not None:
+        resolved = status
     row = Notification(
         alert_id=alert_id,
         channel=channel,
         recipient=recipient,
-        status="sent" if not error else "failed",
+        status=resolved,
         error_message=error,
-        sent_at=now if not error else None,
+        sent_at=now if resolved == "sent" else None,
     )
     db.add(row)
     db.commit()
     db.refresh(row)
+    return row
+
+
+def dispatch_telegram_report(
+    db: Session,
+    settings: Settings,
+    *,
+    kind: str,
+    message: str,
+) -> Notification:
+    payload = load_payload(db)
+    providers = [item for item in _providers(settings, payload, None) if item.channel == "telegram"]
+    if not providers:
+        row = _record(
+            db,
+            alert_id=None,
+            channel="telegram",
+            recipient=kind,
+            error="Telegram is not configured",
+            status="skipped",
+        )
+        hub.publish("overview_updated", reason="notification_updated")
+        hub.publish("alert_updated", reason="notification_updated")
+        return row
+    provider = providers[0]
+    try:
+        error = _deliver(provider, message)
+    finally:
+        provider.close()
+    status = "sent" if not error else "failed"
+    row = _record(
+        db,
+        alert_id=None,
+        channel="telegram",
+        recipient=kind,
+        error=error,
+        status=status,
+    )
+    hub.publish("overview_updated", reason="notification_updated")
+    hub.publish("alert_updated", reason="notification_updated")
     return row
 
 
@@ -216,7 +265,11 @@ def retry_notification(db: Session, settings: Settings, notification: Notificati
         return notification
     provider = providers[0]
     message = "HomeLab Monitor: Retry notification"
-    if notification.alert_id:
+    if notification.recipient in REPORT_RECIPIENTS:
+        from homelab_monitor.telegram_reports import TelegramReportService
+
+        message = TelegramReportService().build(db, notification.recipient)
+    elif notification.alert_id:
         alert = db.get(Alert, notification.alert_id)
         if alert is not None:
             message = alert.message
@@ -227,7 +280,8 @@ def retry_notification(db: Session, settings: Settings, notification: Notificati
     notification.status = "sent" if not error else "failed"
     notification.error_message = error
     notification.sent_at = datetime.now(UTC) if not error else None
-    notification.recipient = provider.recipient
+    if notification.recipient not in REPORT_RECIPIENTS:
+        notification.recipient = provider.recipient
     db.commit()
     db.refresh(notification)
     hub.publish("overview_updated", reason="notification_updated")

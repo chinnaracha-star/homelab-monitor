@@ -29,7 +29,8 @@
 }
 
 .online,
-.healthy {
+.healthy,
+.info {
   color: #047857;
   background: #d1fae5;
 }
@@ -38,6 +39,16 @@
 .critical {
   color: #b91c1c;
   background: #fee2e2;
+}
+
+.running {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.stopped {
+  color: #c2410c;
+  background: #ffedd5;
 }
 
 .registered,
@@ -53,21 +64,96 @@
 
 .statCard,
 .metricCard {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 0.9rem;
+  border-radius: 1rem;
   background: var(--surface);
   box-shadow: var(--shadow);
+  transition: box-shadow 0.15s ease;
+}
+
+.statCard:hover,
+.metricCard:hover {
+  box-shadow: 0 12px 28px rgb(15 23 42 / 8%);
 }
 
 .statCard {
-  padding: 1.35rem;
+  padding: 1.35rem 1.35rem 1.2rem;
+}
+
+.statCard[data-tone]::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: var(--tone, var(--accent));
+  content: '';
+}
+
+.statCard[data-tone='cpu'],
+.statCard[data-tone='analytics'] {
+  --tone: var(--color-cpu);
+}
+
+.statCard[data-tone='memory'] {
+  --tone: var(--color-memory);
+}
+
+.statCard[data-tone='storage'] {
+  --tone: var(--color-storage);
+}
+
+.statCard[data-tone='temperature'] {
+  --tone: var(--color-temperature);
+}
+
+.statCard[data-tone='photos'] {
+  --tone: var(--color-immich);
+}
+
+.statCard[data-tone='backup'] {
+  --tone: var(--color-backup);
+}
+
+.statCard[data-tone='alerts'] {
+  --tone: var(--color-alerts);
+}
+
+.statCard[data-tone='qnap'] {
+  --tone: var(--color-qnap);
+}
+
+.statCard[data-tone='docker'] {
+  --tone: var(--color-docker);
+}
+
+.statCard[data-tone='immich'] {
+  --tone: var(--color-immich);
+}
+
+.statCard[data-tone='qumagie'] {
+  --tone: var(--color-qumagie);
+}
+
+.statCard[data-tone='agent'] {
+  --tone: var(--color-storage);
+}
+
+.icon {
+  width: 1rem;
+  height: 1rem;
 }
 
 .statLabel,
 .metricLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -79,6 +165,12 @@
   font-size: clamp(1.8rem, 4vw, 2.4rem);
   font-weight: 750;
   line-height: 1;
+}
+
+.statValueRich {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .statValue,
@@ -264,6 +356,38 @@
   margin: 0;
 }
 
+.offlineBanner,
+.updateBanner {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.9rem;
+}
+
+.offlineBanner {
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  background: #f8fafc;
+}
+
+.updateBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid #93c5fd;
+  color: #1e3a8a;
+  background: #eff6ff;
+}
+
+.bannerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .lastUpdated {
   display: flex;
   align-items: center;
@@ -271,6 +395,12 @@
   margin: 0;
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+
+.thaiStamp {
+  white-space: pre-line;
+  text-align: right;
+  line-height: 1.35;
 }
 
 .refreshSpinner {
@@ -361,6 +491,32 @@
   background: #fee2e2;
 }
 
+.statusRecovered {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.alertMeta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.35rem 1rem;
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.alertMeta dt {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.alertMeta dd {
+  margin: 0.15rem 0 0;
+  color: var(--text-primary);
+}
+
 .emptyState {
   padding: 2rem;
   border: 1px dashed #cbd5e1;
@@ -426,6 +582,10 @@
   box-shadow: var(--shadow);
   text-decoration: none;
   color: inherit;
+}
+
+.alertItem article {
+  display: contents;
 }
 
 .alertItem:hover,

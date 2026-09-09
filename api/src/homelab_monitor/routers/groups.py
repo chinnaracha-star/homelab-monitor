@@ -5,13 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from homelab_monitor.agent_presence import presence_for_agents, to_agent_summary
 from homelab_monitor.auth.dependencies import require_roles
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
 from homelab_monitor.models import Agent, AgentGroup, AgentGroupMember
 from homelab_monitor.realtime import hub
 from homelab_monitor.schemas import (
-    AgentSummaryResponse,
     GroupCreateRequest,
     GroupDetailResponse,
     GroupMembershipRequest,
@@ -34,19 +34,21 @@ def _load_group(db: Session, group_id: str) -> AgentGroup:
 
 
 def _membership_stats(db: Session) -> dict[str, tuple[int, int, list[str]]]:
+    agents = list(db.scalars(select(Agent)).all())
+    presences = presence_for_agents(db, agents)
     rows = db.execute(
         select(
             AgentGroupMember.group_id,
             Agent.id,
-            Agent.status,
         ).join(Agent, Agent.id == AgentGroupMember.agent_id)
     ).all()
     stats: dict[str, tuple[int, int, list[str]]] = {}
-    for group_id, agent_id, agent_status in rows:
+    for group_id, agent_id in rows:
         total, online, agent_ids = stats.get(group_id, (0, 0, []))
+        presence = presences.get(agent_id)
         stats[group_id] = (
             total + 1,
-            online + (1 if agent_status == "online" else 0),
+            online + (1 if presence is not None and presence.status == "online" else 0),
             [*agent_ids, agent_id],
         )
     return stats
@@ -85,7 +87,8 @@ def _detail(db: Session, group_id: str) -> GroupDetailResponse:
         (membership.agent for membership in group.memberships),
         key=lambda item: item.name,
     )
-    online = sum(1 for agent in members if agent.status == "online")
+    presences = presence_for_agents(db, members)
+    online = sum(1 for agent in members if presences[agent.id].status == "online")
     return GroupDetailResponse(
         id=group.id,
         name=group.name,
@@ -95,7 +98,7 @@ def _detail(db: Session, group_id: str) -> GroupDetailResponse:
         agent_ids=[agent.id for agent in members],
         created_at=group.created_at,
         updated_at=group.updated_at,
-        members=[AgentSummaryResponse.model_validate(agent) for agent in members],
+        members=[to_agent_summary(agent, presences[agent.id]) for agent in members],
     )
 
 

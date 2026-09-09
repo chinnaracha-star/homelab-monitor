@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '../auth/AuthContext'
+import { PwaContext, type PwaContextValue } from '../pwa/PwaProvider'
 import type { BackupStatus, DashboardOverview } from '../types/dashboard'
 import { DashboardOverviewPage } from './DashboardOverviewPage'
 
@@ -66,7 +67,16 @@ function renderPage() {
 describe('Dashboard overview backup cards', () => {
   beforeEach(() => {
     vi.mocked(getDashboardOverview).mockResolvedValue(overview)
-    vi.mocked(getAgents).mockResolvedValue([])
+    vi.mocked(getAgents).mockResolvedValue([
+      {
+        id: 'agent-online',
+        name: 'mini-pc',
+        hostname: 'mini-pc.local',
+        version: '0.1.0',
+        status: 'online',
+        last_seen_at: '2026-09-08T08:35:00Z',
+      },
+    ])
     vi.mocked(getActiveAlerts).mockResolvedValue([])
     vi.mocked(getBackupStatus).mockResolvedValue(backup)
   })
@@ -81,6 +91,49 @@ describe('Dashboard overview backup cards', () => {
     expect(screen.getByRole('heading', { name: 'Backup' })).toBeInTheDocument()
     expect(screen.getByLabelText('Backup TS-253 Pro')).toBeInTheDocument()
     expect(screen.getByLabelText('Healthy healthy')).toBeInTheDocument()
-    expect(screen.getByLabelText('Running % 43.0%')).toBeInTheDocument()
+    expect(screen.getByLabelText('Status Online')).toBeInTheDocument()
+  })
+
+  it('shows the PWA install button and offline shell', async () => {
+    const install = vi.fn()
+    const pwa: PwaContextValue = {
+      installed: false,
+      canInstall: true,
+      serviceWorker: 'registered',
+      cacheReady: true,
+      version: '0.1.0',
+      updateAvailable: false,
+      offline: true,
+      install,
+      checkForUpdate: vi.fn(),
+      applyUpdate: vi.fn(),
+      dismissUpdate: vi.fn(),
+      clearCache: vi.fn(),
+    }
+    render(
+      <PwaContext.Provider value={pwa}>
+        <AuthContext.Provider
+          value={{
+            user: {
+              id: 'user-admin',
+              username: 'admin',
+              full_name: 'Administrator',
+              role: 'admin',
+              is_active: true,
+            },
+            loading: false,
+            login: async () => undefined,
+            logout: () => undefined,
+          }}
+        >
+          <DashboardOverviewPage />
+        </AuthContext.Provider>
+      </PwaContext.Provider>,
+    )
+    expect(await screen.findByLabelText('Total Agents 2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Install HomeLab Monitor' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Offline status')).toBeInTheDocument()
+    expect(screen.getByText('Cached Data')).toBeInTheDocument()
+    expect(screen.getByLabelText('Monitoring summary').className).toMatch(/statGrid/)
   })
 })

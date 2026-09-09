@@ -60,12 +60,15 @@ later without changing the server ingestion contract.
 - Dashboard authorization is enforced by user roles (`admin`, `operator`, `viewer`).
 - Integration credentials must not be included in metric payloads or API responses.
 
-The intended deployment boundary for version 1 is a trusted HomeLab LAN with
-HTTPS termination. Internet-facing and multi-site operation are version 2 work.
+The intended deployment boundary for version 1 is a trusted HomeLab LAN, with
+optional remote access only through a private Tailscale tailnet (no public
+ports). See [remote-access.md](remote-access.md). Internet-facing Funnel,
+Cloudflare Tunnel, and extra reverse proxies are out of scope.
 
-Production packaging is Docker Compose (API + nginx dashboard) or systemd units
-on Ubuntu. Nginx is the only published HTTP port; it reverse-proxies `/api` and
-WebSocket upgrades to FastAPI. See [deployment.md](deployment.md).
+Production packaging is Docker Compose (API + dashboard nginx inside Compose)
+or systemd units on Ubuntu. The dashboard container's nginx is the SPA server
+and same-origin proxy for `/api` and WebSockets. Remote HTTPS is provided by
+Tailscale Serve, not by publishing host ports. See [deployment.md](deployment.md).
 
 ## Persistence
 

@@ -8,6 +8,7 @@ import { TableSkeleton } from '../components/Skeleton'
 import { StatusBadge } from '../components/StatusBadge'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import { getErrorMessage } from '../utils/errors'
+import { formatThaiDateTime } from '../utils/thaiDate'
 import componentStyles from '../components/Components.module.css'
 import userStyles from './UsersPage.module.css'
 import pageStyles from './Pages.module.css'
@@ -104,7 +105,7 @@ export function NotificationsPage() {
                     />
                   </td>
                   <td>{item.error_message || '—'}</td>
-                  <td>{item.sent_at ? new Date(item.sent_at).toLocaleString() : '—'}</td>
+                  <td>{item.sent_at ? formatThaiDateTime(item.sent_at, false) : '—'}</td>
                   <td>
                     {canSend && item.status === 'failed' ? (
                       <button

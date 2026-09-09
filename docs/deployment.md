@@ -35,6 +35,17 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 That publishes `127.0.0.1:80`. Put TLS on a LAN reverse proxy or tunnel in
 front of it.
 
+For phones and laptops outside the home, use Tailscale Serve against loopback
+instead of a public proxy. See [remote-access.md](remote-access.md). Example:
+
+```bash
+export HOMELAB_DASHBOARD_PORT=18081
+docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d --build
+sudo tailscale serve --bg 18081
+```
+
+Local `http://localhost:18081` remains available. Do not port-forward.
+
 ## systemd
 
 Assumes the repository is cloned to `/opt/homelab-monitor`.
@@ -94,7 +105,8 @@ sudo systemctl enable --now homelab-monitor-api.service
 sudo systemctl enable --now homelab-monitor-dashboard.service
 ```
 
-The Ubuntu agent unit remains `deploy/systemd/homelab-agent.service`. Point
+The Ubuntu agent unit remains `deploy/systemd/homelab-agent.service`. See
+[agent.md](agent.md#run-with-systemd) for enable/start commands. Point
 `HOMELAB_SERVER_URL` at `http://<host>/api/v1` when nginx is in front of the
 API, or `http://127.0.0.1:8000/api/v1` on the same host without nginx.
 

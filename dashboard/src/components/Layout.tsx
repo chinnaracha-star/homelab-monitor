@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { DashboardSocketProvider, useDashboardConnection } from '../hooks/useDashboardSocket'
 import { AlertBanner } from './AlertBanner'
+import { PwaUpdateBanner } from './PwaUpdateBanner'
 import styles from './Layout.module.css'
 import { Navbar } from './Navbar'
 import { RealtimeDisconnectedBanner } from './RealtimeDisconnectedBanner'
@@ -48,6 +49,7 @@ function LayoutShell() {
         ) : null}
         <Sidebar open={sidebarOpen} onNavigate={closeSidebar} />
         <main className={styles.main} id="main-content">
+          <PwaUpdateBanner />
           {status === 'disconnected' ? <RealtimeDisconnectedBanner /> : null}
           <AlertBanner />
           <Outlet />

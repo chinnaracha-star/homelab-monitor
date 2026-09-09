@@ -46,7 +46,8 @@ The API is available at `http://127.0.0.1:8000`, with OpenAPI documentation at
 Production deployment uses Docker Compose or systemd. The dashboard nginx
 container (or host nginx) serves the UI and proxies `/api`, `/ws`, and
 `/health`. See [deployment](docs/deployment.md), [docker](docs/docker.md),
-[nginx](docs/nginx.md), and [backup](docs/backup.md).
+[nginx](docs/nginx.md), [remote access](docs/remote-access.md),
+[PWA](docs/pwa.md), and [backup](docs/backup.md).
 
 The dashboard is a Vite app in `dashboard/`. After logging in at `/login` it
 calls the protected Dashboard API.

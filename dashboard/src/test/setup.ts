@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
-import { afterEach } from 'vitest'
+import { afterEach, vi } from 'vitest'
+
+vi.mock('virtual:pwa-register', () => ({
+  registerSW: () => async () => undefined,
+}))
 
 HTMLDialogElement.prototype.showModal = function showModal() {
   this.setAttribute('open', '')
@@ -18,6 +22,20 @@ class ResizeObserverStub {
 }
 
 window.ResizeObserver = ResizeObserverStub
+
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  }),
+})
 
 afterEach(() => {
   cleanup()

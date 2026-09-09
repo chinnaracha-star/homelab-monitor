@@ -1,0 +1,21 @@
+name: homelab-monitor
+
+# Optional overlay. Tailscale stays on the Ubuntu host.
+# The API only reads status; it never enables Serve or Funnel.
+#
+#   HOMELAB_DASHBOARD_PORT=18081 docker compose \
+#     -f docker-compose.yml -f docker-compose.tailscale.yml up -d
+#
+# Then on the host:
+#   sudo tailscale serve --bg 18081
+
+services:
+  api:
+    environment:
+      HOMELAB_TAILSCALE_SOCKET: /var/run/tailscale/tailscaled.sock
+    volumes:
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro
+
+  dashboard:
+    ports:
+      - "127.0.0.1:18081:8080"

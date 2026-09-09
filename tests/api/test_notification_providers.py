@@ -193,7 +193,10 @@ def test_alert_dispatch_records_history(monkeypatch) -> None:
     with Session(get_engine()) as db:
         row = db.scalar(
             select(Notification)
-            .where(Notification.channel == "discord")
+            .where(
+                Notification.channel == "discord",
+                Notification.recipient == "https://discord.example/api",
+            )
             .order_by(Notification.created_at.desc())
         )
         assert row is not None

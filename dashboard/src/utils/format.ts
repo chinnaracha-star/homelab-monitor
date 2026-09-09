@@ -1,17 +1,13 @@
+import { formatThaiDateTime, formatThaiTime } from './thaiDate'
+
+export { formatThaiDate, formatThaiDateTime, formatThaiTime } from './thaiDate'
+
 export function formatDateTime(value: string | null): string {
   if (!value) {
     return 'Never'
   }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown'
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date)
+  const formatted = formatThaiDateTime(value)
+  return formatted === '—' ? 'Unknown' : formatted
 }
 
 export function formatBytes(value: number): string {
@@ -33,12 +29,7 @@ export function formatBytes(value: number): string {
 }
 
 export function formatClock(value: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).format(value)
+  return formatThaiTime(value)
 }
 
 export function formatUptime(value: number | undefined): string {

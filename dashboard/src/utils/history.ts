@@ -1,4 +1,5 @@
 import type { AgentHistory, HistoryPoint } from '../types/dashboard'
+import { formatThaiDateShort, formatThaiTime } from './thaiDate'
 
 export type HistoryRange = '1h' | '6h' | '24h' | '7d' | '30d'
 
@@ -46,13 +47,7 @@ export function formatHistoryTick(value: string): string {
   if (Number.isNaN(date.getTime())) {
     return value
   }
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
+  return `${formatThaiDateShort(date)} ${formatThaiTime(date, false)}`
 }
 
 export function historyExportFilename(agentName: string, generatedAt = new Date()): string {

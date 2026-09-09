@@ -133,6 +133,11 @@ export interface ActiveAlert {
   message: string
   opened_at: string
   last_observed_at: string
+  status?: string
+  started_at?: string | null
+  last_triggered_at?: string | null
+  recovered_at?: string | null
+  duration_seconds?: number | null
 }
 
 export interface GroupSummary {
@@ -202,11 +207,40 @@ export interface EmailNotificationSettings {
   password_set: boolean
 }
 
+export interface ScheduledReportCard {
+  enabled: boolean
+  last_sent: string | null
+  next_scheduled: string | null
+  status: string
+}
+
+export interface ScheduledReportsSettings {
+  hourly_enabled: boolean
+  daily_enabled: boolean
+  weekly_enabled: boolean
+  hour_interval: number
+  daily_time: string
+  weekly_day: string
+  weekly_time: string
+  timezone: string
+  hourly: ScheduledReportCard
+  daily: ScheduledReportCard
+  weekly: ScheduledReportCard
+}
+
+export interface TelegramTestReportResult {
+  status: string
+  notification_id: string | null
+  sent_at: string | null
+  provider: string
+}
+
 export interface NotificationSettings {
   telegram: TelegramNotificationSettings
   discord: WebhookNotificationSettings
   slack: WebhookNotificationSettings
   email: EmailNotificationSettings
+  reports: ScheduledReportsSettings
 }
 
 export type AlertMetric =
@@ -336,4 +370,443 @@ export interface BackupStatus {
   updated_at: string
   destination: BackupDestination
   history: BackupHistoryPeriod[]
+}
+
+export interface AnalyticsSeriesPoint {
+  timestamp: string | null
+  label: string
+  value: number | null
+}
+
+export interface AnalyticsCpu {
+  current: number | null
+  average_24h: number | null
+  minimum: number | null
+  maximum: number | null
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface AnalyticsMemory {
+  current: number | null
+  average: number | null
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface AnalyticsStorage {
+  current: number
+  daily_growth: number
+  weekly_growth: number
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface AnalyticsTemperature {
+  current: number | null
+  average: number | null
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface AnalyticsPhotos {
+  today: number
+  yesterday: number
+  this_week: number
+  growth: number
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface AnalyticsBackup {
+  last_backup: string
+  duration_seconds: number | null
+  success_rate: number | null
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface AnalyticsDailyOverview {
+  agents_total: number
+  agents_online: number
+  alerts_today: number
+  notifications_today: number
+  history_points_today: number
+}
+
+export interface AnalyticsOverview {
+  cpu_average: number | null
+  memory_average: number | null
+  storage_used: number
+  photos_today: number
+  backup_success_rate: number | null
+  temperature_average: number | null
+  daily: AnalyticsDailyOverview
+}
+
+export interface TrendMetric {
+  latest: number | null
+  average_1d: number | null
+  average_7d: number | null
+  average_30d: number | null
+  trend: string
+  difference_percent: number | null
+  hourly: AnalyticsSeriesPoint[]
+  daily: AnalyticsSeriesPoint[]
+}
+
+export interface TrendStorage {
+  current_used: number
+  used_percent: number | null
+  daily_growth_bytes: number
+  weekly_growth_bytes: number
+  monthly_growth_bytes: number
+  growth_per_day: number
+  estimated_days_until_full: number | null
+  estimated_full_date: string
+  trend: string
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface TrendPhotos {
+  today: number
+  yesterday: number
+  this_week: number
+  last_week: number
+  this_month: number
+  growth: number
+  daily: number
+  weekly: number
+  monthly: number
+  expected_next_week: number
+  trend: string
+  difference_percent: number | null
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface TrendBackup {
+  last_30_backups: number
+  success_rate: number | null
+  failure_rate: number | null
+  average_duration: number | null
+  fastest: number | null
+  slowest: number | null
+  running_count: number
+  expected_completion_seconds: number | null
+  last_backup: string
+  trend: string
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface TrendHealth {
+  healthy_count: number
+  warning_count: number
+  critical_count: number
+  unknown_count: number
+}
+
+export interface TrendOverview {
+  cpu_trend: string
+  memory_trend: string
+  storage_trend: string
+  photo_trend: string
+  backup_trend: string
+  overall_health: string
+  overall_score: number
+  health: TrendHealth
+}
+
+export interface CapacityStorage {
+  current_used: number
+  current_free: number
+  capacity: number
+  average_daily_growth: number
+  average_weekly_growth: number
+  estimated_days_remaining: number | null
+  estimated_full_date: string
+  risk: string
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface CapacityPhotos {
+  photos_today: number
+  photos_this_week: number
+  average_photos_per_day: number
+  expected_photos_next_month: number
+  expected_storage_next_month: number
+  average_size_per_photo: number
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface CapacityBackup {
+  destination_capacity: number
+  current_backup_size: number
+  growth_per_day: number
+  estimated_days_remaining: number | null
+  estimated_full_date: string
+  success_percent: number | null
+  average_duration: number | null
+  trend: string
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface CapacitySystem {
+  cpu_trend: string
+  memory_trend: string
+  storage_trend: string
+  backup_trend: string
+  overall_score: number
+  bottleneck: string
+  health: TrendHealth
+}
+
+export interface CapacityOverview {
+  storage_remaining_days: number | null
+  estimated_full_date: string
+  growth_per_day: number
+  photo_forecast: number
+  backup_forecast: string
+  capacity_score: number
+  bottleneck: string
+  storage_risk: string
+  backup_risk: string
+  recommendations: string[]
+  series: AnalyticsSeriesPoint[]
+}
+
+export interface DeveloperGit {
+  branch: string | null
+  commit: string | null
+  dirty: boolean | null
+  working_tree: string | null
+  modified_files: number | null
+  untracked_files: number | null
+  ahead_count: number | null
+  behind_count: number | null
+}
+
+export interface DeveloperOverview {
+  project: {
+    application_version: string
+    build_time: string | null
+    environment: string
+    current_phase: number
+    current_sprint: string
+    git: DeveloperGit
+  }
+  runtime: Record<
+    | 'api'
+    | 'dashboard'
+    | 'agent'
+    | 'database'
+    | 'docker'
+    | 'websocket'
+    | 'telegram'
+    | 'immich'
+    | 'qumagie'
+    | 'qnap'
+    | 'backup',
+    string
+  >
+  build: {
+    last_build: string | null
+    build_status: string
+    backend: string
+    frontend: string
+    docker_compose: string
+    application_version: string
+    environment: string
+  }
+  tests: {
+    backend_tests: string
+    frontend_tests: string
+    lint: string
+    ruff: string
+    build: string
+    qa: string
+  }
+  progress: {
+    phases: { phase: number; percent: number }[]
+    current_sprint: string
+    roadmap: string
+    completed_percent: number
+    current_milestone: string
+  }
+  statistics: {
+    rest_apis: number
+    database_tables: number
+    agents: number
+    groups: number
+    users: number
+    alert_rules: number
+    notifications: number
+    photos: number
+    docker_services: number
+    frontend_pages: number
+    react_components: number
+    backend_modules: number
+    test_count: number
+    frontend_test_count: number
+  }
+  activity: { kind: string; message: string; timestamp: string | null }[]
+  health: {
+    overall_health: number
+    overall_capacity: number
+    overall_trend: number
+    overall_infrastructure: number
+  }
+  capacity_score: number
+  agent_service: {
+    state: string
+    enabled: string
+    agent_status: string
+    last_heartbeat: string | null
+    last_check_in: string | null
+    last_report: string | null
+    next_report_eta: string | null
+    pid: number | null
+    restart_count: number | null
+    report_interval_seconds: number
+    systemd_status: string | null
+  }
+}
+
+export interface InsightItem {
+  summary: string
+  severity: string
+  recommendation: string
+}
+
+export interface InsightStorage extends InsightItem {
+  estimated_days: number | null
+}
+
+export interface InsightSystem {
+  cpu: InsightItem
+  memory: InsightItem
+  infrastructure: InsightItem
+}
+
+export interface InsightOverview {
+  overall: InsightItem
+  storage: InsightStorage
+  cpu: InsightItem
+  memory: InsightItem
+  backup: InsightItem
+  photos: InsightItem
+  infrastructure: InsightItem
+  recommendation: string
+  severity: string
+}
+
+export interface AlertHistoryEntry {
+  id: string
+  alert_type: string
+  severity: string
+  started_at: string
+  recovered_at: string | null
+  duration_seconds: number | null
+  agent_id: string
+  agent_name: string
+  source: string
+  threshold: number | null
+  peak_value: number | null
+  status: string
+}
+
+export interface AlertStatistics {
+  active_alerts: number
+  recovered_today: number
+  average_duration_seconds: number
+  critical_count: number
+  warning_count: number
+  recovery_rate: number
+  recovered: number
+  total: number
+}
+
+export interface IncidentSummary {
+  id: string
+  started_at: string
+  recovered_at: string | null
+  duration_seconds: number | null
+  agent_id: string
+  agent_name: string
+  severity: string
+  status: string
+  alert_count: number
+  cause: string
+}
+
+export interface IncidentDetail extends IncidentSummary {
+  affected_alerts: AlertHistoryEntry[]
+}
+
+export interface IncidentStatistics {
+  average_duration_seconds: number
+  open_count: number
+  recovered_count: number
+  critical_count: number
+  warning_count: number
+  incident_count: number
+  top_affected_agent: string
+}
+
+export interface NotificationCenterItem {
+  id: string
+  title: string
+  description: string
+  severity: string
+  source: string
+  kind: string
+  agent_id: string | null
+  agent_name: string | null
+  read_state: string
+  created_at: string
+}
+
+export interface NotificationHistory {
+  items: NotificationCenterItem[]
+  groups: { date: string; label: string; items: NotificationCenterItem[] }[]
+}
+
+export interface NotificationCenterStatistics {
+  unread: number
+  today: number
+  this_week: number
+  critical: number
+  total: number
+}
+
+export interface PredictionForecast {
+  horizon_days: number
+  summary: string
+  value: number | null
+  unit: string
+}
+
+export interface PredictionMetric {
+  risk: string
+  summary: string
+  recommendation: string
+  forecasts: PredictionForecast[]
+  series: { timestamp: string | null; label: string; value: number }[]
+}
+
+export interface PredictionOverview {
+  overall_risk: string
+  storage: PredictionMetric
+  system: PredictionMetric
+  photos: PredictionMetric
+  backup: PredictionMetric
+  recommendations: string[]
+  summary: string
+}
+
+export type RemoteAccessStatus = 'connected' | 'disconnected' | 'not_installed' | 'unknown'
+
+export interface RemoteAccess {
+  enabled: boolean
+  provider: string
+  hostname: string | null
+  tailnet_ip: string | null
+  https: boolean
+  serve_enabled: boolean
+  funnel_enabled: boolean
+  public: boolean
+  status: RemoteAccessStatus
 }

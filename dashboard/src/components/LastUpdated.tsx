@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { formatClock } from '../utils/format'
+import { formatThaiDateTime } from '../utils/thaiDate'
 import styles from './Components.module.css'
 
 interface LastUpdatedProps {
@@ -17,7 +17,9 @@ export const LastUpdated = memo(function LastUpdated({ value, refreshing }: Last
       {value ? (
         <>
           <span>Last updated:</span>
-          <time dateTime={value.toISOString()}>{formatClock(value)}</time>
+          <time className={styles.thaiStamp} dateTime={value.toISOString()}>
+            {formatThaiDateTime(value)}
+          </time>
         </>
       ) : null}
       {refreshing ? (

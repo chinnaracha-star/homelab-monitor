@@ -2,6 +2,7 @@ import { StatusBadge } from './StatusBadge'
 import badgeStyles from './Components.module.css'
 import type { InfrastructureSnapshot } from '../types/dashboard'
 import { formatBytes, formatPercent } from '../utils/bytes'
+import { formatThaiDateTime } from '../utils/thaiDate'
 import userStyles from '../pages/UsersPage.module.css'
 import infraStyles from '../pages/InfrastructurePage.module.css'
 import styles from '../pages/PhotoServicesPage.module.css'
@@ -23,7 +24,7 @@ export function PhotoServiceCard({ snapshot, title, onRetry }: PhotoServiceCardP
   const health = String(snapshot.summary.health ?? snapshot.status)
 
   return (
-    <article className={infraStyles.connectorCard} aria-label={`${title} card`}>
+    <article className={infraStyles.connectorCard} data-service="immich" aria-label={`${title} card`}>
       <header className={infraStyles.connectorHeader}>
         <h2 className={infraStyles.connectorName}>{title}</h2>
         <StatusBadge status={STATUS_MAP[snapshot.status] ?? snapshot.status} />
@@ -31,7 +32,7 @@ export function PhotoServiceCard({ snapshot, title, onRetry }: PhotoServiceCardP
       <p className={infraStyles.meta}>Status {snapshot.status}</p>
       <p className={infraStyles.meta}>Version {snapshot.version || 'unknown'}</p>
       <p className={infraStyles.meta}>
-        Last update {snapshot.updated_at ? new Date(snapshot.updated_at).toLocaleString() : 'never'}
+        Last update {snapshot.updated_at ? formatThaiDateTime(snapshot.updated_at, false) : 'never'}
       </p>
       <p className={infraStyles.meta}>Health {health}</p>
       <div className={infraStyles.retryRow}>
@@ -60,7 +61,7 @@ export function StorageCard({ snapshot, onRetry }: StorageCardProps) {
     health === 'critical' ? badgeStyles.critical : health === 'warning' ? badgeStyles.warning : badgeStyles.healthy
 
   return (
-    <article className={infraStyles.connectorCard} aria-label="QNAP Storage card">
+    <article className={infraStyles.connectorCard} data-service="qnap" aria-label="QNAP Storage card">
       <header className={infraStyles.connectorHeader}>
         <h2 className={infraStyles.connectorName}>QNAP Storage</h2>
         <StatusBadge status={STATUS_MAP[snapshot?.status ?? 'unknown'] ?? 'registered'} />
@@ -68,7 +69,7 @@ export function StorageCard({ snapshot, onRetry }: StorageCardProps) {
       <p className={infraStyles.meta}>Status {snapshot?.status ?? 'unknown'}</p>
       <p className={infraStyles.meta}>Version {snapshot?.version || 'unknown'}</p>
       <p className={infraStyles.meta}>
-        Last update {snapshot?.updated_at ? new Date(snapshot.updated_at).toLocaleString() : 'never'}
+        Last update {snapshot?.updated_at ? formatThaiDateTime(snapshot.updated_at, false) : 'never'}
       </p>
       <p className={infraStyles.meta}>Health {snapshot?.summary.health ?? snapshot?.status ?? 'unknown'}</p>
       <dl className={infraStyles.summaryList}>

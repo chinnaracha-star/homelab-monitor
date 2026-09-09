@@ -87,6 +87,7 @@ def register_agent(
 )
 def check_in(
     payload: AgentCheckInRequest,
+    background_tasks: BackgroundTasks,
     agent: Annotated[Agent, Depends(get_current_agent)],
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -95,10 +96,12 @@ def check_in(
     agent.version = payload.version
     agent.last_seen_at = observed_at
     agent.status = "online"
-    AlertEngine(settings).mark_agent_online(db, agent, observed_at)
+    recovery = AlertEngine(settings).mark_agent_online(db, agent, observed_at)
     db.commit()
     db.refresh(agent)
     hub.notify_ingest(reason="check_in", agent_id=agent.id)
+    if recovery is not None:
+        background_tasks.add_task(dispatch_alert_events, settings, [recovery])
     return build_agent_control(agent, settings, payload.config_revision)
 
 

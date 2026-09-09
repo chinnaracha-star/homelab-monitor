@@ -7,6 +7,7 @@ import { OverviewSkeleton } from '../components/Skeleton'
 import { StatCard } from '../components/StatCard'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import { formatBytes, formatPercent } from '../utils/bytes'
+import { formatThaiDateTime } from '../utils/thaiDate'
 import userStyles from './UsersPage.module.css'
 import pageStyles from './Pages.module.css'
 import infraStyles from './InfrastructurePage.module.css'
@@ -80,7 +81,7 @@ export function PhotoServicesPage() {
             <article className={styles.statNote} aria-label={`Last Scan ${stats.last_scan || 'unknown'}`}>
               <p className={styles.statNoteLabel}>Last Scan</p>
               <p className={styles.statNoteValue}>
-                {stats.last_scan ? new Date(stats.last_scan).toLocaleString() : 'unknown'}
+                {stats.last_scan ? formatThaiDateTime(stats.last_scan, false) : 'unknown'}
               </p>
             </article>
           </div>

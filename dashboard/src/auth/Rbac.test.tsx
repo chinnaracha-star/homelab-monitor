@@ -66,6 +66,9 @@ function renderWithUser(user: AuthUser, initialEntry: string) {
               <Route element={<PermissionRoute permission="settings" />}>
                 <Route path="/settings" element={<h1>Settings</h1>} />
               </Route>
+              <Route element={<PermissionRoute permission="developer" />}>
+                <Route path="/developer" element={<h1>Mission Control</h1>} />
+              </Route>
             </Route>
           </Route>
         </Routes>
@@ -99,51 +102,83 @@ describe('role-based access control', () => {
     expect(can('operator', 'photo_services')).toBe(true)
     expect(can('viewer', 'backup')).toBe(true)
     expect(can('operator', 'backup')).toBe(true)
+    expect(can('viewer', 'analytics')).toBe(true)
+    expect(can('operator', 'analytics')).toBe(true)
+    expect(can('admin', 'analytics')).toBe(true)
+    expect(can('admin', 'developer')).toBe(true)
+    expect(can('operator', 'developer')).toBe(false)
+    expect(can('viewer', 'developer')).toBe(false)
   })
 
   it('shows every navigation item for an admin', () => {
     renderWithUser(admin, '/dashboard')
-    expect(screen.getByRole('link', { name: 'Overview' })).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Overview' }).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByLabelText('Analytics')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Trends' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Capacity Planning' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'AI Insights' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Predictive Alerting' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Agents' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Groups' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Infrastructure' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Photo Services' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Backup' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Alerts' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Alert Timeline' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Incidents' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Notification Center' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Alert Rules' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Notifications' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Users' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Mission Control' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Developer')).toBeInTheDocument()
     expect(screen.getByLabelText('Role admin')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument()
   })
 
   it('hides Users and Settings for an operator', () => {
     renderWithUser(operator, '/dashboard')
-    expect(screen.getByRole('link', { name: 'Overview' })).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Overview' }).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByRole('link', { name: 'Trends' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Capacity Planning' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'AI Insights' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Groups' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Infrastructure' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Photo Services' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Backup' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Alerts' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Alert Timeline' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Incidents' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Notification Center' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Alert Rules' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Notifications' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Mission Control' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Role operator')).toBeInTheDocument()
   })
 
   it('hides Users and Settings for a viewer', () => {
     renderWithUser(viewer, '/dashboard')
     expect(screen.getByRole('link', { name: 'Agents' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Trends' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Capacity Planning' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'AI Insights' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Predictive Alerting' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Groups' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Infrastructure' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Photo Services' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Backup' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Alerts' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Alert Timeline' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Incidents' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Notification Center' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Alert Rules' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Notifications' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Mission Control' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Role viewer')).toBeInTheDocument()
   })
 
@@ -151,6 +186,12 @@ describe('role-based access control', () => {
     renderWithUser(operator, '/users')
     expect(await screen.findByRole('heading', { name: 'Permission denied' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Users' })).not.toBeInTheDocument()
+  })
+
+  it('blocks operators from mission control', async () => {
+    renderWithUser(operator, '/developer')
+    expect(await screen.findByRole('heading', { name: 'Permission denied' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Mission Control' })).not.toBeInTheDocument()
   })
 
   it('blocks viewers from settings and allows the dashboard', () => {

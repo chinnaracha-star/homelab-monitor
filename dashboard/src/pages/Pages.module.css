@@ -10,6 +10,27 @@
   gap: 1rem;
 }
 
+.missionControl .pageHeader {
+  padding: 1.25rem 1.4rem;
+  border: 1px solid #1e293b;
+  border-radius: 1.1rem;
+  color: #e2e8f0;
+  background: linear-gradient(135deg, #0f172a, #1d4ed8 140%);
+}
+
+.missionControl .eyebrow {
+  color: #93c5fd;
+}
+
+.missionControl .title,
+.missionControl .description {
+  color: #f8fafc;
+}
+
+.missionControl .description {
+  color: #cbd5e1;
+}
+
 .eyebrow {
   margin: 0 0 0.35rem;
   color: var(--accent);
@@ -29,6 +50,27 @@
 .description {
   margin: 0.5rem 0 0;
   color: var(--text-muted);
+}
+
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.offlineMode {
+  margin: 0.75rem 0 0;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  color: #92400e;
+  background: #fef3c7;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  width: fit-content;
 }
 
 .backLink {
@@ -166,9 +208,19 @@
   min-width: 0;
   padding: 1rem;
   border: 1px solid var(--border);
-  border-radius: 0.9rem;
+  border-radius: 1rem;
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.chartTooltip {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 0.8rem;
+  white-space: pre-line;
 }
 
 .chartSurface {
@@ -194,6 +246,161 @@
   opacity: 0.55;
 }
 
+.recommendationList {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recommendationItem {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.timelineList {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timelineItem {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.timelineKind {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.timelineMessage {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.timelineTime {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.insightGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.insightCard {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 1rem;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.insightCard[data-tone='docker'] {
+  border-left-color: var(--color-docker);
+}
+
+.insightCard[data-tone='storage'] {
+  border-left-color: var(--color-storage);
+}
+
+.insightCard[data-tone='cpu'] {
+  border-left-color: var(--color-cpu);
+}
+
+.insightCard[data-tone='memory'] {
+  border-left-color: var(--color-memory);
+}
+
+.insightCard[data-tone='backup'] {
+  border-left-color: var(--color-backup);
+}
+
+.insightCard[data-tone='photos'] {
+  border-left-color: var(--color-immich);
+}
+
+.insightCard[data-tone='alerts'] {
+  border-left-color: var(--color-alerts);
+}
+
+.insightHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.insightTitle {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.insightSummary,
+.insightRecommendation {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.insightRecommendation {
+  color: var(--text-muted);
+}
+
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.filterField {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 10rem;
+}
+
+.filterField label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.incidentButton {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 @media (max-width: 1050px) {
   .statGrid,
   .metricGrid {
@@ -204,7 +411,9 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .chartGrid {
+  .chartGrid,
+  .insightGrid,
+  .filterBar {
     grid-template-columns: 1fr;
   }
 }
@@ -218,7 +427,20 @@
 
   .statGrid,
   .metricGrid,
-  .infoPanel {
+  .infoPanel,
+  .remoteAccessGrid {
     grid-template-columns: 1fr;
   }
+}
+
+.remoteAccessGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem;
+}
+
+.remoteAccessActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }

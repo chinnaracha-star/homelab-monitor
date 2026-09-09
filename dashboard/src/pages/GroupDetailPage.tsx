@@ -18,6 +18,7 @@ import { SectionError } from '../components/SectionError'
 import { OverviewSkeleton } from '../components/Skeleton'
 import { StatCard } from '../components/StatCard'
 import { ConfirmDialog, ModalDialog } from '../components/UserDialogs'
+import { LIVE_PAGE_POLL } from '../constants'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import { getErrorMessage, isNotFound } from '../utils/errors'
 import userStyles from './UsersPage.module.css'
@@ -30,9 +31,9 @@ export function GroupDetailPage() {
   const { groupId = '' } = useParams()
   const navigate = useNavigate()
   const canManage = useCan()('manage_groups')
-  const group = useLivePolling(() => getGroup(groupId), GROUP_EVENTS)
-  const groups = useLivePolling(getGroups, GROUP_EVENTS)
-  const agents = useLivePolling(getAgents, GROUP_EVENTS)
+  const group = useLivePolling(() => getGroup(groupId), GROUP_EVENTS, LIVE_PAGE_POLL)
+  const groups = useLivePolling(getGroups, GROUP_EVENTS, LIVE_PAGE_POLL)
+  const agents = useLivePolling(getAgents, GROUP_EVENTS, LIVE_PAGE_POLL)
   const [dialog, setDialog] = useState<'edit' | 'assign' | 'delete' | string | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')

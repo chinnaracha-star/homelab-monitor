@@ -46,8 +46,12 @@ def telegram_credentials(settings: Settings, payload: dict) -> dict:
     env_token = (
         settings.telegram_bot_token.get_secret_value() if settings.telegram_bot_token else ""
     )
+    default_enabled = bool(env_token and settings.telegram_chat_id)
+    enabled = bool(stored.get("enabled", default_enabled))
+    if not settings.telegram_enabled:
+        enabled = False
     return {
-        "enabled": bool(stored.get("enabled", bool(env_token and settings.telegram_chat_id))),
+        "enabled": enabled,
         "api_base_url": stored.get("api_base_url")
         or settings.telegram_api_base_url
         or DEFAULT_TELEGRAM_API_BASE_URL,
@@ -58,6 +62,8 @@ def telegram_credentials(settings: Settings, payload: dict) -> dict:
 
 
 def public_settings(settings: Settings, payload: dict) -> dict:
+    from homelab_monitor.telegram_reports import public_reports
+
     telegram = telegram_credentials(settings, payload)
     discord = channel_payload(payload, "discord")
     slack = channel_payload(payload, "slack")
@@ -94,6 +100,7 @@ def public_settings(settings: Settings, payload: dict) -> dict:
             "use_tls": bool(email.get("use_tls", True)),
             "password_set": bool(email.get("password")),
         },
+        "reports": public_reports(payload),
     }
 
 
@@ -106,6 +113,15 @@ def apply_updates(payload: dict, updates: dict) -> dict:
             channel_payload(payload, channel),
             updates[channel],
         )
+    if "reports" in updates and isinstance(updates["reports"], dict):
+        from homelab_monitor.telegram_reports import reports_payload
+
+        merged_reports = reports_payload(payload)
+        for key, value in updates["reports"].items():
+            if value is None or key == "last_sent":
+                continue
+            merged_reports[key] = value
+        next_payload["reports"] = merged_reports
     return next_payload
 
 
@@ -116,6 +132,8 @@ def build_telegram_notifier(
 ) -> TelegramNotifier | None:
     if injected is not None:
         return injected
+    if not settings.telegram_enabled:
+        return None
     creds = telegram_credentials(settings, payload)
     if not creds["enabled"]:
         return None

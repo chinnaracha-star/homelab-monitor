@@ -1,9 +1,18 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from homelab_monitor.agent_presence import (
+    latest_report_time,
+    online_count,
+    presence_for_agents,
+    presence_of,
+    to_agent_summary,
+)
+from homelab_monitor.alert_engine import alert_duration_seconds
 from homelab_monitor.auth.dependencies import require_roles
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
@@ -21,6 +30,7 @@ from homelab_monitor.schemas import (
     LatestMetricReportResponse,
     ReportCountResponse,
 )
+from homelab_monitor.settings import get_settings
 
 router = APIRouter(
     prefix="/api/v1",
@@ -37,27 +47,27 @@ router = APIRouter(
 def get_dashboard_overview(
     db: Annotated[Session, Depends(get_db)],
 ) -> DashboardOverviewResponse:
-    total_agents = db.scalar(select(func.count()).select_from(Agent)) or 0
-    online_agents = (
-        db.scalar(select(func.count()).select_from(Agent).where(Agent.status == "online")) or 0
-    )
+    agents = list(db.scalars(select(Agent)).all())
+    presences = presence_for_agents(db, agents)
+    total_agents = len(agents)
+    online_agents = online_count(presences)
     total_reports = db.scalar(select(func.count()).select_from(MetricReport)) or 0
     total_groups = db.scalar(select(func.count()).select_from(AgentGroup)) or 0
     group_rows = db.execute(
         select(AgentGroup.id, AgentGroup.name).order_by(AgentGroup.name.asc())
     ).all()
     memberships = db.execute(
-        select(AgentGroupMember.group_id, Agent.status).join(
+        select(AgentGroupMember.group_id, Agent.id).join(
             Agent, Agent.id == AgentGroupMember.agent_id
         )
     ).all()
     counts: dict[str, list[int]] = {group_id: [0, 0] for group_id, _ in group_rows}
-    for group_id, agent_status in memberships:
+    for group_id, agent_id in memberships:
         pair = counts.get(group_id)
         if pair is None:
             continue
         pair[0] += 1
-        if agent_status == "online":
+        if presences.get(agent_id) and presences[agent_id].status == "online":
             pair[1] += 1
 
     return DashboardOverviewResponse(
@@ -85,8 +95,10 @@ def get_dashboard_overview(
     response_model=list[AgentSummaryResponse],
     summary="List monitored agents",
 )
-def list_agents(db: Annotated[Session, Depends(get_db)]) -> list[Agent]:
-    return list(db.scalars(select(Agent).order_by(Agent.name.asc())).all())
+def list_agents(db: Annotated[Session, Depends(get_db)]) -> list[AgentSummaryResponse]:
+    agents = list(db.scalars(select(Agent).order_by(Agent.name.asc())).all())
+    presences = presence_for_agents(db, agents)
+    return [to_agent_summary(agent, presences[agent.id]) for agent in agents]
 
 
 @router.get(
@@ -104,12 +116,18 @@ def get_agent(
     if agent is None:
         raise APIError(404, "agent_not_found", "The requested agent does not exist")
 
+    presence = presence_of(
+        agent.last_seen_at,
+        latest_report_time(db, agent.id),
+        now=datetime.now(UTC),
+        timeout_seconds=get_settings().agent_offline_after_seconds,
+    )
     return AgentDetailResponse(
         id=agent.id,
         name=agent.name,
         hostname=agent.hostname,
         version=agent.version,
-        status=agent.status,
+        status=presence.status,
         last_seen_at=agent.last_seen_at,
         configuration_revision=agent.configuration.revision if agent.configuration else 0,
         capabilities=agent.capabilities,
@@ -174,6 +192,38 @@ def get_agent_report_history(
     )
 
 
+def _alert_response(
+    alert: Alert, agent_name: str, now: datetime | None = None
+) -> ActiveAlertResponse:
+    clock = now or datetime.now(UTC)
+    recovered = alert.status != "active"
+    recovered_at = alert.resolved_at if recovered else None
+    started_at = alert.opened_at
+    return ActiveAlertResponse(
+        id=alert.id,
+        agent_id=alert.agent_id,
+        agent_name=agent_name,
+        kind=alert.kind,
+        resource=alert.resource,
+        severity=alert.severity,
+        current_value=alert.current_value,
+        threshold=alert.threshold,
+        message=alert.message,
+        opened_at=alert.opened_at,
+        last_observed_at=alert.last_observed_at,
+        status="recovered" if recovered else "active",
+        started_at=started_at,
+        last_triggered_at=alert.last_observed_at,
+        recovered_at=recovered_at,
+        duration_seconds=alert_duration_seconds(
+            started_at,
+            recovered_at,
+            clock,
+            recovered=recovered,
+        ),
+    )
+
+
 @router.get(
     "/alerts/active",
     response_model=list[ActiveAlertResponse],
@@ -181,30 +231,14 @@ def get_agent_report_history(
 )
 def list_active_alerts(
     db: Annotated[Session, Depends(get_db)],
+    include_recovered: Annotated[bool, Query()] = False,
 ) -> list[ActiveAlertResponse]:
-    rows = db.execute(
-        select(Alert, Agent.name)
-        .join(Agent, Alert.agent_id == Agent.id)
-        .where(Alert.status == "active")
-        .order_by(Alert.opened_at.desc(), Alert.id.desc())
-    ).all()
-
-    return [
-        ActiveAlertResponse(
-            id=alert.id,
-            agent_id=alert.agent_id,
-            agent_name=agent_name,
-            kind=alert.kind,
-            resource=alert.resource,
-            severity=alert.severity,
-            current_value=alert.current_value,
-            threshold=alert.threshold,
-            message=alert.message,
-            opened_at=alert.opened_at,
-            last_observed_at=alert.last_observed_at,
-        )
-        for alert, agent_name in rows
-    ]
+    query = select(Alert, Agent.name).join(Agent, Alert.agent_id == Agent.id)
+    if not include_recovered:
+        query = query.where(Alert.status == "active")
+    rows = db.execute(query.order_by(Alert.opened_at.desc(), Alert.id.desc())).all()
+    now = datetime.now(UTC)
+    return [_alert_response(alert, agent_name, now) for alert, agent_name in rows]
 
 
 @router.post(

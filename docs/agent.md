@@ -74,15 +74,37 @@ are closed before exit.
 
 ## Run with systemd
 
-The example unit is `deploy/systemd/homelab-agent.service`. It assumes:
+The unit file is `deploy/systemd/homelab-agent.service`. It:
+
+- starts `homelab-agent run`
+- reads `EnvironmentFile=/opt/homelab-monitor/state/agent.env` (no tokens in the unit)
+- uses `Restart=always` and `RestartSec=5`
+- starts after `network-online.target`
+- is enabled with `WantedBy=multi-user.target`
+
+Copy `deploy/systemd/agent.env.example` to `state/agent.env` in the checkout, then
+install and enable the service:
+
+```bash
+sudo cp deploy/systemd/homelab-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable homelab-agent
+sudo systemctl start homelab-agent
+sudo systemctl status homelab-agent
+journalctl -u homelab-agent -f
+```
+
+If the checkout is not `/opt/homelab-monitor`, edit `WorkingDirectory`,
+`EnvironmentFile`, `ExecStart`, and `ReadWritePaths` in the installed unit
+before `daemon-reload`.
+
+The unit assumes:
 
 - application checkout at `/opt/homelab-monitor`
 - virtual environment at `/opt/homelab-monitor/.venv`
 - dedicated `homelab-monitor` user and group
-- environment file at `/etc/homelab-monitor/agent.env`
-- queue at `/var/lib/homelab-monitor/agent-buffer.db`
-
-Installation is intentionally manual during Sprint 2.
+- environment file at `/opt/homelab-monitor/state/agent.env`
+- writable state under `/opt/homelab-monitor/state` and `/var/lib/homelab-monitor`
 
 ## Offline buffer and retries
 

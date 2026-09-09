@@ -13,12 +13,45 @@ import type {
   NotificationDelivery,
   NotificationList,
   NotificationSettings,
+  TelegramTestReportResult,
   AlertRule,
   AlertRulePayload,
   InfrastructureSnapshot,
   InfrastructureSummary,
   PhotoServicesSummary,
   BackupStatus,
+  AnalyticsOverview,
+  AnalyticsCpu,
+  AnalyticsMemory,
+  AnalyticsStorage,
+  AnalyticsTemperature,
+  AnalyticsPhotos,
+  AnalyticsBackup,
+  TrendOverview,
+  TrendMetric,
+  TrendStorage,
+  TrendPhotos,
+  TrendBackup,
+  CapacityOverview,
+  CapacityStorage,
+  CapacityPhotos,
+  CapacityBackup,
+  CapacitySystem,
+  DeveloperOverview,
+  InsightOverview,
+  InsightStorage,
+  InsightSystem,
+  InsightItem,
+  AlertHistoryEntry,
+  AlertStatistics,
+  IncidentSummary,
+  IncidentDetail,
+  IncidentStatistics,
+  NotificationHistory,
+  NotificationCenterStatistics,
+  PredictionOverview,
+  PredictionMetric,
+  RemoteAccess,
 } from '../types/dashboard'
 
 export async function getDashboardOverview(): Promise<DashboardOverview> {
@@ -43,9 +76,11 @@ export async function getLatestAgentReport(agentId: string): Promise<LatestMetri
   return response.data
 }
 
-export async function getActiveAlerts(): Promise<ActiveAlert[]> {
+export async function getActiveAlerts(includeRecovered = false): Promise<ActiveAlert[]> {
   try {
-    const response = await apiClient.get<ActiveAlert[]>('/alerts/active')
+    const response = await apiClient.get<ActiveAlert[]>('/alerts/active', {
+      params: includeRecovered ? { include_recovered: true } : undefined,
+    })
     return response.data
   } catch (error) {
     if (isNotFound(error)) {
@@ -138,6 +173,11 @@ export async function sendTestNotification(
   return response.data
 }
 
+export async function sendTelegramTestReport(): Promise<TelegramTestReportResult> {
+  const response = await apiClient.post<TelegramTestReportResult>('/notifications/test-report')
+  return response.data
+}
+
 export async function retryNotification(notificationId: string): Promise<NotificationDelivery> {
   const response = await apiClient.post<NotificationDelivery>(
     `/notifications/${encodeURIComponent(notificationId)}/retry`,
@@ -151,7 +191,7 @@ export async function getNotificationSettings(): Promise<NotificationSettings> {
 }
 
 export async function updateNotificationSettings(
-  payload: Record<string, Record<string, unknown>>,
+  payload: Record<string, unknown>,
 ): Promise<NotificationSettings> {
   const response = await apiClient.put<NotificationSettings>('/settings/notifications', payload)
   return response.data
@@ -203,5 +243,190 @@ export async function getPhotoServices(): Promise<PhotoServicesSummary> {
 
 export async function getBackupStatus(): Promise<BackupStatus> {
   const response = await apiClient.get<BackupStatus>('/backup')
+  return response.data
+}
+
+export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
+  const response = await apiClient.get<AnalyticsOverview>('/analytics/overview')
+  return response.data
+}
+
+export async function getAnalyticsCpu(): Promise<AnalyticsCpu> {
+  const response = await apiClient.get<AnalyticsCpu>('/analytics/cpu')
+  return response.data
+}
+
+export async function getAnalyticsMemory(): Promise<AnalyticsMemory> {
+  const response = await apiClient.get<AnalyticsMemory>('/analytics/memory')
+  return response.data
+}
+
+export async function getAnalyticsStorage(): Promise<AnalyticsStorage> {
+  const response = await apiClient.get<AnalyticsStorage>('/analytics/storage')
+  return response.data
+}
+
+export async function getAnalyticsTemperature(): Promise<AnalyticsTemperature> {
+  const response = await apiClient.get<AnalyticsTemperature>('/analytics/temperature')
+  return response.data
+}
+
+export async function getAnalyticsPhotos(): Promise<AnalyticsPhotos> {
+  const response = await apiClient.get<AnalyticsPhotos>('/analytics/photos')
+  return response.data
+}
+
+export async function getAnalyticsBackup(): Promise<AnalyticsBackup> {
+  const response = await apiClient.get<AnalyticsBackup>('/analytics/backup')
+  return response.data
+}
+
+export async function getTrendsOverview(): Promise<TrendOverview> {
+  const response = await apiClient.get<TrendOverview>('/trends/overview')
+  return response.data
+}
+
+export async function getTrendsCpu(): Promise<TrendMetric> {
+  const response = await apiClient.get<TrendMetric>('/trends/cpu')
+  return response.data
+}
+
+export async function getTrendsMemory(): Promise<TrendMetric> {
+  const response = await apiClient.get<TrendMetric>('/trends/memory')
+  return response.data
+}
+
+export async function getTrendsStorage(): Promise<TrendStorage> {
+  const response = await apiClient.get<TrendStorage>('/trends/storage')
+  return response.data
+}
+
+export async function getTrendsPhotos(): Promise<TrendPhotos> {
+  const response = await apiClient.get<TrendPhotos>('/trends/photos')
+  return response.data
+}
+
+export async function getTrendsBackup(): Promise<TrendBackup> {
+  const response = await apiClient.get<TrendBackup>('/trends/backup')
+  return response.data
+}
+
+export async function getCapacityOverview(): Promise<CapacityOverview> {
+  const response = await apiClient.get<CapacityOverview>('/capacity/overview')
+  return response.data
+}
+
+export async function getCapacityStorage(): Promise<CapacityStorage> {
+  const response = await apiClient.get<CapacityStorage>('/capacity/storage')
+  return response.data
+}
+
+export async function getCapacityPhotos(): Promise<CapacityPhotos> {
+  const response = await apiClient.get<CapacityPhotos>('/capacity/photos')
+  return response.data
+}
+
+export async function getCapacityBackup(): Promise<CapacityBackup> {
+  const response = await apiClient.get<CapacityBackup>('/capacity/backup')
+  return response.data
+}
+
+export async function getCapacitySystem(): Promise<CapacitySystem> {
+  const response = await apiClient.get<CapacitySystem>('/capacity/system')
+  return response.data
+}
+
+export async function getDeveloperOverview(): Promise<DeveloperOverview> {
+  const response = await apiClient.get<DeveloperOverview>('/developer/overview')
+  return response.data
+}
+
+export async function getRemoteAccess(): Promise<RemoteAccess> {
+  const response = await apiClient.get<RemoteAccess>('/system/remote-access')
+  return response.data
+}
+
+export async function getInsightsOverview(): Promise<InsightOverview> {
+  const response = await apiClient.get<InsightOverview>('/insights/overview')
+  return response.data
+}
+
+export async function getInsightsStorage(): Promise<InsightStorage> {
+  const response = await apiClient.get<InsightStorage>('/insights/storage')
+  return response.data
+}
+
+export async function getInsightsSystem(): Promise<InsightSystem> {
+  const response = await apiClient.get<InsightSystem>('/insights/system')
+  return response.data
+}
+
+export async function getInsightsPhotos(): Promise<InsightItem> {
+  const response = await apiClient.get<InsightItem>('/insights/photos')
+  return response.data
+}
+
+export async function getInsightsBackup(): Promise<InsightItem> {
+  const response = await apiClient.get<InsightItem>('/insights/backup')
+  return response.data
+}
+
+export async function getAlertHistory(): Promise<AlertHistoryEntry[]> {
+  const response = await apiClient.get<AlertHistoryEntry[]>('/alerts/history')
+  return response.data
+}
+
+export async function getAlertStatistics(): Promise<AlertStatistics> {
+  const response = await apiClient.get<AlertStatistics>('/alerts/statistics')
+  return response.data
+}
+
+export async function getIncidents(): Promise<IncidentSummary[]> {
+  const response = await apiClient.get<IncidentSummary[]>('/incidents')
+  return response.data
+}
+
+export async function getIncident(incidentId: string): Promise<IncidentDetail> {
+  const response = await apiClient.get<IncidentDetail>(`/incidents/${encodeURIComponent(incidentId)}`)
+  return response.data
+}
+
+export async function getIncidentStatistics(): Promise<IncidentStatistics> {
+  const response = await apiClient.get<IncidentStatistics>('/incidents/statistics')
+  return response.data
+}
+
+export async function getNotificationHistory(): Promise<NotificationHistory> {
+  const response = await apiClient.get<NotificationHistory>('/notifications/history')
+  return response.data
+}
+
+export async function getNotificationCenterStatistics(): Promise<NotificationCenterStatistics> {
+  const response = await apiClient.get<NotificationCenterStatistics>('/notifications/statistics')
+  return response.data
+}
+
+export async function getPredictionsOverview(): Promise<PredictionOverview> {
+  const response = await apiClient.get<PredictionOverview>('/predictions/overview')
+  return response.data
+}
+
+export async function getPredictionsStorage(): Promise<PredictionMetric> {
+  const response = await apiClient.get<PredictionMetric>('/predictions/storage')
+  return response.data
+}
+
+export async function getPredictionsSystem(): Promise<PredictionMetric> {
+  const response = await apiClient.get<PredictionMetric>('/predictions/system')
+  return response.data
+}
+
+export async function getPredictionsPhotos(): Promise<PredictionMetric> {
+  const response = await apiClient.get<PredictionMetric>('/predictions/photos')
+  return response.data
+}
+
+export async function getPredictionsBackup(): Promise<PredictionMetric> {
+  const response = await apiClient.get<PredictionMetric>('/predictions/backup')
   return response.data
 }

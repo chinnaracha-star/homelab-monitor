@@ -12,6 +12,7 @@ from homelab_monitor.telegram import (
     dispatch_alert_events,
     format_alert_message,
     format_telegram_test_message,
+    format_thai_datetime,
     telegram_config_error,
 )
 
@@ -54,25 +55,50 @@ def test_notifier_uses_configured_url_and_telegram_payload() -> None:
     assert str(captured.url) == ("https://telegram.example.test/bottest-bot-token/sendMessage")
     body = captured.read().decode()
     assert '"chat_id":"-100123"' in body
-    assert "CPU Warning" in body
-    assert "home-srv-01" in body
+    assert "CPU Usage High" in body
+    assert "95%" in body
 
 
 @pytest.mark.parametrize(
     ("kind", "title"),
     [
         ("agent_offline", "Agent Offline"),
-        ("cpu_high", "CPU Warning"),
-        ("memory_high", "Memory Warning"),
-        ("disk_high", "Disk Warning"),
-        ("temperature_high", "Temperature Warning"),
+        ("cpu_high", "CPU Usage High"),
+        ("memory_high", "Memory Usage High"),
+        ("disk_high", "Disk Usage High"),
+        ("temperature_high", "Temperature High"),
     ],
 )
 def test_supported_alert_messages(kind: str, title: str) -> None:
     message = format_alert_message(make_event(kind))
 
-    assert title in message
-    assert "Agent: home-srv-01" in message
+    assert f"🔴 {title}" in message
+    assert "Current:" in message
+    assert "Threshold:" in message
+    assert "Started:" in message
+    assert "16:00" in message
+
+
+def test_recovery_alert_message() -> None:
+    event = AlertEvent(
+        agent_id="agent-id",
+        agent_name="home-srv-01",
+        kind="cpu_high",
+        resource="system",
+        value=41,
+        threshold=90,
+        message="recovered",
+        observed_at=datetime(2026, 9, 7, 9, 17, tzinfo=UTC),
+        transition="recovered",
+        started_at=datetime(2026, 9, 7, 9, 0, tzinfo=UTC),
+        recovered_at=datetime(2026, 9, 7, 9, 17, tzinfo=UTC),
+        duration_seconds=17 * 60,
+    )
+    message = format_alert_message(event)
+    assert "🟢 CPU Usage Recovered" in message
+    assert "Recovered after" in message
+    assert "17 minutes" in message
+    assert "41%" in message
 
 
 def test_dispatch_is_disabled_without_credentials() -> None:
@@ -84,6 +110,24 @@ def test_dispatch_is_disabled_without_credentials() -> None:
     )
 
     dispatch_alert_events(settings, [make_event("cpu_high")])
+
+
+def test_telegram_kill_switch_skips_delivery() -> None:
+    from homelab_monitor.notifications.config import build_telegram_notifier
+
+    settings = Settings(
+        registration_key=REGISTRATION_KEY,
+        jwt_secret="test-jwt-secret-key-at-least-32-chars",
+        telegram_enabled=False,
+        telegram_bot_token="test-bot-token",
+        telegram_chat_id="-100123",
+        telegram_api_base_url="https://telegram.example.test",
+    )
+    notifier = build_telegram_notifier(
+        settings, {"telegram": {"enabled": True, "bot_token": "x", "chat_id": "1"}}
+    )
+    assert notifier is None
+    assert TelegramNotifier.from_settings(settings) is None
 
 
 def test_report_upload_notifies_only_on_alert_transition(
@@ -139,6 +183,12 @@ def test_report_upload_notifies_only_on_alert_transition(
     assert [event.kind for event in event_batches[0]] == ["cpu_high"]
 
 
+def test_format_thai_datetime_uses_buddhist_era_and_bangkok_time() -> None:
+    assert format_thai_datetime(datetime(2026, 9, 8, 7, 25, tzinfo=UTC)) == (
+        "8 กันยายน 2569 14:25 น."
+    )
+
+
 def test_telegram_test_message_includes_required_fields() -> None:
     message = format_telegram_test_message(
         server="production",
@@ -146,7 +196,7 @@ def test_telegram_test_message_includes_required_fields() -> None:
         observed_at=datetime(2026, 9, 8, 2, 0, tzinfo=UTC),
     )
     assert message.startswith("🚀 Homelab Monitor Test")
-    assert "Time: 2026-09-08T02:00:00+00:00" in message
+    assert "Time: 8 กันยายน 2569 09:00 น." in message
     assert "Server: production" in message
     assert "Version: 8.3.5" in message
     assert "Status: ok" in message

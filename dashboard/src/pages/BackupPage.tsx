@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import badgeStyles from '../components/Components.module.css'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import { formatDuration, formatPercent } from '../utils/bytes'
+import { formatThaiDateTime } from '../utils/thaiDate'
 import type { BackupStatus } from '../types/dashboard'
 import userStyles from './UsersPage.module.css'
 import pageStyles from './Pages.module.css'
@@ -150,11 +151,8 @@ function formatTimestamp(value: string): string {
   if (!value) {
     return 'unknown'
   }
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    return value
-  }
-  return parsed.toLocaleString()
+  const formatted = formatThaiDateTime(value, false)
+  return formatted === '—' ? value : formatted
 }
 
 function titleCase(value: string): string {
