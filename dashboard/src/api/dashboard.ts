@@ -49,6 +49,8 @@ import type {
   IncidentStatistics,
   NotificationHistory,
   NotificationCenterStatistics,
+  NotificationDeliveryMetrics,
+  NotificationDeliveryHistory,
   PredictionOverview,
   PredictionMetric,
   RemoteAccess,
@@ -423,6 +425,16 @@ export async function getNotificationHistory(): Promise<NotificationHistory> {
 
 export async function getNotificationCenterStatistics(): Promise<NotificationCenterStatistics> {
   const response = await apiClient.get<NotificationCenterStatistics>('/notifications/statistics')
+  return response.data
+}
+
+export async function getNotificationMetrics(): Promise<NotificationDeliveryMetrics> {
+  const response = await apiClient.get<NotificationDeliveryMetrics>('/notifications/metrics')
+  return response.data
+}
+
+export async function getNotificationDeliveryHistory(): Promise<NotificationDeliveryHistory> {
+  const response = await apiClient.get<NotificationDeliveryHistory>('/notifications/delivery-history')
   return response.data
 }
 

@@ -100,7 +100,16 @@ def test_first_activation_duplicate_recovery_and_repeat() -> None:
         agent = _agent(db, "lifecycle-cpu")
         engine = AlertEngine(_settings())
 
-        first = engine.evaluate_report(db, agent, _payload(96), observed)
+        first_pending = engine.evaluate_report(db, agent, _payload(96), observed)
+        db.commit()
+        assert first_pending == []
+        assert (
+            db.scalar(select(Alert).where(Alert.agent_id == agent.id, Alert.kind == "cpu_high"))
+            is None
+        )
+
+        activated_at = observed + timedelta(minutes=2)
+        first = engine.evaluate_report(db, agent, _payload(96), activated_at)
         db.commit()
         assert len(first) == 1
         assert first[0].transition == "activated"
@@ -110,7 +119,7 @@ def test_first_activation_duplicate_recovery_and_repeat() -> None:
         assert alert.status == "active"
         opened = alert.opened_at
 
-        duplicate = engine.evaluate_report(db, agent, _payload(97), observed + timedelta(minutes=3))
+        duplicate = engine.evaluate_report(db, agent, _payload(97), observed + timedelta(minutes=5))
         db.commit()
         db.refresh(alert)
         assert duplicate == []
@@ -118,9 +127,16 @@ def test_first_activation_duplicate_recovery_and_repeat() -> None:
         assert alert.opened_at == opened
         assert alert.current_value == 97
 
-        recovered = engine.evaluate_report(
+        still_active = engine.evaluate_report(
             db, agent, _payload(41), observed + timedelta(minutes=17)
         )
+        db.commit()
+        db.refresh(alert)
+        assert still_active == []
+        assert alert.status == "active"
+
+        recovered_at = observed + timedelta(minutes=19)
+        recovered = engine.evaluate_report(db, agent, _payload(41), recovered_at)
         db.commit()
         db.refresh(alert)
         assert len(recovered) == 1
@@ -130,14 +146,21 @@ def test_first_activation_duplicate_recovery_and_repeat() -> None:
         assert alert.resolved_at is not None
 
         later = observed + timedelta(minutes=20)
-        again = engine.evaluate_report(db, agent, _payload(96), later)
+        pending_again = engine.evaluate_report(db, agent, _payload(96), later)
+        db.commit()
+        db.refresh(alert)
+        assert pending_again == []
+        assert alert.status == "resolved"
+
+        reopened_at = later + timedelta(minutes=2)
+        again = engine.evaluate_report(db, agent, _payload(96), reopened_at)
         db.commit()
         db.refresh(alert)
         assert len(again) == 1
         assert again[0].transition == "activated"
         assert alert.status == "active"
         assert alert.resolved_at is None
-        assert AlertEngine._as_utc(alert.opened_at) == later
+        assert AlertEngine._as_utc(alert.opened_at) == reopened_at
         assert alert.id  # same unique row, new lifecycle timestamps
 
 
@@ -183,18 +206,31 @@ def test_alerts_api_exposes_lifecycle_fields(
         },
     )
     token = registration.json()["agent_token"]
+    start = datetime(2026, 9, 8, 8, 0, tzinfo=UTC)
     high = client.post(
         "/api/v1/agent/reports",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "report_id": "lifecycle-high",
             "schema_version": "1.0",
-            "observed_at": datetime.now(UTC).isoformat(),
+            "observed_at": start.isoformat(),
             "config_revision": 1,
             **_payload(96),
         },
     )
     assert high.status_code == 200
+    held = client.post(
+        "/api/v1/agent/reports",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "report_id": "lifecycle-high-held",
+            "schema_version": "1.0",
+            "observed_at": (start + timedelta(minutes=2)).isoformat(),
+            "config_revision": 1,
+            **_payload(96),
+        },
+    )
+    assert held.status_code == 200
     headers = auth_header()
     active = client.get("/api/v1/alerts/active", headers=headers).json()
     assert len(active) == 1
@@ -212,12 +248,28 @@ def test_alerts_api_exposes_lifecycle_fields(
         json={
             "report_id": "lifecycle-low",
             "schema_version": "1.0",
-            "observed_at": datetime.now(UTC).isoformat(),
+            "observed_at": (start + timedelta(minutes=3)).isoformat(),
             "config_revision": 1,
             **_payload(41),
         },
     )
     assert low.status_code == 200
+    recovering = client.get("/api/v1/alerts/active", headers=headers).json()
+    assert len(recovering) == 1
+    assert recovering[0]["status"] == "active"
+
+    recovered_report = client.post(
+        "/api/v1/agent/reports",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "report_id": "lifecycle-low-held",
+            "schema_version": "1.0",
+            "observed_at": (start + timedelta(minutes=5)).isoformat(),
+            "config_revision": 1,
+            **_payload(41),
+        },
+    )
+    assert recovered_report.status_code == 200
     still_active = client.get("/api/v1/alerts/active", headers=headers).json()
     assert still_active == []
     recovered = client.get(
@@ -268,4 +320,18 @@ def test_websocket_events_stay_compatible(
         assert response.status_code == 200
         types = {websocket.receive_json()["type"] for _ in range(3)}
         assert types <= allowed
-        assert "alert_updated" in types
+        held = client.post(
+            "/api/v1/agent/reports",
+            headers={"Authorization": f"Bearer {agent_token}"},
+            json={
+                "report_id": "lifecycle-ws-high-held",
+                "schema_version": "1.0",
+                "observed_at": (datetime.now(UTC) + timedelta(minutes=2)).isoformat(),
+                "config_revision": 1,
+                **_payload(96),
+            },
+        )
+        assert held.status_code == 200
+        held_types = {websocket.receive_json()["type"] for _ in range(3)}
+        assert held_types <= allowed
+        assert "alert_updated" in held_types

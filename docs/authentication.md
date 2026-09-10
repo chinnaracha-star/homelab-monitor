@@ -26,17 +26,12 @@ Role checks are enforced by `require_roles(...)`. See [rbac.md](rbac.md) and
 5. `GET /api/v1/auth/me` returns the current user for the navbar.
 6. Logout deletes the stored token and returns to `/login`.
 
-Default seeded accounts (change these passwords in any shared environment):
-
-| Username | Password | Role |
-| --- | --- | --- |
-| `admin` | `admin123` | admin |
-| `operator` | `operator123` | operator |
-| `viewer` | `viewer123` | viewer |
-
-A fresh `0003_add_users` migration inserts all three. If `0003` already ran with
-only `admin`, the API creates any missing default users at startup and never
-overwrites an existing username.
+Accounts are created from environment variables at API start, not from hardcoded
+passwords. Production requires `HOMELAB_BOOTSTRAP_ADMIN_PASSWORD` (minimum 8
+characters, and not `admin123`). Optional `HOMELAB_BOOTSTRAP_OPERATOR_PASSWORD`
+and `HOMELAB_BOOTSTRAP_VIEWER_PASSWORD` create those roles when set. Existing
+usernames are never overwritten unless they still use a known insecure default
+and a bootstrap password is provided.
 
 ## JWT
 

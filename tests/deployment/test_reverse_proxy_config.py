@@ -17,7 +17,9 @@ def test_nginx_configs_keep_api_and_websocket_routes(config_path: Path) -> None:
         "}", maxsplit=1
     )[0]
 
-    assert "location /ws/" in config
+    assert "location = /health {" in config
+    assert "location = /openapi.json {" in config
+    assert "location /docs {" in config
     assert 'proxy_set_header Connection "";' in rest_location
     assert "proxy_set_header Upgrade" not in rest_location
     assert "proxy_set_header Upgrade $http_upgrade;" in websocket_location
@@ -46,7 +48,8 @@ def test_compose_keeps_dashboard_loopback_only_and_api_internal() -> None:
 
     assert '"127.0.0.1:${HOMELAB_DASHBOARD_PORT:-8080}:8080"' in compose
     assert '"127.0.0.1:80:8080"' in production
-    assert "backend:\n    internal: true" in compose
+    assert "networks:\n  backend:\n  egress:\n" in compose
+    assert "internal: true" not in compose
     assert "api:\n" in compose
     assert "      - backend\n      - egress" in compose
     assert "dashboard:\n" in compose

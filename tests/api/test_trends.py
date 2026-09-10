@@ -16,9 +16,18 @@ from homelab_monitor.models import (
     Notification,
     OpsSnapshot,
 )
+from homelab_monitor.trends import _forecast_full_date
 
 REGISTRATION_KEY = "test-registration-key-at-least-24-chars"
 PATHS = ("/overview", "/cpu", "/memory", "/storage", "/photos", "/backup")
+
+
+def test_forecast_full_date_clamps_overflow() -> None:
+    end = datetime(2026, 9, 10, tzinfo=UTC)
+    assert _forecast_full_date(end, 5.25).startswith("2026-09-")
+    assert _forecast_full_date(end, 1e12)
+    assert _forecast_full_date(end, None) == ""
+    assert _forecast_full_date(end, -1) == ""
 
 
 def _reset_analytics_sources() -> None:

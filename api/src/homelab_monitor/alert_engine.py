@@ -14,6 +14,12 @@ from homelab_monitor.alert_rules.evaluate import (
 )
 from homelab_monitor.alert_rules.metrics import extract_system_samples, offline_sample
 from homelab_monitor.alert_severity import alert_payload_severity
+from homelab_monitor.alert_stability import (
+    abandon_close_alert,
+    abandon_open_alert,
+    should_close_alert,
+    should_open_alert,
+)
 from homelab_monitor.models import Agent, Alert
 from homelab_monitor.settings import Settings
 
@@ -90,12 +96,13 @@ class AlertEngine:
             )
             if event is not None:
                 events.append(event)
+        self._enqueue_notifications(events)
         return events
 
     def mark_agent_online(
         self, db: Session, agent: Agent, observed_at: datetime
     ) -> AlertEvent | None:
-        return self._set_threshold_state(
+        event = self._set_threshold_state(
             db,
             agent,
             kind="agent_offline",
@@ -106,6 +113,9 @@ class AlertEngine:
             observed_at=observed_at,
             message=f"Agent {agent.name} is online",
         )
+        if event is not None:
+            self._enqueue_notifications([event])
+        return event
 
     def evaluate_offline_agents(
         self,
@@ -168,7 +178,16 @@ class AlertEngine:
             )
             if event is not None:
                 events.append(event)
+        self._enqueue_notifications(events)
         return events, status_changed
+
+    @staticmethod
+    def _enqueue_notifications(events: list[AlertEvent]) -> None:
+        if not events:
+            return
+        from homelab_monitor.notification_queue import enqueue_alert_events
+
+        enqueue_alert_events(events)
 
     @staticmethod
     def _as_utc(value: datetime) -> datetime:
@@ -199,7 +218,10 @@ class AlertEngine:
             )
         )
         if breached:
+            abandon_close_alert(agent.id, kind, resource)
             if alert is None:
+                if not should_open_alert(agent.id, kind, resource, observed_at):
+                    return None
                 alert = Alert(
                     agent_id=agent.id,
                     kind=kind,
@@ -237,6 +259,8 @@ class AlertEngine:
                     < cooldown_seconds
                 ):
                     return None
+                if not should_open_alert(agent.id, kind, resource, observed_at):
+                    return None
                 alert.status = "active"
                 alert.severity = severity
                 alert.opened_at = observed_at
@@ -265,7 +289,14 @@ class AlertEngine:
             alert.last_observed_at = observed_at
             return event
 
+        abandon_open_alert(agent.id, kind, resource)
         if alert is not None and alert.status == "active":
+            if not should_close_alert(agent.id, kind, resource, observed_at):
+                alert.current_value = value
+                alert.threshold = threshold
+                alert.message = message
+                alert.last_observed_at = observed_at
+                return None
             alert.status = "resolved"
             alert.current_value = value
             alert.threshold = threshold

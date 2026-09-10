@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 from httpx import Response
@@ -118,25 +119,39 @@ def test_operator_and_admin_can_acknowledge_alerts(
     )
     assert register.status_code == 201
     token = register.json()["agent_token"]
-    report = client.post(
+    start = datetime(2026, 9, 7, 9, 0, tzinfo=UTC)
+    report_body = {
+        "schema_version": "1.0",
+        "config_revision": 1,
+        "modules": [
+            {
+                "module": "system",
+                "status": "warning",
+                "summary": "CPU is high",
+                "metrics": {"cpu": {"usage_percent": 100.0}},
+                "diagnostics": {},
+            }
+        ],
+    }
+    first = client.post(
         "/api/v1/agent/reports",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "report_id": "rbac-alert-report",
-            "schema_version": "1.0",
-            "observed_at": "2026-09-07T09:00:00Z",
-            "config_revision": 1,
-            "modules": [
-                {
-                    "module": "system",
-                    "status": "warning",
-                    "summary": "CPU is high",
-                    "metrics": {"cpu": {"usage_percent": 100.0}},
-                    "diagnostics": {},
-                }
-            ],
+            "observed_at": start.isoformat(),
+            **report_body,
         },
     )
+    report = client.post(
+        "/api/v1/agent/reports",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "report_id": "rbac-alert-report-held",
+            "observed_at": (start + timedelta(minutes=2)).isoformat(),
+            **report_body,
+        },
+    )
+    assert first.status_code == 200
     assert report.status_code == 200
     alerts = client.get(
         "/api/v1/alerts/active",

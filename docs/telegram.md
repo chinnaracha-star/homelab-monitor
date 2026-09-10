@@ -51,10 +51,7 @@ Metric alerts are queued as FastAPI background tasks after alert state commits.
 Offline-agent alerts are sent after the periodic liveness transaction commits.
 Telegram failures are logged and do not roll back reports or alert state.
 
-Notification delivery is reusable through `TelegramNotifier.send_alert()` and
-`dispatch_alert_events()`, which now records history and fans out to other
-configured channels. Tests replace the HTTP transport and never contact
-the public Telegram service.
-
-See [notifications.md](notifications.md) for Discord, Slack, email, retries,
-and the dashboard Settings page.
+Live alert delivery in v1.0.0-rc1 uses the in-memory notification queue and
+Telegram worker. See [notifications.md](notifications.md) and
+[known-limitations.md](known-limitations.md). Tests replace the HTTP transport
+and never contact the public Telegram service.

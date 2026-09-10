@@ -35,7 +35,7 @@ the API network.
 
 ```bash
 cp .env.production.example .env
-# set HOMELAB_REGISTRATION_KEY and HOMELAB_JWT_SECRET (required)
+# set HOMELAB_REGISTRATION_KEY, HOMELAB_JWT_SECRET, and HOMELAB_BOOTSTRAP_ADMIN_PASSWORD
 docker compose up -d --build
 curl -fsS http://127.0.0.1:8080/health
 curl -fsS http://127.0.0.1:8080/

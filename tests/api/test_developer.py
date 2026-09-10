@@ -53,7 +53,7 @@ def test_developer_overview_is_admin_only(
     assert operator.status_code == 403
     assert viewer.status_code == 403
     body = admin.json()
-    assert body["project"]["application_version"] == "0.9.3-dev"
+    assert body["project"]["application_version"] == "1.0.0-rc1"
     assert body["project"]["current_sprint"] == "9.3.5"
     assert body["project"]["current_phase"] == 9
     assert body["tests"]["backend_tests"] == "unknown"

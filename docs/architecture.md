@@ -116,8 +116,8 @@ A periodic server task compares each agent's last contact with offline rules
 `agent_offline` alert. A successful check-in or report resolves that state.
 Alert evaluation and report persistence share the same database transaction.
 
-New and reopened alert transitions are delivered through the notification
-center after alert state commits. Telegram, Discord, Slack, and email are
-supported. Repeated active observations do not produce duplicate messages, and
-delivery failures do not roll back reports or alert state. See
-[notifications.md](notifications.md).
+New and reopened alert transitions are enqueued for Telegram after alert
+state commits. Repeated active observations do not produce duplicate messages,
+and delivery failures do not roll back reports or alert state. See
+[notifications.md](notifications.md) and
+[known-limitations.md](known-limitations.md).

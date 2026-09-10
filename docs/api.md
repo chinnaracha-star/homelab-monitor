@@ -79,11 +79,11 @@ Dashboard APIs require a JWT issued by `POST /api/v1/auth/login`:
 ```bash
 curl --request POST http://127.0.0.1:8000/api/v1/auth/login \
   --header "Content-Type: application/json" \
-  --data '{"username":"admin","password":"admin123"}'
+  --data '{"username":"admin","password":"<bootstrap-admin-password>"}'
 ```
 
-The example uses the default administrator. Operator and viewer accounts are
-documented in [authentication.md](authentication.md).
+The example uses the bootstrap administrator from `HOMELAB_BOOTSTRAP_ADMIN_PASSWORD`.
+Operator and viewer accounts are documented in [authentication.md](authentication.md).
 
 - `GET /api/v1/auth/me`
 - `GET /api/v1/dashboard/overview`

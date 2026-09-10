@@ -1,10 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from homelab_monitor.alert_engine import AlertEvent
+from homelab_monitor.notification_queue import get_notification_queue
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram import (
     TelegramNotificationError,
@@ -130,19 +131,7 @@ def test_telegram_kill_switch_skips_delivery() -> None:
     assert TelegramNotifier.from_settings(settings) is None
 
 
-def test_report_upload_notifies_only_on_alert_transition(
-    client: TestClient,
-    monkeypatch,
-) -> None:
-    event_batches: list[list[AlertEvent]] = []
-
-    def capture_events(_settings: Settings, events: list[AlertEvent]) -> None:
-        event_batches.append(events)
-
-    monkeypatch.setattr(
-        "homelab_monitor.routers.agents.dispatch_alert_events",
-        capture_events,
-    )
+def test_report_upload_enqueues_only_on_alert_transition(client: TestClient) -> None:
     registration = client.post(
         "/api/v1/agents/register",
         headers={"X-Registration-Key": REGISTRATION_KEY},
@@ -154,14 +143,14 @@ def test_report_upload_notifies_only_on_alert_transition(
         },
     ).json()
 
-    def upload(report_id: str) -> None:
+    def upload(report_id: str, observed_at: datetime) -> None:
         response = client.post(
             "/api/v1/agent/reports",
             headers={"Authorization": f"Bearer {registration['agent_token']}"},
             json={
                 "report_id": report_id,
                 "schema_version": "1.0",
-                "observed_at": datetime.now(UTC).isoformat(),
+                "observed_at": observed_at.isoformat(),
                 "config_revision": 1,
                 "modules": [
                     {
@@ -176,11 +165,16 @@ def test_report_upload_notifies_only_on_alert_transition(
         )
         assert response.status_code == 200
 
-    upload("telegram-alert-001")
-    upload("telegram-alert-002")
+    start = datetime(2026, 9, 10, 8, 0, tzinfo=UTC)
+    upload("telegram-alert-001", start)
+    upload("telegram-alert-002", start + timedelta(minutes=2))
+    upload("telegram-alert-003", start + timedelta(minutes=3))
 
-    assert len(event_batches) == 1
-    assert [event.kind for event in event_batches[0]] == ["cpu_high"]
+    jobs = get_notification_queue().snapshot()
+    assert len(jobs) == 1
+    assert jobs[0].channel == "telegram"
+    assert jobs[0].event == "activated"
+    assert "CPU Usage High" in jobs[0].message
 
 
 def test_format_thai_datetime_uses_buddhist_era_and_bangkok_time() -> None:

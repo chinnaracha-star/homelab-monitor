@@ -4,7 +4,7 @@ import secrets
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, status
+from fastapi import APIRouter, Depends, Header, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -26,7 +26,6 @@ from homelab_monitor.schemas import (
 )
 from homelab_monitor.security import create_agent_token, get_current_agent, hash_agent_token
 from homelab_monitor.settings import Settings, get_settings
-from homelab_monitor.telegram import dispatch_alert_events
 
 router = APIRouter(prefix="/api/v1", tags=["agents"])
 
@@ -87,7 +86,6 @@ def register_agent(
 )
 def check_in(
     payload: AgentCheckInRequest,
-    background_tasks: BackgroundTasks,
     agent: Annotated[Agent, Depends(get_current_agent)],
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -96,12 +94,10 @@ def check_in(
     agent.version = payload.version
     agent.last_seen_at = observed_at
     agent.status = "online"
-    recovery = AlertEngine(settings).mark_agent_online(db, agent, observed_at)
+    AlertEngine(settings).mark_agent_online(db, agent, observed_at)
     db.commit()
     db.refresh(agent)
     hub.notify_ingest(reason="check_in", agent_id=agent.id)
-    if recovery is not None:
-        background_tasks.add_task(dispatch_alert_events, settings, [recovery])
     return build_agent_control(agent, settings, payload.config_revision)
 
 
@@ -112,7 +108,6 @@ def check_in(
 )
 def upload_report(
     payload: MetricReportRequest,
-    background_tasks: BackgroundTasks,
     agent: Annotated[Agent, Depends(get_current_agent)],
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -166,7 +161,7 @@ def upload_report(
     agent.status = "online"
     alert_engine = AlertEngine(settings)
     alert_engine.mark_agent_online(db, agent, observed_at)
-    alert_events = alert_engine.evaluate_report(
+    alert_engine.evaluate_report(
         db,
         agent,
         report_payload,
@@ -181,8 +176,6 @@ def upload_report(
     db.commit()
     db.refresh(agent)
     hub.notify_ingest(reason="report", agent_id=agent.id, alerts_changed=True)
-    if alert_events:
-        background_tasks.add_task(dispatch_alert_events, settings, alert_events)
 
     return MetricReportResponse(
         accepted=True,

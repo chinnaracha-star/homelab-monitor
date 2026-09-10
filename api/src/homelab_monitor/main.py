@@ -11,6 +11,7 @@ from homelab_monitor.database import get_engine
 from homelab_monitor.errors import APIError, api_error_handler
 from homelab_monitor.infrastructure_monitor import run_infrastructure_monitor
 from homelab_monitor.logging import RequestLoggingMiddleware, configure_logging
+from homelab_monitor.notification_worker import run_notification_worker
 from homelab_monitor.offline_monitor import run_offline_monitor
 from homelab_monitor.realtime import hub
 from homelab_monitor.routers import (
@@ -42,12 +43,13 @@ from homelab_monitor.telegram_reports import run_telegram_reports
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     with Session(get_engine()) as db:
-        ensure_default_users(db)
+        ensure_default_users(db, get_settings())
     hub.bind_loop(asyncio.get_running_loop())
     tasks = [
         asyncio.create_task(run_offline_monitor(get_settings())),
         asyncio.create_task(run_infrastructure_monitor(get_settings())),
         asyncio.create_task(run_telegram_reports(get_settings())),
+        asyncio.create_task(run_notification_worker(get_settings())),
     ]
     try:
         yield

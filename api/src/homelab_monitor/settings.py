@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     )
     jwt_secret: SecretStr = Field(min_length=32)
     jwt_expire_minutes: int = Field(default=60, ge=1, le=10_080)
+    bootstrap_admin_password: SecretStr | None = None
+    bootstrap_operator_password: SecretStr | None = None
+    bootstrap_viewer_password: SecretStr | None = None
+    notification_worker_enabled: bool = True
     infrastructure_mock: bool = True
     infrastructure_refresh_seconds: int = Field(default=30, ge=5, le=3600)
     infrastructure_timeout_seconds: float = Field(default=2.0, gt=0, le=30)

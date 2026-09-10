@@ -1,56 +1,43 @@
 # HomeLab Monitor Toolkit
 
-HomeLab Monitor Toolkit is an agent-server monitoring platform for Ubuntu hosts,
-Docker workloads, Immich, and QNAP. Lightweight Python agents collect local health data
-and send authenticated reports to a central FastAPI server for history, alerting,
-Telegram notifications, and a web dashboard.
+HomeLab Monitor Toolkit is an agent-server platform for a trusted home lab:
+Ubuntu hosts, Docker, Immich/QuMagie photo pipelines, and QNAP NAS snapshots.
+Python agents send authenticated health reports to a FastAPI server. The server
+stores history, evaluates alerts, can notify Telegram, and serves a React
+dashboard.
 
-> Status: early development. Phase 8.3 adds read-only backup monitoring for a
-> TS-253 Pro target. Agent protocol, alert engine, alert rules, notifications,
-> JWT, groups, history, existing REST APIs, and WebSocket event types remain in
-> place.
+> **v1.0.0-rc1** — first release candidate. Set bootstrap passwords before
+> exposing the dashboard. See [release notes](docs/release-notes-v1.0.0-rc1.md),
+> [changelog](CHANGELOG.md), and [known limitations](docs/known-limitations.md).
 
 ## Architecture
 
 ```text
 Ubuntu agents --HTTPS POST--> nginx -- /api --> FastAPI --SQLite--> History and alerts
                                       |
-                                      +--> React dashboard (static)
+                                      +--> React dashboard (static PWA)
                                       +--> /api/v1/ws/dashboard (WebSocket)
-                                      +--> Telegram / Discord / Slack / email
+                                      +--> Telegram (live alerts in rc1)
 ```
 
-Agents initiate outbound connections every 60 seconds by default. They do not
-expose inbound ports. The API response supplies the next reporting interval,
-configuration revision, and supported agent-version policy.
+Agents only make outbound connections (default 60s). They do not open inbound
+ports. More detail: [architecture](docs/architecture.md).
 
-## Sprint 1 development
+## Quick Start
 
-Requirements:
-
-- Python 3.12+
-- `python3-venv` on Ubuntu (`sudo apt install python3-venv`)
+Requirements: Python 3.12+, `python3-venv`, Node.js 22+ for the dashboard.
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 cp .env.example .env
-# Set HOMELAB_REGISTRATION_KEY and HOMELAB_JWT_SECRET in .env
+# Set HOMELAB_REGISTRATION_KEY, HOMELAB_JWT_SECRET, and
+# HOMELAB_BOOTSTRAP_ADMIN_PASSWORD
 .venv/bin/alembic upgrade head
 .venv/bin/uvicorn homelab_monitor.main:app --reload
 ```
 
-The API is available at `http://127.0.0.1:8000`, with OpenAPI documentation at
-`/docs` and the health endpoint at `/health`.
-
-Production deployment uses Docker Compose or systemd. The dashboard nginx
-container (or host nginx) serves the UI and proxies `/api`, `/ws`, and
-`/health`. See [deployment](docs/deployment.md), [docker](docs/docker.md),
-[nginx](docs/nginx.md), [remote access](docs/remote-access.md),
-[PWA](docs/pwa.md), and [backup](docs/backup.md).
-
-The dashboard is a Vite app in `dashboard/`. After logging in at `/login` it
-calls the protected Dashboard API.
+API: `http://127.0.0.1:8000` — OpenAPI `/docs`, health `/health`.
 
 ```bash
 cd dashboard
@@ -58,92 +45,118 @@ npm install
 npm run dev
 ```
 
-Dashboard clients authenticate with a JWT and then read:
+Log in at `/login` with the bootstrap admin user. JWT, roles, and user admin:
+[authentication](docs/authentication.md), [RBAC](docs/rbac.md),
+[user management](docs/user-management.md).
 
-- `/api/v1/dashboard/overview`
-- `/api/v1/agents`
-- `/api/v1/agents/{agent_id}`
-- `/api/v1/agents/{agent_id}/latest-report`
-- `/api/v1/groups`
-- `/api/v1/groups/summary`
-- `/api/v1/groups/{group_id}`
+## Docker deployment
 
-Default logins after migration (or after the next API start on an older `0003`
-database): `admin` / `admin123`, `operator` / `operator123`, and
-`viewer` / `viewer123`. See [authentication](docs/authentication.md),
-[RBAC](docs/rbac.md), and [user management](docs/user-management.md).
+```bash
+cp .env.production.example .env
+# Replace secrets and HOMELAB_BOOTSTRAP_ADMIN_PASSWORD
+docker compose up -d --build
+curl -fsS http://127.0.0.1:8080/health
+```
 
-After login the dashboard also opens `GET /api/v1/ws/dashboard` with the JWT.
-Live events refresh Overview, Agents, Agent Detail, and Alerts immediately.
-If the socket drops, last-loaded data stays on screen, a reconnect banner is
-shown, and 30-second REST polling continues until the connection returns. See
-[realtime](docs/realtime.md).
+Only the dashboard is published (`127.0.0.1:8080` by default). Nginx proxies
+`/api`, `/ws`, and `/health`. Production overlay and Tailscale Serve:
+[docker](docs/docker.md), [deployment](docs/deployment.md),
+[nginx](docs/nginx.md), [remote access](docs/remote-access.md), [PWA](docs/pwa.md).
 
-Agent Detail also loads `GET /api/v1/history/agents/{agent_id}` for the selected
-time range and charts CPU, memory, disk, and temperature. See
-[history](docs/history.md).
+## Environment variables
 
-Agents can be organized into groups. Admins and operators create groups and
-assign membership; viewers can list groups and open group detail. See
-[groups](docs/groups.md).
+Copy [`.env.example`](.env.example) or [`.env.production.example`](.env.production.example).
+Never commit a filled-in `.env`.
 
-The server also persists active and resolved alert state for CPU, memory, disk,
-temperature, and offline agents. Thresholds come from
-[configurable alert rules](docs/alert-rules.md). Alert transitions are delivered
-through the [notification center](docs/notifications.md) (Telegram, Discord,
-Slack, email). Telegram environment variables still work as a fallback; see
-[telegram](docs/telegram.md).
+| Variable | Role |
+| --- | --- |
+| `HOMELAB_ENVIRONMENT` | `development` or `production` |
+| `HOMELAB_REGISTRATION_KEY` | Agent registration (min 24 chars) |
+| `HOMELAB_JWT_SECRET` | Dashboard JWT (min 32 chars) |
+| `HOMELAB_BOOTSTRAP_ADMIN_PASSWORD` | Required in production to create/rotate `admin` |
+| `HOMELAB_BOOTSTRAP_OPERATOR_PASSWORD` | Optional; creates `operator` when set |
+| `HOMELAB_BOOTSTRAP_VIEWER_PASSWORD` | Optional; creates `viewer` when set |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Telegram Bot API |
+| `HOMELAB_TELEGRAM_ENABLED` | Delivery on/off (`false` in examples) |
+| `HOMELAB_NOTIFICATION_WORKER_ENABLED` | Background Telegram worker |
+| `HOMELAB_INFRASTRUCTURE_MOCK` | Synthetic NAS/photo snapshots when `true` |
+| `HOMELAB_QNAP_*` / `HOMELAB_IMMICH_*` / `HOMELAB_QUMAGIE_*` | Live connectors |
 
-Read-only [infrastructure connectors](docs/infrastructure.md) expose QNAP,
-Docker, Immich, QuMagie, and backup snapshots to the dashboard. The
-[Photo Services](docs/photo-services.md) page is a read-only view of Immich,
-QuMagie, and QNAP storage. The [Backup](docs/backup.md) page observes
-replication to a TS-253 Pro target and never controls jobs.
+Thresholds, forwarded IPs, and log paths are documented in the example files.
+
+## Telegram setup
+
+1. Create a bot with BotFather and note the chat ID.
+2. Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `HOMELAB_TELEGRAM_ENABLED=true`.
+3. Restart the API so the notification worker can send.
+
+Alert activate/recover messages are queued, batched (10s), and retried up to
+three times. Guide: [telegram](docs/telegram.md).
+
+## Photo Scanner
+
+The dashboard **Photo Services** page is a read-only observer of Immich, QuMagie,
+and QNAP photo storage. It never uploads, indexes, or deletes files. Mock mode
+is the default until live URLs and API keys are configured.
+[photo-services](docs/photo-services.md).
+
+## QNAP / NAS integration
+
+Infrastructure connectors issue **GET**-only snapshots for QNAP, Docker, Immich,
+QuMagie, and backup targets. One failed connector does not fail the others.
+[infrastructure](docs/infrastructure.md), [backup](docs/backup.md).
+
+## Notification Center
+
+Path: `/monitoring/notifications`. The page shows delivery metrics, a filterable
+history table (max 100 rows), and the existing notification timeline.
+
+Live alert delivery in rc1 is **Telegram only**. Queue and history live in
+process memory. [notifications](docs/notifications.md),
+[known limitations](docs/known-limitations.md).
 
 ## Ubuntu agent
 
-Collect one local snapshot without connecting to the server:
-
 ```bash
 .venv/bin/homelab-agent collect
-```
-
-Register the host through the API, copy the one-time token, and create an
-environment file from `deploy/systemd/agent.env.example`. Start the scheduled
-agent manually:
-
-```bash
 .venv/bin/homelab-agent --env-file ./agent.env run
 ```
 
-The server controls the next reporting interval. Failed reports are retained in
-a bounded local SQLite queue and retried in order with their original report IDs.
-The [registration example](docs/api.md#register-an-agent) reads the bootstrap
-key directly from `.env` using `python-dotenv`; no shell export is required. See
-[the agent guide](docs/agent.md) for configuration, systemd, and troubleshooting.
+Register via [docs/api.md#register-an-agent](docs/api.md#register-an-agent).
+Failed reports stay in a local SQLite queue. [agent](docs/agent.md).
 
-Run tests and lint checks:
+Alerts use [alert rules](docs/alert-rules.md). History charts:
+[history](docs/history.md). Groups: [groups](docs/groups.md). Live UI:
+[realtime](docs/realtime.md).
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| API exits immediately in Docker | `HOMELAB_ENVIRONMENT=production` requires `HOMELAB_BOOTSTRAP_ADMIN_PASSWORD` (not `admin123`) |
+| Cannot log in | Bootstrap env on first start; JWT secret unchanged after tokens were issued |
+| No Telegram messages | Token, chat ID, `HOMELAB_TELEGRAM_ENABLED=true`, worker enabled; history is empty after restart |
+| Photo/QNAP data looks fake | `HOMELAB_INFRASTRUCTURE_MOCK=true` (default) |
+| Dashboard empty after refresh | Confirm nginx `/api` proxy and `VITE_API_BASE_URL=/api/v1` in the image |
+| Port 8080 busy | `HOMELAB_DASHBOARD_PORT=18081` |
+| Health 503 | SQLite volume permissions / migrations (`alembic upgrade head`) |
+
+Tests:
 
 ```bash
 .venv/bin/pytest
 .venv/bin/ruff check .
-.venv/bin/ruff format --check .
 cd dashboard && npm run lint && npm run test && npm run build
 ```
 
 ## Version 1 scope
 
-- Ubuntu agents
-- Docker and Immich monitoring
-- Basic QNAP monitoring through SSH/API
-- REST API, WebSocket dashboard updates, and config sync
-- SQLite history and health scores
-- Telegram alerts and recovery notifications
-- React dashboard
-- Docker Compose deployment
+In rc1: Ubuntu agents, Docker/Immich/QNAP **read-only** views, REST + WebSocket
+dashboard, SQLite, Telegram alerts, Compose.
 
-UPS, Tailscale, Nginx, advanced SMART data, PostgreSQL,
-Prometheus, Grafana, Kubernetes, and agent auto-update are deferred.
+Out of scope: UPS, agent auto-update, PostgreSQL, Prometheus/Grafana, Kubernetes,
+controlling NAS or backup jobs. Tailscale is **read-only status** plus optional
+host Serve; the API never configures Tailscale.
 
 ## License
 

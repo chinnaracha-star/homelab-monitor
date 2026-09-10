@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 TEST_DATABASE_PATH = Path(tempfile.gettempdir()) / f"homelab-monitor-tests-{os.getpid()}.db"
+os.environ["HOMELAB_ENVIRONMENT"] = "development"
 os.environ["HOMELAB_REGISTRATION_KEY"] = "test-registration-key-at-least-24-chars"
 os.environ["HOMELAB_DATABASE_URL"] = f"sqlite:///{TEST_DATABASE_PATH}"
 os.environ["HOMELAB_LOG_LEVEL"] = "WARNING"
@@ -18,11 +19,15 @@ os.environ["HOMELAB_TELEGRAM_BOT_TOKEN"] = ""
 os.environ["HOMELAB_TELEGRAM_CHAT_ID"] = ""
 os.environ["HOMELAB_TELEGRAM_ENABLED"] = "true"
 os.environ["TELEGRAM_ENABLED"] = "true"
+os.environ["HOMELAB_NOTIFICATION_WORKER_ENABLED"] = "false"
 
+from homelab_monitor.alert_stability import reset_stability_windows  # noqa: E402
 from homelab_monitor.auth.passwords import hash_password  # noqa: E402
 from homelab_monitor.database import Base, get_engine  # noqa: E402
 from homelab_monitor.main import app  # noqa: E402
 from homelab_monitor.models import User  # noqa: E402
+from homelab_monitor.notification_history import reset_notification_history  # noqa: E402
+from homelab_monitor.notification_queue import reset_notification_queue  # noqa: E402
 
 
 def _remove_sqlite(path: Path) -> None:
@@ -77,6 +82,17 @@ def database_schema() -> Iterator[None]:
     Base.metadata.drop_all(bind=get_engine())
     get_engine().dispose()
     _remove_sqlite(TEST_DATABASE_PATH)
+
+
+@pytest.fixture(autouse=True)
+def reset_alert_stability_windows() -> Iterator[None]:
+    reset_stability_windows()
+    reset_notification_queue()
+    reset_notification_history()
+    yield
+    reset_stability_windows()
+    reset_notification_queue()
+    reset_notification_history()
 
 
 @pytest.fixture

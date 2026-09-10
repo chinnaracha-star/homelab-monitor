@@ -8,7 +8,6 @@ from homelab_monitor.alert_engine import AlertEngine
 from homelab_monitor.database import get_engine
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
-from homelab_monitor.telegram import dispatch_alert_events
 
 logger = logging.getLogger("homelab_monitor.offline_monitor")
 
@@ -28,4 +27,3 @@ def evaluate_offline_agents(settings: Settings) -> None:
         db.commit()
     if events or status_changed:
         hub.notify_ingest(reason="offline_evaluation", agent_id=None)
-    dispatch_alert_events(settings, events)

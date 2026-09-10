@@ -19,6 +19,23 @@ from homelab_monitor.schemas import (
 )
 
 STABLE_PERCENT = 5.0
+MAX_STORAGE_FORECAST_DAYS = 36500
+
+
+def _forecast_full_date(end: datetime, days: float | None) -> str:
+    if days is None:
+        return ""
+    try:
+        span = int(days)
+    except (OverflowError, ValueError):
+        return ""
+    if span < 0:
+        return ""
+    span = min(span, MAX_STORAGE_FORECAST_DAYS)
+    try:
+        return (end + timedelta(days=span)).date().isoformat()
+    except OverflowError:
+        return ""
 
 
 def _classify(current: float | None, previous: float | None) -> tuple[str, float | None]:
@@ -110,7 +127,7 @@ class TrendService:
         if growth_per_day > 0 and capacity > current:
             days_until_full = _round((capacity - current) / growth_per_day)
             if days_until_full is not None:
-                full_date = (end + timedelta(days=days_until_full)).date().isoformat()
+                full_date = _forecast_full_date(end, days_until_full)
         direction = "rising" if growth_per_day > 0 else "stable"
         forecast = _storage_forecast(storage.series, growth_per_day, used_percent, days_until_full)
         return TrendStorageResponse(

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "homelab-monitor-toolkit"
-version = "0.1.0"
+version = "1.0.0-rc1"
 description = "Agent-server monitoring platform for HomeLab infrastructure"
 readme = "README.md"
 requires-python = ">=3.12"

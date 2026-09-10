@@ -78,12 +78,9 @@ def test_metric_alerts_open_update_and_resolve() -> None:
         agent = create_agent(db, "alert-metrics")
         engine = AlertEngine(alert_settings())
 
-        engine.evaluate_report(
-            db,
-            agent,
-            system_payload(cpu=95, memory=96, disk=97, temperature=85),
-            observed_at,
-        )
+        high = system_payload(cpu=95, memory=96, disk=97, temperature=85)
+        engine.evaluate_report(db, agent, high, observed_at)
+        engine.evaluate_report(db, agent, high, observed_at + timedelta(minutes=2))
         db.commit()
 
         alerts = list(
@@ -97,12 +94,9 @@ def test_metric_alerts_open_update_and_resolve() -> None:
         }
         assert all(alert.status == "active" for alert in alerts)
 
-        engine.evaluate_report(
-            db,
-            agent,
-            system_payload(cpu=20, memory=30, disk=40, temperature=50),
-            observed_at + timedelta(minutes=1),
-        )
+        low = system_payload(cpu=20, memory=30, disk=40, temperature=50)
+        engine.evaluate_report(db, agent, low, observed_at + timedelta(minutes=3))
+        engine.evaluate_report(db, agent, low, observed_at + timedelta(minutes=5))
         db.commit()
 
         resolved = list(db.scalars(select(Alert).where(Alert.agent_id == agent.id)))
@@ -154,18 +148,32 @@ def test_report_upload_persists_alert_without_changing_response(client: TestClie
     assert registration.status_code == 201
     credentials = registration.json()
 
-    report = client.post(
+    start = datetime(2026, 9, 10, 8, 0, tzinfo=UTC)
+    payload = system_payload(cpu=95, memory=20, disk=30, temperature=40)
+    first = client.post(
         "/api/v1/agent/reports",
         headers={"Authorization": f"Bearer {credentials['agent_token']}"},
         json={
             "report_id": "alert-report-001",
             "schema_version": "1.0",
-            "observed_at": datetime.now(UTC).isoformat(),
+            "observed_at": start.isoformat(),
             "config_revision": 1,
-            **system_payload(cpu=95, memory=20, disk=30, temperature=40),
+            **payload,
+        },
+    )
+    report = client.post(
+        "/api/v1/agent/reports",
+        headers={"Authorization": f"Bearer {credentials['agent_token']}"},
+        json={
+            "report_id": "alert-report-002",
+            "schema_version": "1.0",
+            "observed_at": (start + timedelta(minutes=2)).isoformat(),
+            "config_revision": 1,
+            **payload,
         },
     )
 
+    assert first.status_code == 200
     assert report.status_code == 200
     assert report.json()["accepted"] is True
     assert report.json()["duplicate"] is False

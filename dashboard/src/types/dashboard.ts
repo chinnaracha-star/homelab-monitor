@@ -773,6 +773,33 @@ export interface NotificationCenterStatistics {
   total: number
 }
 
+export interface NotificationDeliveryMetrics {
+  total_sent: number
+  total_success: number
+  total_failed: number
+  success_rate: number
+  average_duration_ms: number
+  max_duration_ms: number
+  average_retry_count: number
+  last_notification_at: string | null
+}
+
+export interface NotificationDeliveryHistoryItem {
+  id: string
+  created_at: string
+  sent_at: string | null
+  channel: string
+  event: string
+  success: boolean
+  retry_count: number
+  duration_ms: number
+  error_message: string | null
+}
+
+export interface NotificationDeliveryHistory {
+  items: NotificationDeliveryHistoryItem[]
+}
+
 export interface PredictionForecast {
   horizon_days: number
   summary: string

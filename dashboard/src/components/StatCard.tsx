@@ -9,20 +9,35 @@ export const StatCard = memo(function StatCard({
   valueLabel,
   tone,
   icon,
+  meta,
+  status,
+  statusKind,
+  extras,
 }: {
   label: string
   value: number | string | ReactNode
   valueLabel?: string
   tone?: string
   icon?: IconName
+  meta?: string
+  status?: string
+  statusKind?: string
+  extras?: { label: string; value: string }[]
 }) {
   const isPlain = typeof value === 'number' || typeof value === 'string'
   const display = typeof value === 'number' ? value.toLocaleString() : value
   const ariaValue = valueLabel ?? (isPlain ? String(display) : '')
-  const ariaLabel = ariaValue ? `${label} ${ariaValue}` : label
+  const extraLabels = (extras ?? []).map((item) => `${item.label} ${item.value}`)
+  const parts = [ariaValue, meta, status ? `Status: ${status}` : '', ...extraLabels]
+  const ariaLabel = [label, ...parts.filter(Boolean)].join(' ')
 
   return (
-    <article className={styles.statCard} data-tone={tone} aria-label={ariaLabel}>
+    <article
+      className={styles.statCard}
+      data-status={statusKind}
+      data-tone={tone}
+      aria-label={ariaLabel}
+    >
       <p className={styles.statLabel}>
         {icon ? <Icon name={icon} /> : null}
         {label}
@@ -32,6 +47,23 @@ export const StatCard = memo(function StatCard({
           {display}
         </span>
       </p>
+      {meta ? <p className={styles.statMeta}>{meta}</p> : null}
+      {status ? (
+        <p className={styles.statStatus}>
+          Status:
+          <span>{status}</span>
+        </p>
+      ) : null}
+      {extras?.length ? (
+        <ul className={styles.statExtras}>
+          {extras.map((item) => (
+            <li key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </article>
   )
 })

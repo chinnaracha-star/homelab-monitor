@@ -1,58 +1,54 @@
-from collections.abc import Callable
 from pathlib import Path
 
-from fastapi.testclient import TestClient
+import pytest
+from pydantic import SecretStr
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from homelab_monitor.auth.bootstrap import DEFAULT_USERS, ensure_default_users
+from homelab_monitor.auth.bootstrap import InsecureBootstrapError, ensure_default_users
 from homelab_monitor.auth.passwords import hash_password, verify_password
 from homelab_monitor.database import Base
 from homelab_monitor.models import User
+from homelab_monitor.settings import Settings
+
+JWT = "test-jwt-secret-key-at-least-32-chars"
+REG = "test-registration-key-at-least-24-chars"
 
 
-def test_default_users_exist_and_passwords_work(
-    client: TestClient,
-    auth_header: Callable[..., dict[str, str]],
-) -> None:
-    response = client.get("/api/v1/users", headers=auth_header("admin", "admin123"))
-    assert response.status_code == 200
-    users = {user["username"]: user for user in response.json()}
-    assert users["admin"]["role"] == "admin"
-    assert users["admin"]["is_active"] is True
-    assert users["operator"]["role"] == "operator"
-    assert users["operator"]["is_active"] is True
-    assert users["viewer"]["role"] == "viewer"
-    assert users["viewer"]["is_active"] is True
+def _settings(**overrides: object) -> Settings:
+    values = {
+        "registration_key": REG,
+        "jwt_secret": JWT,
+        "environment": "development",
+        **overrides,
+    }
+    return Settings.model_validate(values)
 
 
-def test_login_succeeds_for_default_admin_operator_and_viewer(client: TestClient) -> None:
-    for user in DEFAULT_USERS:
-        response = client.post(
-            "/api/v1/auth/login",
-            json={"username": user.username, "password": user.password},
-        )
-        assert response.status_code == 200, user.username
-        body = response.json()
-        assert body["token_type"] == "bearer"
-        assert body["access_token"]
+def test_bootstrap_creates_accounts_from_configured_passwords(tmp_path: Path) -> None:
+    engine = create_engine(f"sqlite:///{tmp_path / 'users.db'}")
+    Base.metadata.create_all(bind=engine)
+    settings = _settings(
+        bootstrap_admin_password=SecretStr("admin-pass-ok"),
+        bootstrap_operator_password=SecretStr("operator-pass-ok"),
+        bootstrap_viewer_password=SecretStr("viewer-pass-ok"),
+    )
+    with Session(engine) as db:
+        ensure_default_users(db, settings)
 
-        me = client.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": f"Bearer {body['access_token']}"},
-        )
-        assert me.status_code == 200
-        assert me.json()["username"] == user.username
-        assert me.json()["role"] == user.role
+    with Session(engine) as db:
+        users = {user.username: user for user in db.scalars(select(User)).all()}
+        assert set(users) == {"admin", "operator", "viewer"}
+        assert users["admin"].role == "admin"
+        assert verify_password("admin-pass-ok", users["admin"].password_hash)
+        assert verify_password("operator-pass-ok", users["operator"].password_hash)
+        assert verify_password("viewer-pass-ok", users["viewer"].password_hash)
 
 
-def test_ensure_default_users_creates_missing_accounts_without_overwriting(
-    tmp_path: Path,
-) -> None:
+def test_bootstrap_does_not_overwrite_existing_custom_passwords(tmp_path: Path) -> None:
     engine = create_engine(f"sqlite:///{tmp_path / 'users.db'}")
     Base.metadata.create_all(bind=engine)
     custom_hash = hash_password("keep-existing-admin")
-
     with Session(engine) as db:
         db.add(
             User(
@@ -64,24 +60,64 @@ def test_ensure_default_users_creates_missing_accounts_without_overwriting(
             )
         )
         db.commit()
-        ensure_default_users(db)
+        ensure_default_users(
+            db,
+            _settings(bootstrap_admin_password=SecretStr("replacement-admin")),
+        )
 
     with Session(engine) as db:
-        users = {user.username: user for user in db.scalars(select(User)).all()}
-        assert set(users) == {"admin", "operator", "viewer"}
-        assert users["admin"].full_name == "Custom Admin"
-        assert users["admin"].password_hash == custom_hash
-        assert verify_password("keep-existing-admin", users["admin"].password_hash)
-        assert users["operator"].role == "operator"
-        assert users["operator"].is_active is True
-        assert verify_password("operator123", users["operator"].password_hash)
-        assert users["viewer"].role == "viewer"
-        assert users["viewer"].is_active is True
-        assert verify_password("viewer123", users["viewer"].password_hash)
+        admin = db.scalars(select(User).where(User.username == "admin")).one()
+        assert admin.full_name == "Custom Admin"
+        assert admin.password_hash == custom_hash
+        assert verify_password("keep-existing-admin", admin.password_hash)
 
-        ensure_default_users(db)
-        assert {user.username for user in db.scalars(select(User)).all()} == {
-            "admin",
-            "operator",
-            "viewer",
-        }
+
+def test_production_requires_admin_bootstrap_password(tmp_path: Path) -> None:
+    engine = create_engine(f"sqlite:///{tmp_path / 'users.db'}")
+    Base.metadata.create_all(bind=engine)
+    with (
+        Session(engine) as db,
+        pytest.raises(InsecureBootstrapError, match="HOMELAB_BOOTSTRAP_ADMIN_PASSWORD"),
+    ):
+        ensure_default_users(db, _settings(environment="production"))
+
+
+def test_production_replaces_insecure_default_passwords(tmp_path: Path) -> None:
+    engine = create_engine(f"sqlite:///{tmp_path / 'users.db'}")
+    Base.metadata.create_all(bind=engine)
+    with Session(engine) as db:
+        db.add(
+            User(
+                username="admin",
+                password_hash=hash_password("admin123"),
+                full_name="Administrator",
+                role="admin",
+                is_active=True,
+            )
+        )
+        db.commit()
+        ensure_default_users(
+            db,
+            _settings(
+                environment="production",
+                bootstrap_admin_password=SecretStr("rotated-admin-pass"),
+            ),
+        )
+
+    with Session(engine) as db:
+        admin = db.scalars(select(User).where(User.username == "admin")).one()
+        assert verify_password("rotated-admin-pass", admin.password_hash)
+        assert not verify_password("admin123", admin.password_hash)
+
+
+def test_production_rejects_known_default_bootstrap_password(tmp_path: Path) -> None:
+    engine = create_engine(f"sqlite:///{tmp_path / 'users.db'}")
+    Base.metadata.create_all(bind=engine)
+    with Session(engine) as db, pytest.raises(InsecureBootstrapError, match="documented default"):
+        ensure_default_users(
+            db,
+            _settings(
+                environment="production",
+                bootstrap_admin_password=SecretStr("admin123"),
+            ),
+        )

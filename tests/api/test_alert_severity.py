@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -105,12 +105,9 @@ def test_alert_engine_stores_band_severity() -> None:
     with Session(get_engine()) as db:
         agent = create_agent(db, "severity-bands")
         engine = AlertEngine(alert_settings())
-        engine.evaluate_report(
-            db,
-            agent,
-            system_payload(cpu=75, memory=85, disk=82, temperature=66),
-            observed_at,
-        )
+        warning = system_payload(cpu=75, memory=85, disk=82, temperature=66)
+        engine.evaluate_report(db, agent, warning, observed_at)
+        engine.evaluate_report(db, agent, warning, observed_at + timedelta(minutes=2))
         db.commit()
         alerts = {
             alert.kind: alert
@@ -124,7 +121,7 @@ def test_alert_engine_stores_band_severity() -> None:
             db,
             agent,
             system_payload(cpu=95, memory=91, disk=91, temperature=80),
-            observed_at,
+            observed_at + timedelta(minutes=2),
         )
         db.commit()
         alerts = {

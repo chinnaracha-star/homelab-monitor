@@ -14,7 +14,7 @@ See [docker.md](docker.md).
 
 ```bash
 cp .env.production.example .env
-# Replace HOMELAB_REGISTRATION_KEY and HOMELAB_JWT_SECRET
+# Replace HOMELAB_REGISTRATION_KEY, HOMELAB_JWT_SECRET, and HOMELAB_BOOTSTRAP_ADMIN_PASSWORD
 docker compose up -d --build
 ```
 
@@ -118,7 +118,7 @@ API, or `http://127.0.0.1:8000/api/v1` on the same host without nginx.
 
 ## Defaults
 
-Change the seeded `admin` / `admin123` password immediately after first login.
+Set `HOMELAB_BOOTSTRAP_ADMIN_PASSWORD` in `.env` before the first production start.
 
 ## Backup
 

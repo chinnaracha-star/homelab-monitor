@@ -13,6 +13,11 @@ from homelab_monitor.notification_center import (
     list_notification_center,
     notification_center_statistics,
 )
+from homelab_monitor.notification_history import (
+    HISTORY_API_LIMIT,
+    get_notification_history_service,
+)
+from homelab_monitor.notification_metrics import NotificationMetricsService
 from homelab_monitor.notifications import REPORT_RECIPIENTS
 from homelab_monitor.notifications.config import (
     apply_updates,
@@ -22,8 +27,11 @@ from homelab_monitor.notifications.config import (
 )
 from homelab_monitor.notifications.dispatcher import retry_notification, send_test_notification
 from homelab_monitor.schemas import (
+    NotificationDeliveryHistoryItem,
+    NotificationDeliveryHistoryResponse,
     NotificationHistoryResponse,
     NotificationListResponse,
+    NotificationMetricsResponse,
     NotificationResponse,
     NotificationSettingsResponse,
     NotificationSettingsUpdateRequest,
@@ -167,6 +175,33 @@ def notification_statistics(
     db: Annotated[Session, Depends(get_db)],
 ) -> NotificationStatisticsResponse:
     return notification_center_statistics(db)
+
+
+@router.get(
+    "/notifications/delivery-history",
+    response_model=NotificationDeliveryHistoryResponse,
+    dependencies=[READ],
+    summary="List notification delivery attempts",
+)
+def notification_delivery_history() -> NotificationDeliveryHistoryResponse:
+    records = get_notification_history_service().list_history(HISTORY_API_LIMIT)
+    return NotificationDeliveryHistoryResponse(
+        items=[
+            NotificationDeliveryHistoryItem.model_validate(record, from_attributes=True)
+            for record in records
+        ]
+    )
+
+
+@router.get(
+    "/notifications/metrics",
+    response_model=NotificationMetricsResponse,
+    dependencies=[READ],
+    summary="Notification delivery metrics",
+)
+def notification_metrics() -> NotificationMetricsResponse:
+    snapshot = NotificationMetricsService().snapshot()
+    return NotificationMetricsResponse.model_validate(snapshot, from_attributes=True)
 
 
 @router.get(

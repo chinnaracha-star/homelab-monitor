@@ -12,15 +12,27 @@ vi.mock('../api/dashboard', () => ({
   getBackupStatus: vi.fn(),
   getCapacityStorage: vi.fn(),
   getCapacitySystem: vi.fn(),
+  getAnalyticsOverview: vi.fn(),
+  getAnalyticsCpu: vi.fn(),
+  getAnalyticsMemory: vi.fn(),
+  getAnalyticsTemperature: vi.fn(),
+  getAnalyticsPhotos: vi.fn(),
+  getPhotoServices: vi.fn(),
 }))
 
 import {
   getActiveAlerts,
   getAgents,
+  getAnalyticsCpu,
+  getAnalyticsMemory,
+  getAnalyticsOverview,
+  getAnalyticsPhotos,
+  getAnalyticsTemperature,
   getBackupStatus,
   getCapacityStorage,
   getCapacitySystem,
   getDashboardOverview,
+  getPhotoServices,
 } from '../api/dashboard'
 
 const overview: DashboardOverview = {
@@ -105,10 +117,47 @@ describe('Dashboard overview backup cards', () => {
       memory_trend: 'stable',
       storage_trend: 'stable',
       backup_trend: 'stable',
-      overall_score: 64,
+      overall_score: 95,
       bottleneck: 'none',
       health: { healthy_count: 1, warning_count: 0, critical_count: 0, unknown_count: 0 },
     })
+    vi.mocked(getAnalyticsOverview).mockResolvedValue({
+      cpu_average: 15,
+      memory_average: 42,
+      storage_used: 106 * 1024 ** 3,
+      photos_today: 12,
+      backup_success_rate: 100,
+      temperature_average: 46,
+      daily: {
+        agents_total: 2,
+        agents_online: 1,
+        alerts_today: 0,
+        notifications_today: 0,
+        history_points_today: 0,
+      },
+    })
+    vi.mocked(getAnalyticsCpu).mockResolvedValue({
+      current: 15,
+      average_24h: 15,
+      minimum: 10,
+      maximum: 20,
+      series: [],
+    })
+    vi.mocked(getAnalyticsMemory).mockResolvedValue({ current: 42, average: 40, series: [] })
+    vi.mocked(getAnalyticsTemperature).mockResolvedValue({ current: 46, average: 45, series: [] })
+    vi.mocked(getAnalyticsPhotos).mockResolvedValue({
+      today: 12,
+      yesterday: 0,
+      this_week: 12,
+      growth: 12,
+      series: [],
+    })
+    vi.mocked(getPhotoServices).mockResolvedValue({
+      collected_at: '2026-09-10T00:00:00Z',
+      read_only: true,
+      services: [],
+      stats: { indexed_photos: 79119 },
+    } as never)
   })
 
   it('keeps existing summary cards and adds backup cards', async () => {
@@ -124,10 +173,21 @@ describe('Dashboard overview backup cards', () => {
     expect(screen.getByLabelText('Status Online')).toBeInTheDocument()
   })
 
+  it('shows polished metric cards from analytics values', async () => {
+    renderPage()
+    expect(await screen.findByLabelText(/CPU 15% Status: Normal/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Memory 42% Status: Normal/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Temperature 46°C Status: Normal/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Overall Health Excellent 95 \/ 100 Status: Excellent/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Photos Today \+12/)).toBeInTheDocument()
+    expect(screen.getByText('Total Photos')).toBeInTheDocument()
+    expect(screen.getByText(Number(79119).toLocaleString())).toBeInTheDocument()
+  })
+
   it('shows health and capacity forecast cards', async () => {
     renderPage()
-    expect(await screen.findByLabelText('Health Good')).toBeInTheDocument()
-    expect(screen.getByLabelText(/Storage Used/)).toBeInTheDocument()
+    expect(await screen.findByLabelText(/Overall Health Excellent 95 \/ 100/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Storage 9\.3 TB \/ 12\.0 TB 78% Status: Normal/)).toBeInTheDocument()
     expect(screen.getByLabelText('Estimated Full 138 Days')).toBeInTheDocument()
   })
 
@@ -149,7 +209,7 @@ describe('Dashboard overview backup cards', () => {
       },
     ])
     renderPage()
-    expect(await screen.findByLabelText('Health Critical')).toBeInTheDocument()
+    expect(await screen.findByLabelText(/Overall Health Critical/)).toBeInTheDocument()
   })
 
   it('shows the PWA install button and offline shell', async () => {

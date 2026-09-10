@@ -2,10 +2,16 @@ import { memo, useMemo } from 'react'
 import {
   getActiveAlerts,
   getAgents,
+  getAnalyticsCpu,
+  getAnalyticsMemory,
+  getAnalyticsOverview,
+  getAnalyticsPhotos,
+  getAnalyticsTemperature,
   getBackupStatus,
   getCapacityStorage,
   getCapacitySystem,
   getDashboardOverview,
+  getPhotoServices,
 } from '../api/dashboard'
 import { ConnectionLost } from '../components/ConnectionLost'
 import { GroupCard } from '../components/GroupCard'
@@ -20,7 +26,7 @@ import { LIVE_PAGE_POLL } from '../constants'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import { useOptionalPwa } from '../pwa/PwaProvider'
 import { formatBytes, formatPercent } from '../utils/bytes'
-import { dashboardHealthStatus, estimatedFullLabel } from '../utils/healthStatus'
+import { dashboardHealthStatus, estimatedFullLabel, metricStatus } from '../utils/healthStatus'
 import { formatThaiDateTime } from '../utils/thaiDate'
 import styles from './Pages.module.css'
 import groupStyles from './GroupsPage.module.css'
@@ -29,6 +35,17 @@ const OVERVIEW_EVENTS = ['overview_updated', 'agent_updated', 'alert_updated'] a
 const AGENT_EVENTS = ['overview_updated', 'agent_updated', 'alert_updated'] as const
 const ALERT_EVENTS = ['overview_updated', 'agent_updated', 'alert_updated'] as const
 
+function percentText(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) {
+    return '—'
+  }
+  return `${Math.round(value)}%`
+}
+
+function statusKind(status: string): string {
+  return status.toLowerCase()
+}
+
 export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
   const overview = useLivePolling(getDashboardOverview, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
   const agents = useLivePolling(getAgents, AGENT_EVENTS, LIVE_PAGE_POLL)
@@ -36,6 +53,12 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
   const backup = useLivePolling(getBackupStatus, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
   const storage = useLivePolling(getCapacityStorage, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
   const system = useLivePolling(getCapacitySystem, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const analytics = useLivePolling(getAnalyticsOverview, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const cpu = useLivePolling(getAnalyticsCpu, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const memory = useLivePolling(getAnalyticsMemory, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const temperature = useLivePolling(getAnalyticsTemperature, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const photos = useLivePolling(getAnalyticsPhotos, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const photoServices = useLivePolling(getPhotoServices, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
   const pwa = useOptionalPwa()
   const cached =
     Boolean(overview.data && overview.error) ||
@@ -48,7 +71,13 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
     agents.isRefreshing ||
     alerts.isRefreshing ||
     storage.isRefreshing ||
-    system.isRefreshing
+    system.isRefreshing ||
+    analytics.isRefreshing ||
+    cpu.isRefreshing ||
+    memory.isRefreshing ||
+    temperature.isRefreshing ||
+    photos.isRefreshing ||
+    photoServices.isRefreshing
   const lastUpdated =
     [
       overview.lastUpdated,
@@ -56,6 +85,12 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
       alerts.lastUpdated,
       storage.lastUpdated,
       system.lastUpdated,
+      analytics.lastUpdated,
+      cpu.lastUpdated,
+      memory.lastUpdated,
+      temperature.lastUpdated,
+      photos.lastUpdated,
+      photoServices.lastUpdated,
     ]
       .filter((value): value is Date => value !== null)
       .sort((left, right) => right.getTime() - left.getTime())[0] ?? null
@@ -80,9 +115,20 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
   const storageUsedLabel = storage.data
     ? `${formatBytes(storage.data.current_used)} / ${formatBytes(storage.data.capacity)}`
     : '—'
+  const storagePercent =
+    storage.data && storage.data.capacity > 0
+      ? Math.round((storage.data.current_used / storage.data.capacity) * 100)
+      : null
+  const cpuStatus = metricStatus('cpu', cpu.data?.current)
+  const memoryStatus = metricStatus('memory', memory.data?.current)
+  const temperatureStatus = metricStatus('temperature', temperature.data?.current)
+  const storageStatus = metricStatus('storage', storagePercent)
+  const photosToday = photos.data?.today ?? analytics.data?.photos_today ?? 0
   const estimatedFull =
     storage.data?.estimated_full_in ||
     estimatedFullLabel(storage.data?.estimated_days_remaining, storage.data?.average_daily_growth ?? 0)
+  const score = system.data?.overall_score
+  const scoreLabel = score == null ? '—' : `${Math.round(score)} / 100`
 
   return (
     <section className={styles.page}>
@@ -125,13 +171,74 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
         ) : null}
       </section>
 
-      <section className={styles.section} aria-labelledby="overview-health-title">
-        <h2 className={styles.sectionTitle} id="overview-health-title">
-          Health
+      <section className={styles.section} aria-labelledby="overview-metrics-title">
+        <h2 className={styles.sectionTitle} id="overview-metrics-title">
+          Metrics
         </h2>
-        {system.error ? <SectionError title="Health API failed" onRetry={system.retry} /> : null}
-        <section className={styles.statGrid} aria-label="Health status">
-          <StatCard label="Health" value={healthLabel} />
+        {cpu.error || memory.error || temperature.error || analytics.error || photos.error ? (
+          <SectionError title="Analytics cards failed" onRetry={analytics.retry} />
+        ) : null}
+        <section className={styles.statGrid} aria-label="System metric cards">
+          <StatCard
+            icon="cpu"
+            label="CPU"
+            tone="cpu"
+            value={percentText(cpu.data?.current)}
+            status={cpuStatus}
+            statusKind={statusKind(cpuStatus)}
+          />
+          <StatCard
+            icon="memory"
+            label="Memory"
+            tone="memory"
+            value={percentText(memory.data?.current)}
+            status={memoryStatus}
+            statusKind={statusKind(memoryStatus)}
+          />
+          <StatCard
+            icon="storage"
+            label="Storage"
+            tone="storage"
+            value={storageUsedLabel}
+            meta={storagePercent == null ? undefined : percentText(storagePercent)}
+            status={storageStatus}
+            statusKind={statusKind(storageStatus)}
+          />
+          <StatCard
+            icon="temperature"
+            label="Temperature"
+            tone="temperature"
+            value={
+              temperature.data?.current == null ? '—' : `${Math.round(temperature.data.current)}°C`
+            }
+            status={temperatureStatus}
+            statusKind={statusKind(temperatureStatus)}
+          />
+          <StatCard
+            icon="backup"
+            label="Overall Health"
+            tone="alerts"
+            value={healthLabel}
+            meta={scoreLabel}
+            status={healthLabel}
+            statusKind={statusKind(healthLabel)}
+          />
+          <StatCard
+            icon="photo"
+            label="Photos Today"
+            tone="photos"
+            value={`+${photosToday}`}
+            extras={[
+              {
+                label: 'Total Photos',
+                value: (photoServices.data?.stats.indexed_photos ?? 0).toLocaleString(),
+              },
+              {
+                label: 'Storage Used',
+                value: formatBytes(analytics.data?.storage_used ?? 0),
+              },
+            ]}
+          />
         </section>
       </section>
 
@@ -142,7 +249,6 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
         {storage.error ? <SectionError title="Capacity API failed" onRetry={storage.retry} /> : null}
         {storage.data ? (
           <section className={styles.statGrid} aria-label="Storage capacity">
-            <StatCard label="Storage Used" value={storageUsedLabel} />
             <StatCard label="Estimated Full" value={estimatedFull} />
           </section>
         ) : null}

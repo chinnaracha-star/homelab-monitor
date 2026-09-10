@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -213,6 +214,8 @@ def test_dashboard_routes_are_documented_in_openapi(client: TestClient) -> None:
     assert "/api/v1/history/agents/{agent_id}/export" in paths
     assert "/api/v1/notifications" in paths
     assert "/api/v1/notifications/history" in paths
+    assert "/api/v1/notifications/delivery-history" in paths
+    assert "/api/v1/notifications/metrics" in paths
     assert "/api/v1/notifications/statistics" in paths
     assert "/api/v1/notifications/{notification_id}" in paths
     assert "/api/v1/notifications/test" in paths
@@ -299,11 +302,19 @@ def test_active_alerts_include_agent_context(
     auth_header: Callable[..., dict[str, str]],
 ) -> None:
     agent_id, token = register_agent(client, "dashboard-active-alert")
+    start = datetime(2026, 9, 7, 8, 0, tzinfo=UTC)
     upload_report(
         client,
         token,
         "dashboard-alert-report",
-        "2026-09-07T08:00:00Z",
+        start.isoformat().replace("+00:00", "Z"),
+        100.0,
+    )
+    upload_report(
+        client,
+        token,
+        "dashboard-alert-report-held",
+        (start + timedelta(minutes=2)).isoformat().replace("+00:00", "Z"),
         100.0,
     )
 

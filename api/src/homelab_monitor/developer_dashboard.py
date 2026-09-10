@@ -9,6 +9,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from homelab_monitor import __version__ as APP_VERSION
 from homelab_monitor.agent_presence import presence_for_agents
 from homelab_monitor.analytics import AnalyticsService, _round
 from homelab_monitor.capacity_planning import CapacityPlanningService
@@ -44,7 +45,6 @@ from homelab_monitor.schemas import (
 from homelab_monitor.settings import get_settings
 from homelab_monitor.trends import TrendService, _health_bucket
 
-APP_VERSION = "0.9.3-dev"
 CURRENT_PHASE = 9
 CURRENT_SPRINT = "9.3.5"
 PHASE_PERCENTS = (100, 100, 100, 100, 100, 100, 100, 100, 70, 0)

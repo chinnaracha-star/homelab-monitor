@@ -25,7 +25,7 @@ import { getDeveloperOverview, getRemoteAccess } from '../api/dashboard'
 
 const overview: DeveloperOverview = {
   project: {
-    application_version: '0.9.3-dev',
+    application_version: '1.0.0-rc1',
     build_time: null,
     environment: 'development',
     current_phase: 9,
@@ -60,7 +60,7 @@ const overview: DeveloperOverview = {
     backend: 'unknown',
     frontend: 'unknown',
     docker_compose: 'unknown',
-    application_version: '0.9.3-dev',
+    application_version: '1.0.0-rc1',
     environment: 'development',
   },
   tests: {
@@ -165,7 +165,7 @@ describe('Mission Control page', () => {
   it('renders cards, timeline, and gauge', async () => {
     renderPage()
     expect(await screen.findByRole('heading', { name: 'Mission Control' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Version v0.9.3-dev')).toBeInTheDocument()
+    expect(screen.getByLabelText('Version v1.0.0-rc1')).toBeInTheDocument()
     expect(screen.getByLabelText('Environment development')).toBeInTheDocument()
     expect(screen.getByLabelText('Branch main')).toBeInTheDocument()
     expect(screen.getByLabelText('Commit abcdef1')).toBeInTheDocument()
@@ -208,7 +208,7 @@ describe('Mission Control page', () => {
     vi.mocked(getDeveloperOverview).mockResolvedValue(overview)
     await userEvent.click(screen.getByRole('button', { name: 'Retry section' }))
     await waitFor(() => {
-      expect(screen.getByLabelText('Version v0.9.3-dev')).toBeInTheDocument()
+      expect(screen.getByLabelText('Version v1.0.0-rc1')).toBeInTheDocument()
     })
   })
 

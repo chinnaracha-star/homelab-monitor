@@ -846,7 +846,7 @@ class DeveloperGitStatus(BaseModel):
 
 
 class DeveloperProjectStatus(BaseModel):
-    application_version: str = "0.9.3-dev"
+    application_version: str = "1.0.0-rc1"
     build_time: str | None = None
     environment: str = "development"
     current_phase: int = 9
@@ -888,7 +888,7 @@ class DeveloperBuildStatus(BaseModel):
     backend: str = "unknown"
     frontend: str = "unknown"
     docker_compose: str = "unknown"
-    application_version: str = "0.9.3-dev"
+    application_version: str = "1.0.0-rc1"
     environment: str = "development"
 
 
@@ -1032,6 +1032,33 @@ class NotificationDayGroup(BaseModel):
 class NotificationHistoryResponse(BaseModel):
     items: list[NotificationCenterItem] = []
     groups: list[NotificationDayGroup] = []
+
+
+class NotificationDeliveryHistoryItem(BaseModel):
+    id: str
+    created_at: datetime
+    sent_at: datetime | None = None
+    channel: str
+    event: str
+    success: bool
+    retry_count: int
+    duration_ms: int
+    error_message: str | None = None
+
+
+class NotificationDeliveryHistoryResponse(BaseModel):
+    items: list[NotificationDeliveryHistoryItem] = []
+
+
+class NotificationMetricsResponse(BaseModel):
+    total_sent: int
+    total_success: int
+    total_failed: int
+    success_rate: float
+    average_duration_ms: int
+    max_duration_ms: int
+    average_retry_count: float
+    last_notification_at: datetime | None = None
 
 
 class NotificationStatisticsResponse(BaseModel):

@@ -1,30 +1,22 @@
 # Notification center
 
-Alert event types are unchanged. After alert state commits, HomeLab Monitor
-dispatches messages through a notification layer with pluggable providers.
+Alert activate and recover events are enqueued for **Telegram** delivery. The
+worker batches jobs for 10 seconds, retries failed sends up to three times
+(5s apart), and records attempts in an **in-memory** history buffer.
 
-## Channels
+Discord, Slack, and email are **not** on the live alert path in v1.0.0-rc1.
+See [known-limitations.md](known-limitations.md).
 
-| Channel | Provider | Recipient |
-| --- | --- | --- |
-| Telegram | Existing `TelegramNotifier` | Chat ID |
-| Discord | Incoming webhook | Webhook URL (masked in API responses) |
-| Slack | Incoming webhook | Webhook URL (masked in API responses) |
-| Email | SMTP STARTTLS | To address |
-
-Environment Telegram settings remain the fallback when dashboard settings are
-empty. Dashboard admins can override or add Discord, Slack, and email in
-Settings. Secrets are stored in `notification_settings.payload` and never
-returned by GET.
+Environment Telegram settings (`TELEGRAM_*` / `HOMELAB_TELEGRAM_*`) control
+the worker. Dashboard Settings may still show other channel fields; those
+do not send live alerts in this RC.
 
 ## Delivery
 
-`dispatch_alert_events()` still runs after report ingest and offline evaluation.
-It now records a `notifications` row per channel, retries failed HTTP/SMTP
-attempts three times, and publishes existing WebSocket events
-`overview_updated` and `alert_updated` with `reason=notification_updated`.
+Statuses recorded on successful or dropped attempts: `sent`, `failed`.
 
-Statuses: `pending`, `sent`, `failed`.
+Queue and history are process-local. An API restart drops pending jobs and
+clears Notification Center delivery history and metrics.
 
 ## APIs
 
@@ -34,6 +26,8 @@ Statuses: `pending`, `sent`, `failed`.
 | `GET` | `/api/v1/notifications/{id}` | admin, operator, viewer |
 | `POST` | `/api/v1/notifications/test` | admin, operator |
 | `POST` | `/api/v1/notifications/{id}/retry` | admin, operator |
+| `GET` | `/api/v1/notifications/delivery-history` | admin, operator, viewer |
+| `GET` | `/api/v1/notifications/metrics` | admin, operator, viewer |
 | `GET` | `/api/v1/settings/notifications` | admin, operator, viewer |
 | `PUT` | `/api/v1/settings/notifications` | admin |
 
@@ -42,8 +36,7 @@ Error codes: `notification_not_found`, `notification_channel_unconfigured`,
 
 ## Dashboard
 
-- Settings (admin): channel configuration and test buttons. Telegram shows
-  Configured or Not configured, Last test, and Test Message. The bot token is
-  never displayed.
-- Notifications: delivery history. Operators and admins can send a test and
-  retry failures. Viewers are read-only.
+- Notification Center (`/monitoring/notifications`): delivery metric cards,
+  search/filter history (max 100 rows), and the existing timeline.
+- Settings (admin): Telegram test controls. The bot token is never displayed.
+- Notifications page: persisted `notifications` rows for tests/retries.

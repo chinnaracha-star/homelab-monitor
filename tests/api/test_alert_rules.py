@@ -295,6 +295,8 @@ def test_group_rule_only_matches_members() -> None:
         payload = system_payload(cpu=95, memory=20, disk=30, temperature=40)
         engine.evaluate_report(db, member, payload, observed_at)
         engine.evaluate_report(db, outsider, payload, observed_at)
+        engine.evaluate_report(db, member, payload, observed_at + timedelta(minutes=2))
+        engine.evaluate_report(db, outsider, payload, observed_at + timedelta(minutes=2))
         db.commit()
         assert (
             db.scalar(select(Alert).where(Alert.agent_id == member.id, Alert.kind == "cpu_high"))
@@ -339,12 +341,10 @@ def test_higher_severity_rule_wins_when_operators_overlap() -> None:
             ]
         )
         db.commit()
-        AlertEngine(alert_settings()).evaluate_report(
-            db,
-            agent,
-            system_payload(cpu=95, memory=20, disk=30, temperature=40),
-            observed_at,
-        )
+        payload = system_payload(cpu=95, memory=20, disk=30, temperature=40)
+        engine = AlertEngine(alert_settings())
+        engine.evaluate_report(db, agent, payload, observed_at)
+        engine.evaluate_report(db, agent, payload, observed_at + timedelta(minutes=2))
         db.commit()
         alert = db.scalar(select(Alert).where(Alert.agent_id == agent.id, Alert.kind == "cpu_high"))
         assert alert is not None
@@ -371,37 +371,42 @@ def test_cooldown_suppresses_identical_reopen() -> None:
         )
         db.commit()
         engine = AlertEngine(alert_settings())
-        first = engine.evaluate_report(
-            db,
-            agent,
-            system_payload(cpu=95, memory=20, disk=30, temperature=40),
-            observed_at,
-        )
+        high = system_payload(cpu=95, memory=20, disk=30, temperature=40)
+        low = system_payload(cpu=20, memory=20, disk=30, temperature=40)
+        engine.evaluate_report(db, agent, high, observed_at)
+        first = engine.evaluate_report(db, agent, high, observed_at + timedelta(minutes=2))
         db.commit()
         assert len(first) == 1
-        engine.evaluate_report(
-            db,
-            agent,
-            system_payload(cpu=20, memory=20, disk=30, temperature=40),
-            observed_at + timedelta(seconds=1),
-        )
+        engine.evaluate_report(db, agent, low, observed_at + timedelta(minutes=3))
+        engine.evaluate_report(db, agent, low, observed_at + timedelta(minutes=5))
         db.commit()
         suppressed = engine.evaluate_report(
             db,
             agent,
             system_payload(cpu=96, memory=20, disk=30, temperature=40),
-            observed_at + timedelta(seconds=10),
+            observed_at + timedelta(minutes=5, seconds=10),
         )
         db.commit()
         alert = db.scalar(select(Alert).where(Alert.agent_id == agent.id, Alert.kind == "cpu_high"))
         assert suppressed == []
         assert alert is not None
         assert alert.status == "resolved"
+        after_cooldown = observed_at + timedelta(minutes=5, seconds=70)
+        pending = engine.evaluate_report(
+            db,
+            agent,
+            system_payload(cpu=96, memory=20, disk=30, temperature=40),
+            after_cooldown,
+        )
+        db.commit()
+        db.refresh(alert)
+        assert pending == []
+        assert alert.status == "resolved"
         reopened = engine.evaluate_report(
             db,
             agent,
             system_payload(cpu=96, memory=20, disk=30, temperature=40),
-            observed_at + timedelta(seconds=70),
+            after_cooldown + timedelta(minutes=2),
         )
         db.commit()
         db.refresh(alert)
