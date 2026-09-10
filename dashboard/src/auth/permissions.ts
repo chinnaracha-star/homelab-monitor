@@ -96,6 +96,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/groups', label: 'Groups', permission: 'groups' },
   { to: '/infrastructure', label: 'Infrastructure', permission: 'infrastructure' },
   { to: '/photo-services', label: 'Photo Services', permission: 'photo_services' },
+  { to: '/photo-monitor', label: 'Photo Monitor', permission: 'photo_services' },
   { to: '/backup', label: 'Backup', permission: 'backup' },
   {
     label: 'Monitoring',

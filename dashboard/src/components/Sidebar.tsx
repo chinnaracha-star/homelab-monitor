@@ -16,6 +16,7 @@ const NAV_ICONS: Record<string, IconName> = {
   '/groups': 'groups',
   '/infrastructure': 'infrastructure',
   '/photo-services': 'photo',
+  '/photo-monitor': 'photo',
   '/backup': 'backup',
   '/alerts': 'alert',
   '/monitoring/alerts/history': 'alert',

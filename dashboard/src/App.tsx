@@ -13,6 +13,7 @@ import { GroupDetailPage } from './pages/GroupDetailPage'
 import { GroupsPage } from './pages/GroupsPage'
 import { InfrastructurePage } from './pages/InfrastructurePage'
 import { PhotoServicesPage } from './pages/PhotoServicesPage'
+import { PhotoMonitorPage } from './pages/PhotoMonitorPage'
 import { BackupPage } from './pages/BackupPage'
 import { AnalyticsPage } from './pages/AnalyticsPage'
 import { CapacityPage } from './pages/CapacityPage'
@@ -58,6 +59,7 @@ function App() {
               </Route>
               <Route element={<PermissionRoute permission="photo_services" />}>
                 <Route path="photo-services" element={<PhotoServicesPage />} />
+                <Route path="photo-monitor" element={<PhotoMonitorPage />} />
               </Route>
               <Route element={<PermissionRoute permission="backup" />}>
                 <Route path="backup" element={<BackupPage />} />
