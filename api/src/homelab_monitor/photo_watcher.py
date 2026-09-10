@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -163,6 +164,15 @@ class PhotoWatcherService:
         self._dirty = False
         self._logged_enabled: bool | None = None
         self.indexed_files = 0
+        self.last_folders: list[str] = []
+        self.events_today = 0
+        self.telegram_ok_total = 0
+        self.telegram_failed_total = 0
+        self.last_successful_scan: datetime | None = None
+        self.last_successful_telegram: datetime | None = None
+        self._cycle_scan_ms = 0.0
+        self._cycle_db_ms = 0.0
+        self._cycle_telegram_ms = 0.0
         if self._primed:
             logger.info(
                 "photo_baseline_restored folders=%s files=%s",
@@ -201,9 +211,14 @@ class PhotoWatcherService:
         send_text: Callable[[str], dict] | None = None,
     ) -> int:
         logger.info("photo_watcher_tick")
+        cycle_started = time.perf_counter()
+        self._cycle_scan_ms = 0.0
+        self._cycle_db_ms = 0.0
+        self._cycle_telegram_ms = 0.0
         repo = PhotoEventRepository(db)
         config = repo.ensure_settings(self._settings)
         folders = [os.path.normpath(item) for item in resolved_watch_folders(config)]
+        self.last_folders = folders
         self.sync_watch_roots(folders)
         if not config.enabled:
             if self._logged_enabled is not False:
@@ -246,7 +261,9 @@ class PhotoWatcherService:
                     continue
                 folders_scanned += 1
                 logger.info("scanning_files folder=%s recursive=%s", watch_root, config.recursive)
+                walk_started = time.perf_counter()
                 discovered = iter_image_files(Path(watch_root), config.recursive)
+                self._cycle_scan_ms += (time.perf_counter() - walk_started) * 1000
                 scanned += len(discovered)
                 added, folder_skipped, folder_telegram = self._scan_folder(
                     db,
@@ -263,21 +280,34 @@ class PhotoWatcherService:
                 logger.exception("scan_ended reason=folder_exception folder=%s", watch_root)
         self.indexed_files = scanned
         try:
+            prune_started = time.perf_counter()
             repo.prune(max_events=config.max_events, auto_delete_days=config.auto_delete_days)
+            self._cycle_db_ms += (time.perf_counter() - prune_started) * 1000
         except Exception:
             logger.exception("photo_watcher_prune_failed")
+        commit_started = time.perf_counter()
         if created:
             db.commit()
             hub.notify_ingest(reason="photo_monitor", agent_id=None, alerts_changed=False)
         else:
             db.commit()
+        self._cycle_db_ms += (time.perf_counter() - commit_started) * 1000
+        persist_started = time.perf_counter()
         self._persist()
+        self._cycle_db_ms += (time.perf_counter() - persist_started) * 1000
+        self.last_successful_scan = datetime.now(UTC)
+        self.events_today = repo.today_count()
+        elapsed_ms = (time.perf_counter() - cycle_started) * 1000
         logger.info("Folders scanned: %s", folders_scanned)
         logger.info("Files discovered: %s", scanned)
-        logger.info("Files skipped: %s", skipped)
-        logger.info("New files detected: %s", created)
-        logger.info("Events inserted: %s", created)
+        logger.info("New files: %s", created)
+        logger.info("Skipped: %s", skipped)
+        logger.info("Inserted: %s", created)
         logger.info("Telegram sent: %s", telegram_ok)
+        logger.info("Elapsed scan time ms=%.2f", self._cycle_scan_ms)
+        logger.info("Elapsed database time ms=%.2f", self._cycle_db_ms)
+        logger.info("Elapsed telegram time ms=%.2f", self._cycle_telegram_ms)
+        logger.info("Elapsed cycle time ms=%.2f", elapsed_ms)
         logger.info("scan_ended reason=cycle_complete created=%s", created)
         return created
 
@@ -293,6 +323,30 @@ class PhotoWatcherService:
             logger.warning("%s", folder)
             logger.warning("Reason")
             logger.warning("%s", reason)
+
+    def log_health(self) -> None:
+        last_scan = (
+            self.last_successful_scan.isoformat() if self.last_successful_scan else "never"
+        )
+        last_telegram = (
+            self.last_successful_telegram.isoformat()
+            if self.last_successful_telegram
+            else "never"
+        )
+        baseline_size = sum(len(keys) for keys in self._seen.values())
+        logger.info("Photo Monitor Health")
+        logger.info("Running")
+        logger.info("Watching folders %s", len(self.last_folders) or len(self._primed))
+        logger.info("Current queue 0")
+        logger.info("Events today %s", self.events_today)
+        logger.info(
+            "Telegram OK/Failed %s/%s",
+            self.telegram_ok_total,
+            self.telegram_failed_total,
+        )
+        logger.info("Baseline size %s", baseline_size)
+        logger.info("Last successful scan %s", last_scan)
+        logger.info("Last successful Telegram %s", last_telegram)
 
     def _scan_folder(
         self,
@@ -310,7 +364,11 @@ class PhotoWatcherService:
             self._primed.add(watch_root)
             self._dirty = True
             logger.info("baseline_created folder=%s files=%s", watch_root, len(discovered))
-            logger.info("scan_ended reason=baseline folder=%s files=%s", watch_root, len(discovered))
+            logger.info(
+                "scan_ended reason=baseline folder=%s files=%s",
+                watch_root,
+                len(discovered),
+            )
             return 0, len(discovered), 0
         created = 0
         skipped = 0
@@ -351,7 +409,9 @@ class PhotoWatcherService:
         if in_seen:
             _skip("already in _seen", path, folder=watch_root)
             return 0, 1, 0
+        exists_started = time.perf_counter()
         exists = repo.exists(folder, filename)
+        self._cycle_db_ms += (time.perf_counter() - exists_started) * 1000
         logger.debug("repo.exists=%s folder=%s file=%s", exists, folder, filename)
         if exists:
             _skip("repo.exists=True", path, folder=watch_root)
@@ -380,6 +440,7 @@ class PhotoWatcherService:
         )
         logger.info("insert_begin folder=%s file=%s", folder, filename)
         try:
+            insert_started = time.perf_counter()
             with db.begin_nested():
                 repo.add(
                     filename=filename,
@@ -388,6 +449,7 @@ class PhotoWatcherService:
                     created_at=created_at,
                     telegram_sent=telegram_sent,
                 )
+            self._cycle_db_ms += (time.perf_counter() - insert_started) * 1000
         except IntegrityError:
             _skip("repo.exists=True", path, reason="integrity_error")
             seen.add(key)
@@ -397,9 +459,12 @@ class PhotoWatcherService:
         logger.info("new_photo_detected folder=%s file=%s", watch_root, filename)
         if telegram_sent:
             logger.info("telegram_sent folder=%s file=%s", watch_root, filename)
+            self.telegram_ok_total += 1
+            self.last_successful_telegram = datetime.now(UTC)
             sent = 1
         else:
             logger.warning("telegram_failed folder=%s file=%s", watch_root, filename)
+            self.telegram_failed_total += 1
             sent = 0
         seen.add(key)
         self._dirty = True
@@ -432,14 +497,18 @@ class PhotoWatcherService:
                 return False
             sender = notifier.send_text
         logger.info("telegram_send_begin folder=%s file=%s", folder, filename)
+        send_started = time.perf_counter()
         try:
             sender(message)
         except TelegramNotificationError:
+            self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
             logger.exception("photo_telegram_failed")
             return False
         except Exception:
+            self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
             logger.exception("photo_telegram_failed")
             return False
+        self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
         logger.info("telegram_send_complete folder=%s file=%s", folder, filename)
         return True
 
@@ -471,33 +540,41 @@ def _next_interval(value: object) -> int:
 
 async def run_photo_watcher(settings: Settings) -> None:
     logger.info("photo_watcher_started")
-    if not settings.photo_watcher_enabled:
-        logger.info("photo_watcher_disabled")
-        logger.info("scan_ended reason=process_disabled")
-        return
+    try:
+        if not settings.photo_watcher_enabled:
+            logger.info("photo_watcher_disabled")
+            logger.info("scan_ended reason=process_disabled")
+            return
 
-    service = get_photo_watcher_service(settings)
-    while True:
-        interval = 10
-        try:
-            interval = await asyncio.to_thread(_scan_and_interval, settings, service)
-            logger.info("photo_watcher_scan_finished interval=%s", interval)
-        except asyncio.CancelledError:
-            logger.info("photo_watcher_cancelled")
-            logger.info("scan_ended reason=cancelled")
-            raise
-        except Exception:
-            logger.exception("photo_watcher_failed")
-            logger.info("scan_ended reason=scan_exception")
+        service = get_photo_watcher_service(settings)
+        last_health = 0.0
+        while True:
             interval = 10
-        delay = max(_next_interval(interval), 5)
-        logger.info("photo_watcher_sleep seconds=%s", delay)
-        try:
-            await asyncio.sleep(delay)
-        except asyncio.CancelledError:
-            logger.info("photo_watcher_cancelled")
-            logger.info("scan_ended reason=cancelled")
-            raise
+            try:
+                interval = await asyncio.to_thread(_scan_and_interval, settings, service)
+                logger.info("photo_watcher_scan_finished interval=%s", interval)
+                now = time.monotonic()
+                if last_health == 0.0 or now - last_health >= 60:
+                    service.log_health()
+                    last_health = now
+            except asyncio.CancelledError:
+                logger.info("photo_watcher_cancelled")
+                logger.info("scan_ended reason=cancelled")
+                raise
+            except Exception:
+                logger.exception("photo_watcher_failed")
+                logger.info("scan_ended reason=scan_exception")
+                interval = 10
+            delay = max(_next_interval(interval), 5)
+            logger.info("photo_watcher_sleep seconds=%s", delay)
+            try:
+                await asyncio.sleep(delay)
+            except asyncio.CancelledError:
+                logger.info("photo_watcher_cancelled")
+                logger.info("scan_ended reason=cancelled")
+                raise
+    finally:
+        logger.info("photo_watcher_stopped")
 
 
 def _scan_and_interval(settings: Settings, service: PhotoWatcherService) -> int:
