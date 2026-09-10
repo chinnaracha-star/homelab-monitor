@@ -40,6 +40,8 @@ def _remove_sqlite(path: Path) -> None:
     path.unlink(missing_ok=True)
     Path(f"{path}-wal").unlink(missing_ok=True)
     Path(f"{path}-shm").unlink(missing_ok=True)
+    (path.parent / "photo_baseline.json").unlink(missing_ok=True)
+    (path.parent / "photo_baseline.json.tmp").unlink(missing_ok=True)
 
 
 def seed_users() -> None:
@@ -100,6 +102,7 @@ def reset_alert_stability_windows() -> Iterator[None]:
         db.execute(delete(PhotoEvent))
         db.execute(delete(PhotoMonitorSettings))
         db.commit()
+    (TEST_DATABASE_PATH.parent / "photo_baseline.json").unlink(missing_ok=True)
     yield
     reset_stability_windows()
     reset_notification_queue()

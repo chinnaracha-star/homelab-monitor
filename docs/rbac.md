@@ -56,7 +56,10 @@ Current assignments:
   `PATCH /api/v1/alert-rules/{rule_id}/enable`,
   `DELETE /api/v1/alert-rules/{rule_id}`: admin
 - `GET /api/v1/infrastructure`, `GET /api/v1/infrastructure/{service}`,
-  `GET /api/v1/photo-services`, `GET /api/v1/backup`: admin, operator, viewer
+  `GET /api/v1/photo-services`, `GET /api/v1/photos`, `GET /api/v1/photos/latest`,
+  `GET /api/v1/photos/stats`, `GET /api/v1/photos/settings`, `GET /api/v1/backup`:
+  admin, operator, viewer
+- `PUT /api/v1/photos/settings`: admin
 - `GET /api/v1/users`: admin
 - `POST /api/v1/users`, `PUT /api/v1/users/{user_id}`,
   `PATCH /api/v1/users/{user_id}/password`,

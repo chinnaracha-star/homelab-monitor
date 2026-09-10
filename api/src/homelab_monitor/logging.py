@@ -13,17 +13,39 @@ from starlette.responses import Response
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
+        try:
+            message = record.getMessage()
+        except Exception:
+            message = str(record.msg)
         payload = {
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": _json_safe_text(message),
         }
         for key in ("request_id", "method", "path", "status_code", "duration_ms"):
             value = getattr(record, key, None)
             if value is not None:
                 payload[key] = value
-        return json.dumps(payload, separators=(",", ":"))
+        if record.exc_info:
+            payload["exception"] = _json_safe_text(self.formatException(record.exc_info))
+        try:
+            return json.dumps(payload, separators=(",", ":"), ensure_ascii=True, default=str)
+        except Exception:
+            return json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "level": getattr(record, "levelname", "ERROR"),
+                    "logger": getattr(record, "name", "homelab_monitor"),
+                    "message": "log_format_failed",
+                },
+                separators=(",", ":"),
+                ensure_ascii=True,
+            )
+
+
+def _json_safe_text(value: object) -> str:
+    return str(value).encode("utf-8", "replace").decode("utf-8")
 
 
 def configure_logging(level: str, log_dir: str = "") -> None:
@@ -34,7 +56,9 @@ def configure_logging(level: str, log_dir: str = "") -> None:
     if log_dir:
         log_path = Path(log_dir)
         log_path.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_path / "api.jsonl", encoding="utf-8")
+        file_handler = logging.FileHandler(
+            log_path / "api.jsonl", encoding="utf-8", errors="replace"
+        )
         file_handler.setFormatter(formatter)
         handlers.append(file_handler)
 

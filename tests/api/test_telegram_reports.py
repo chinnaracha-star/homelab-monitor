@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
@@ -13,6 +13,7 @@ from homelab_monitor.security import hash_agent_token
 from homelab_monitor.settings import get_settings
 from homelab_monitor.telegram_reports import (
     TelegramReportService,
+    format_hourly_report,
     process_due_reports,
     reports_payload,
 )
@@ -83,9 +84,11 @@ def test_hourly_daily_weekly_generation_and_history(monkeypatch) -> None:
         assert len(rows) == 1
         assert rows[0].recipient == "hourly_report"
         assert rows[0].status == "sent"
-        assert "HomeLab Hourly Report" in sent[-1]
+        assert "HomeLab Monitor" in sent[-1]
+        assert "Hourly Report" in sent[-1]
         assert "📷 Photos Today" in sent[-1]
         assert "Everything looks healthy." in sent[-1]
+        assert "No action required." in sent[-1]
         assert "• Status:" not in sent[-1]
         again = process_due_reports(db, settings, now=hourly_at)
         assert again == []
@@ -165,7 +168,8 @@ def test_skipped_failed_retry_and_timezone(
     assert retried.status_code == 200
     assert retried.json()["status"] == "sent"
     assert retried.json()["recipient"] == "hourly_report"
-    assert "HomeLab Hourly Report" in sent[-1]
+    assert "HomeLab Monitor" in sent[-1]
+    assert "Hourly Report" in sent[-1]
     bangkok = datetime(2026, 9, 8, 1, 5, tzinfo=UTC)
     with Session(get_engine()) as db:
         _configure(
@@ -314,9 +318,100 @@ def test_hourly_report_groups_warning_and_critical_and_skips_info(monkeypatch) -
         rows = process_due_reports(db, get_settings(), now=hourly_at)
         assert rows[0].status == "sent"
     body = sent[-1]
-    assert "⚠ Warning" in body
+    assert "⚠️ System Summary" in body
+    assert "2 Active Alerts" in body
     assert "• Storage above 80%" in body
-    assert "🚨 Critical" in body
     assert "• Temperature above 81°C" in body
     assert "High CPU Usage" not in body
     assert "CPU High" not in body
+    assert "Check storage capacity" in body
+    assert "Check cooling" in body
+
+
+def _sample_hourly(**overrides: object) -> str:
+    local = datetime(2026, 9, 10, 14, 0, tzinfo=timezone(timedelta(hours=7)))
+    payload = {
+        "local": local,
+        "agent_line": "Online",
+        "agent_emoji": "🟢",
+        "health_score": 84.0,
+        "cpu": 57.0,
+        "memory": 32.0,
+        "storage_percent": 1.0,
+        "storage_used": 105.8 * (1024**3),
+        "storage_capacity": 11175.9 * (1024**3),
+        "temperature": 51.0,
+        "photos_today": 9,
+        "backup_status": "Running",
+        "last_backup": "",
+        "alerts": [],
+    }
+    payload.update(overrides)
+    return format_hourly_report(**payload)  # type: ignore[arg-type]
+
+
+def test_hourly_format_healthy_layout() -> None:
+    body = _sample_hourly()
+    assert "🏠 HomeLab Monitor" in body
+    assert "📊 Hourly Report" in body
+    assert "10 Sep 2026 • 14:00" in body
+    assert "🖥️ System Status" in body
+    assert "📈 Resource Usage" in body
+    assert "📸 Activity" in body
+    assert "✅ System Summary" in body
+    assert "Everything looks healthy." in body
+    assert "No action required." in body
+    assert "<" not in body
+    assert "**" not in body
+
+
+def test_hourly_format_one_alert() -> None:
+    from types import SimpleNamespace
+
+    body = _sample_hourly(
+        alerts=[
+            SimpleNamespace(alert_type="cpu_high", peak_value=95, severity="critical"),
+        ]
+    )
+    assert "⚠️ System Summary" in body
+    assert "1 Active Alert" in body
+    assert "• CPU above 95%" in body
+    assert "Check CPU load" in body
+    assert "Everything looks healthy." not in body
+
+
+def test_hourly_format_multiple_alerts() -> None:
+    from types import SimpleNamespace
+
+    body = _sample_hourly(
+        backup_status="Failed",
+        alerts=[
+            SimpleNamespace(alert_type="disk_high", peak_value=82, severity="warning"),
+            SimpleNamespace(alert_type="cpu_high", peak_value=95, severity="critical"),
+        ],
+    )
+    assert "2 Active Alerts" in body
+    assert "• Storage above 80%" in body
+    assert "• CPU above 95%" in body
+    assert "Verify NAS Backup" in body
+
+
+def test_hourly_format_unknown_and_missing_values() -> None:
+    body = _sample_hourly(
+        agent_line="Unknown",
+        agent_emoji="⚪",
+        health_score=None,
+        cpu=None,
+        memory=None,
+        storage_percent=None,
+        storage_used=0,
+        storage_capacity=0,
+        temperature=None,
+        backup_status="Unknown",
+        last_backup="",
+        photos_today=0,
+    )
+    assert "Unknown" in body
+    assert "—°C" not in body
+    assert "Everything looks healthy." in body
+

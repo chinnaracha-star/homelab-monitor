@@ -100,6 +100,13 @@ and QNAP photo storage. It never uploads, indexes, or deletes files. Mock mode
 is the default until live URLs and API keys are configured.
 [photo-services](docs/photo-services.md).
 
+## Photo Monitor
+
+The **Photo Monitor** page (`/photo-monitor`) lists new image files detected in
+a configured NAS folder. It stores SQLite events and can send Telegram. It does
+not analyze images. Settings: enable, watch folder, recursive scan, interval,
+max events, auto-delete. Guide: [photo-monitor](docs/photo-monitor.md).
+
 ## QNAP / NAS integration
 
 Infrastructure connectors issue **GET**-only snapshots for QNAP, Docker, Immich,

@@ -5,6 +5,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from homelab_monitor.models import PhotoEvent, PhotoMonitorSettings
+from homelab_monitor.photo_folders import DEFAULT_WATCH_FOLDERS
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram import BANGKOK
 
@@ -40,6 +41,14 @@ def apply_watch_folders(row: PhotoMonitorSettings, folders: list[str]) -> None:
     row.watch_folder = normalized[0] if normalized else ""
 
 
+def with_default_nas_shares(folders: list[str]) -> list[str]:
+    if not folders:
+        return list(DEFAULT_WATCH_FOLDERS)
+    if any(not item.startswith("/mnt/") for item in folders):
+        return folders
+    return normalize_watch_folders(folders, DEFAULT_WATCH_FOLDERS)
+
+
 class PhotoEventRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
@@ -50,14 +59,17 @@ class PhotoEventRepository:
     def ensure_settings(self, settings: Settings) -> PhotoMonitorSettings:
         row = self.get_settings()
         if row is not None:
-            folders = resolved_watch_folders(row)
-            if folders and (not row.watch_folders or row.watch_folder != folders[0]):
+            current = resolved_watch_folders(row)
+            folders = with_default_nas_shares(current)
+            if folders != current or not row.watch_folders or row.watch_folder != folders[0]:
                 apply_watch_folders(row, folders)
                 self._db.flush()
             return row
-        folders = normalize_watch_folders(settings.photo_watch_folders)
+        folders = normalize_watch_folders(settings.photo_watch_folders) or normalize_watch_folders(
+            settings.photo_watch_folder
+        )
         if not folders:
-            folders = normalize_watch_folders(settings.photo_watch_folder)
+            folders = list(DEFAULT_WATCH_FOLDERS)
         row = PhotoMonitorSettings(
             id=SETTINGS_ROW_ID,
             enabled=settings.photo_watcher_enabled,

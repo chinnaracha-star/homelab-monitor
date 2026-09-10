@@ -55,10 +55,12 @@ services:
     volumes:
       - homelab-data:/var/lib/homelab-monitor
       - homelab-logs:/var/log/homelab-monitor
-      
       - /mnt/picture-all:/mnt/picture-all:ro
-      # Bind-mount the NAS photo share when the host path exists:
-      # - ${HOMELAB_PHOTO_WATCH_FOLDER:-/mnt/picture-all}:/mnt/picture-all:ro
+      - /mnt/pictures-ss22:/mnt/pictures-ss22:ro
+      - /mnt/pictures-ae:/mnt/pictures-ae:ro
+      - /mnt/picture-mae:/mnt/picture-mae:ro
+      - /mnt/picture-por:/mnt/picture-por:ro
+      - /mnt/pictures-solarboy:/mnt/pictures-solarboy:ro
     expose:
       - "8000"
     healthcheck:

@@ -228,6 +228,10 @@ def test_dashboard_routes_are_documented_in_openapi(client: TestClient) -> None:
     assert "/api/v1/infrastructure" in paths
     assert "/api/v1/infrastructure/{service}" in paths
     assert "/api/v1/photo-services" in paths
+    assert "/api/v1/photos" in paths
+    assert "/api/v1/photos/latest" in paths
+    assert "/api/v1/photos/stats" in paths
+    assert "/api/v1/photos/settings" in paths
     assert "/api/v1/backup" in paths
     assert "/api/v1/incidents" in paths
     assert "/api/v1/incidents/statistics" in paths

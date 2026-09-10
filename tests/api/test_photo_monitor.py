@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -67,6 +68,21 @@ def test_first_initialization_creates_enabled_watcher(caplog) -> None:
         assert again.enabled is True
         assert again.watch_folder == "/mnt/picture-all"
         assert again.id == row.id
+
+
+def test_legacy_picture_all_settings_expand_to_all_nas_shares() -> None:
+    from homelab_monitor.photo_folders import DEFAULT_WATCH_FOLDERS
+
+    with Session(get_engine()) as db:
+        row = PhotoEventRepository(db).ensure_settings(
+            _monitor_settings(photo_watcher_enabled=True, photo_watch_folder="/mnt/picture-all")
+        )
+        assert row.watch_folders == ["/mnt/picture-all"]
+        expanded = PhotoEventRepository(db).ensure_settings(
+            _monitor_settings(photo_watcher_enabled=True, photo_watch_folder="/mnt/picture-all")
+        )
+        assert expanded.watch_folders == list(DEFAULT_WATCH_FOLDERS)
+        assert expanded.watch_folder == "/mnt/picture-all"
 
 
 def test_existing_settings_are_preserved() -> None:
@@ -425,3 +441,164 @@ def test_watcher_baselines_added_folder_and_drops_removed_folder(tmp_path: Path)
         service.sync_watch_roots([str(first)])
         (second / "ignored.png").write_bytes(b"nope")
         assert service.scan_once(db, send_text=lambda _text: {}) == 0
+
+
+def test_partial_upload_rename_creates_event(tmp_path: Path, caplog) -> None:
+    watch = tmp_path / "picture-all"
+    watch.mkdir()
+    settings = _monitor_settings(photo_watch_folders=[str(watch)])
+    service = PhotoWatcherService(settings)
+    with Session(get_engine()) as db:
+        row = PhotoEventRepository(db).ensure_settings(settings)
+        row.enabled = True
+        row.recursive = False
+        apply_watch_folders(row, [str(watch)])
+        db.commit()
+        assert service.scan_once(db, send_text=lambda _text: {}) == 0
+    partial = watch / "IMG_20260910_140012.jpg.tmp"
+    partial.write_bytes(b"uploading")
+    with Session(get_engine()) as db:
+        with caplog.at_level("DEBUG", logger="homelab_monitor.photo_watcher"):
+            assert service.scan_once(db, send_text=lambda _text: {}) == 0
+        assert "SKIP: partial upload" in caplog.text
+    partial.rename(watch / "IMG_20260910_140012.jpg")
+    with Session(get_engine()) as db:
+        created = service.scan_once(db, send_text=lambda _text: {})
+        latest = PhotoEventRepository(db).latest()
+        assert created == 1
+        assert latest is not None
+        assert latest.filename == "IMG_20260910_140012.jpg"
+
+
+def test_recursive_scan_detects_new_file_in_subfolder(tmp_path: Path) -> None:
+    watch = tmp_path / "picture-all"
+    nested = watch / "2026" / "09"
+    nested.mkdir(parents=True)
+    (nested / "old.jpg").write_bytes(b"old")
+    settings = _monitor_settings(photo_watch_folders=[str(watch)])
+    service = PhotoWatcherService(settings)
+    with Session(get_engine()) as db:
+        row = PhotoEventRepository(db).ensure_settings(settings)
+        row.enabled = True
+        row.recursive = True
+        apply_watch_folders(row, [str(watch)])
+        db.commit()
+        assert service.scan_once(db, send_text=lambda _text: {}) == 0
+    (nested / "new.png").write_bytes(b"new")
+    with Session(get_engine()) as db:
+        created = service.scan_once(db, send_text=lambda _text: {})
+        latest = PhotoEventRepository(db).latest()
+        assert created == 1
+        assert latest is not None
+        assert latest.filename == "new.png"
+        assert latest.folder == str(nested)
+
+
+def test_json_formatter_includes_traceback() -> None:
+    import json
+    import logging as pylogging
+
+    from homelab_monitor.logging import JsonFormatter
+
+    formatter = JsonFormatter()
+    record = pylogging.LogRecord(
+        "homelab_monitor.photo_watcher",
+        pylogging.ERROR,
+        __file__,
+        1,
+        "photo_watcher_failed",
+        (),
+        None,
+    )
+    try:
+        raise RuntimeError("scan exploded")
+    except RuntimeError:
+        record.exc_info = sys.exc_info()
+    payload = json.loads(formatter.format(record))
+    assert payload["message"] == "photo_watcher_failed"
+    assert "scan exploded" in payload["exception"]
+
+
+def test_json_formatter_accepts_surrogate_filenames() -> None:
+    import json
+    import logging as pylogging
+
+    from homelab_monitor.logging import JsonFormatter
+
+    formatter = JsonFormatter()
+    record = pylogging.LogRecord(
+        "homelab_monitor.photo_watcher",
+        pylogging.INFO,
+        __file__,
+        1,
+        "SKIP: unsupported extension file=%s",
+        ("bad\udcff.jpg",),
+        None,
+    )
+    payload = json.loads(formatter.format(record))
+    assert "SKIP" in payload["message"]
+
+
+def test_scan_continues_when_one_folder_raises(tmp_path: Path, monkeypatch) -> None:
+    good = tmp_path / "good"
+    bad = tmp_path / "bad"
+    good.mkdir()
+    bad.mkdir()
+    (good / "keep.jpg").write_bytes(b"old")
+    settings = _monitor_settings(photo_watch_folders=[str(bad), str(good)])
+    service = PhotoWatcherService(settings)
+
+    import homelab_monitor.photo_watcher as watcher
+
+    real_iter = watcher.iter_image_files
+
+    def flaky_iter(folder, recursive):
+        if folder == Path(bad):
+            raise RuntimeError("cifs blew up")
+        return real_iter(folder, recursive)
+
+    monkeypatch.setattr(watcher, "iter_image_files", flaky_iter)
+    with Session(get_engine()) as db:
+        row = PhotoEventRepository(db).ensure_settings(settings)
+        row.enabled = True
+        row.recursive = False
+        apply_watch_folders(row, [str(bad), str(good)])
+        db.commit()
+        assert service.scan_once(db, send_text=lambda _text: {}) == 0
+    (good / "fresh.png").write_bytes(b"new")
+    with Session(get_engine()) as db:
+        created = service.scan_once(db, send_text=lambda _text: {})
+        latest = PhotoEventRepository(db).latest()
+        assert created == 1
+        assert latest is not None
+        assert latest.filename == "fresh.png"
+
+
+def test_persisted_baseline_survives_restart_and_notifies_offline_photos(
+    tmp_path: Path,
+) -> None:
+    watch = tmp_path / "pictures-ss22"
+    watch.mkdir()
+    (watch / "existing.jpg").write_bytes(b"old")
+    baseline = tmp_path / "photo_baseline.json"
+    settings = _monitor_settings(photo_watch_folders=[str(watch)])
+    first = PhotoWatcherService(settings, baseline_path=baseline)
+    with Session(get_engine()) as db:
+        row = PhotoEventRepository(db).ensure_settings(settings)
+        row.enabled = True
+        row.recursive = False
+        apply_watch_folders(row, [str(watch)])
+        db.commit()
+        assert first.scan_once(db, send_text=lambda _text: {}) == 0
+    assert baseline.is_file()
+    (watch / "while-off.png").write_bytes(b"new")
+    restarted = PhotoWatcherService(settings, baseline_path=baseline)
+    sent: list[str] = []
+    with Session(get_engine()) as db:
+        created = restarted.scan_once(db, send_text=sent.append)
+        latest = PhotoEventRepository(db).latest()
+        assert created == 1
+        assert latest is not None
+        assert latest.filename == "while-off.png"
+        assert sent
+        assert restarted.scan_once(db, send_text=sent.append) == 0

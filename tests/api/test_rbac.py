@@ -35,6 +35,7 @@ def test_all_roles_can_read_dashboard_and_alerts(
         rules = client.get("/api/v1/alert-rules", headers=headers)
         infrastructure = client.get("/api/v1/infrastructure", headers=headers)
         photos = client.get("/api/v1/photo-services", headers=headers)
+        photo_monitor = client.get("/api/v1/photos/stats", headers=headers)
         backup = client.get("/api/v1/backup", headers=headers)
         analytics = client.get("/api/v1/analytics/overview", headers=headers)
         trends = client.get("/api/v1/trends/overview", headers=headers)
@@ -55,6 +56,7 @@ def test_all_roles_can_read_dashboard_and_alerts(
         assert rules.status_code == 200
         assert infrastructure.status_code == 200
         assert photos.status_code == 200
+        assert photo_monitor.status_code == 200
         assert backup.status_code == 200
         assert analytics.status_code == 200
         assert trends.status_code == 200

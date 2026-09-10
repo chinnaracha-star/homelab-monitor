@@ -121,6 +121,11 @@ Operator and viewer accounts are documented in [authentication.md](authenticatio
 - `GET /api/v1/infrastructure/qumagie`
 - `GET /api/v1/infrastructure/backup`
 - `GET /api/v1/photo-services`
+- `GET /api/v1/photos`
+- `GET /api/v1/photos/latest`
+- `GET /api/v1/photos/stats`
+- `GET /api/v1/photos/settings`
+- `PUT /api/v1/photos/settings` (admin)
 - `GET /api/v1/backup`
 - `POST /api/v1/users` (admin)
 - `PUT /api/v1/users/{user_id}` (admin)

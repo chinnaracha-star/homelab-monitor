@@ -94,6 +94,9 @@ and QNAP snapshots are aggregated for the dashboard; the existing NAS upload
 path is unchanged and the API never writes photos. See
 [photo-services.md](photo-services.md).
 
+Photo Monitor polls a NAS folder for new image files, writes `photo_events`,
+and sends Telegram. See [photo-monitor.md](photo-monitor.md).
+
 A secondary QNAP TS-253 Pro is observed only as a backup destination. The
 backup connector is GET-only and never starts, stops, or deletes jobs. See
 [backup.md](backup.md).

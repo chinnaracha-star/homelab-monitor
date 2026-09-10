@@ -64,7 +64,31 @@ MONTHS = (
     "November",
     "December",
 )
+SHORT_MONTHS = (
+    "",
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+)
+HOURLY_RULE = "━━━━━━━━━━━━━━━━━━━━"
+HOURLY_LABEL_WIDTH = 14
 TICK_SECONDS = 60
+HOURLY_RECOMMENDATIONS = {
+    "cpu_high": "Check CPU load",
+    "memory_high": "Check memory usage",
+    "disk_high": "Check storage capacity",
+    "temperature_high": "Check cooling",
+    "agent_offline": "Check agent connectivity",
+}
 
 
 def reports_payload(payload: dict) -> dict:
@@ -110,6 +134,72 @@ def _english_date(local: datetime) -> str:
     return f"{local.day} {MONTHS[local.month]} {local.year}"
 
 
+def _short_english_date(local: datetime) -> str:
+    return f"{local.day} {SHORT_MONTHS[local.month]} {local.year}"
+
+
+def _hourly_kv(icon: str, label: str, value: str) -> str:
+    return f"{icon} {label:<{HOURLY_LABEL_WIDTH}} {value}"
+
+
+def _temperature_label(value: float | None) -> str:
+    if value is None:
+        return "—"
+    return f"{_num(value)}°C"
+
+
+def _health_emoji(*, score: float | None, alert_count: int) -> str:
+    if alert_count > 0:
+        return "⚠️"
+    if score is None:
+        return "⚪"
+    if score >= 80:
+        return "💚"
+    if score >= 60:
+        return "💛"
+    return "❤️"
+
+
+def _actionable_alerts(alerts: list) -> list:
+    ranked: list[object] = []
+    for item in alerts:
+        severity = alert_payload_severity(item.alert_type, item.peak_value, item.severity)
+        if severity in {WARNING, CRITICAL}:
+            ranked.append(item)
+    return ranked
+
+
+def _hourly_alert_lines(alerts: list) -> list[str]:
+    lines: list[str] = []
+    for item in _actionable_alerts(alerts):
+        severity = alert_payload_severity(item.alert_type, item.peak_value, item.severity)
+        lines.append(f"• {telegram_alert_line(item.alert_type, severity, item.peak_value)}")
+    return lines
+
+
+def _hourly_recommendations(alerts: list, backup_status: str) -> list[str]:
+    recs: list[str] = []
+    seen: set[str] = set()
+    for item in _actionable_alerts(alerts):
+        text = HOURLY_RECOMMENDATIONS.get(item.alert_type)
+        if text and text not in seen:
+            recs.append(text)
+            seen.add(text)
+    if backup_status.lower() in {"failed", "error", "critical"} and "Verify NAS Backup" not in recs:
+        recs.append("Verify NAS Backup")
+    return recs
+
+
+def _format_last_backup(value: str, tz: tzinfo) -> str | None:
+    if not value:
+        return None
+    parsed = _parse_sent(value)
+    if parsed is None:
+        return value
+    local = parsed.astimezone(tz)
+    return f"{_short_english_date(local)} • {local.strftime('%H:%M')}"
+
+
 def _pct(value: float | None) -> str:
     if value is None:
         return "—"
@@ -147,39 +237,115 @@ def _agent_emoji(overview) -> str:
 
 
 def _hourly_alert_section(alerts: list) -> list[str]:
-    ranked: list[tuple[str, object]] = []
-    for item in alerts:
-        severity = alert_payload_severity(item.alert_type, item.peak_value, item.severity)
-        if severity in {WARNING, CRITICAL}:
-            ranked.append((severity, item))
-    warnings = [item for severity, item in ranked if severity == WARNING]
-    criticals = [item for severity, item in ranked if severity == CRITICAL]
-    if not warnings and not criticals:
-        return ["✅ Everything looks healthy."]
-    lines: list[str] = []
-    if warnings:
-        lines.append("⚠ Warning")
-        lines.extend(
-            f"• {telegram_alert_line(item.alert_type, WARNING, item.peak_value)}"
-            for item in warnings
-        )
-    if criticals:
-        if lines:
-            lines.append("")
-        lines.append("🚨 Critical")
-        lines.extend(
-            f"• {telegram_alert_line(item.alert_type, CRITICAL, item.peak_value)}"
-            for item in criticals
-        )
+    lines = _hourly_alert_lines(alerts)
+    if not lines:
+        return ["Everything looks healthy.", "", "No action required."]
     return lines
 
 
 def _actionable_alert_count(alerts: list) -> int:
-    return sum(
-        1
-        for item in alerts
-        if alert_payload_severity(item.alert_type, item.peak_value, item.severity)
-        in {WARNING, CRITICAL}
+    return len(_actionable_alerts(alerts))
+
+
+def format_hourly_report(
+    *,
+    local: datetime,
+    agent_line: str,
+    agent_emoji: str,
+    health_score: float | None,
+    cpu: float | None,
+    memory: float | None,
+    storage_percent: float | None,
+    storage_used: float | None,
+    storage_capacity: float | None,
+    temperature: float | None,
+    photos_today: int,
+    backup_status: str,
+    last_backup: str = "",
+    alerts: list | None = None,
+) -> str:
+    items = alerts or []
+    alert_count = _actionable_alert_count(items)
+    score_label = "—" if health_score is None else f"{round(health_score)} / 100"
+    storage_lines = [_hourly_kv("💾", "Storage", _pct(storage_percent))]
+    if storage_used or storage_capacity:
+        indent = " " * (3 + HOURLY_LABEL_WIDTH)
+        used_label = _bytes_label(float(storage_used or 0))
+        cap_label = _bytes_label(float(storage_capacity or 0))
+        storage_lines.append(f"{indent} {used_label} / {cap_label}")
+    activity = [
+        _hourly_kv("📷", "Photos Today", str(photos_today)),
+        _hourly_kv("💾", "Backup", backup_status or "Unknown"),
+    ]
+    backup_stamp = _format_last_backup(last_backup, local.tzinfo or timezone(timedelta(hours=7)))
+    if backup_stamp:
+        indent = " " * (3 + HOURLY_LABEL_WIDTH)
+        activity.append(f"{indent} {backup_stamp}")
+    activity.append(_hourly_kv("🚨", "Active Alerts", str(alert_count)))
+    if alert_count:
+        summary = [
+            HOURLY_RULE,
+            "",
+            "⚠️ System Summary",
+            "",
+            f"{alert_count} Active Alert" + ("" if alert_count == 1 else "s"),
+            "",
+            *_hourly_alert_lines(items),
+        ]
+        recs = _hourly_recommendations(items, backup_status)
+        if recs:
+            summary.extend(["", "Recommendation", ""])
+            summary.extend(f"• {item}" for item in recs)
+        summary.extend(["", HOURLY_RULE])
+    else:
+        summary = [
+            HOURLY_RULE,
+            "",
+            "✅ System Summary",
+            "",
+            "Everything looks healthy.",
+            "",
+            "No action required.",
+            "",
+            HOURLY_RULE,
+        ]
+    return "\n".join(
+        [
+            HOURLY_RULE,
+            "",
+            "🏠 HomeLab Monitor",
+            "📊 Hourly Report",
+            "",
+            f"🕒 {_short_english_date(local)} • {local.strftime('%H:%M')}",
+            "",
+            HOURLY_RULE,
+            "",
+            "🖥️ System Status",
+            "",
+            _hourly_kv(agent_emoji, "Agent", agent_line),
+            _hourly_kv(
+                _health_emoji(score=health_score, alert_count=alert_count),
+                "Health Score",
+                score_label,
+            ),
+            "",
+            HOURLY_RULE,
+            "",
+            "📈 Resource Usage",
+            "",
+            _hourly_kv("🖥️", "CPU", _pct(cpu)),
+            _hourly_kv("🧠", "Memory", _pct(memory)),
+            *storage_lines,
+            _hourly_kv("🌡️", "Temperature", _temperature_label(temperature)),
+            "",
+            HOURLY_RULE,
+            "",
+            "📸 Activity",
+            "",
+            *activity,
+            "",
+            *summary,
+        ]
     )
 
 
@@ -298,49 +464,23 @@ class TelegramReportService:
         used = data["storage"].current_used
         _, detail, _ = self.analytics.photo_detail(db, now=now)
         capacity = int(detail.get("capacity") or 0)
-        storage_lines = [_pct(data["storage"].used_percent)]
-        if used or capacity:
-            storage_lines.append(f"({_bytes_label(float(used))} / {_bytes_label(float(capacity))})")
-        alerts = data["alerts"]
-        lines = [
-            "🏠 HomeLab Hourly Report",
-            "",
-            f"🕓 {local.strftime('%H:%M')}",
-            "",
-            "━━━━━━━━━━━━━━",
-            "",
-            f"{_agent_emoji(data['overview'])} Agent",
-            _agent_line(data["overview"]),
-            "",
-            "🖥 CPU",
-            _pct(data["cpu"].current),
-            "",
-            "🧠 Memory",
-            _pct(data["memory"].current),
-            "",
-            "💾 Storage",
-            *storage_lines,
-            "",
-            "🌡 Temperature",
-            f"{_num(data['temperature'].current)}°C",
-            "",
-            "📷 Photos Today",
-            f"+{data['photos'].today}",
-            "",
-            "💾 Last Backup",
-            data["backup_status"],
-            "",
-            "⚠ Active Alerts",
-            str(_actionable_alert_count(alerts)),
-            "",
-            "📊 Health Score",
-            f"{round(data['score'])} / 100",
-            "",
-            "━━━━━━━━━━━━━━",
-            "",
-        ]
-        lines.extend(_hourly_alert_section(alerts))
-        return "\n".join(lines)
+        last_backup = getattr(data["backup"], "last_backup", "") or ""
+        return format_hourly_report(
+            local=local,
+            agent_line=_agent_line(data["overview"]),
+            agent_emoji=_agent_emoji(data["overview"]),
+            health_score=data["score"],
+            cpu=data["cpu"].current,
+            memory=data["memory"].current,
+            storage_percent=data["storage"].used_percent,
+            storage_used=float(used or 0),
+            storage_capacity=float(capacity or 0),
+            temperature=data["temperature"].current,
+            photos_today=int(data["photos"].today),
+            backup_status=data["backup_status"],
+            last_backup=last_backup,
+            alerts=data["alerts"],
+        )
 
     def build_test_report(self, db: Session, *, now: datetime | None = None) -> str:
         clock = now or datetime.now(UTC)
