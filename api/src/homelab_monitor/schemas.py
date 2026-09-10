@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class AgentRegistrationRequest(BaseModel):
@@ -1092,6 +1092,97 @@ class PredictionOverviewResponse(BaseModel):
     backup: PredictionMetricResponse = PredictionMetricResponse()
     recommendations: list[str] = []
     summary: str = ""
+
+
+class PhotoEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    filename: str
+    folder: str
+    size_bytes: int
+    created_at: datetime
+    telegram_sent: bool
+
+
+class PhotoEventListResponse(BaseModel):
+    items: list[PhotoEventResponse] = []
+
+
+class PhotoMonitorStatsResponse(BaseModel):
+    today_count: int = 0
+    last_photo: str | None = None
+    last_folder: str | None = None
+    last_update: datetime | None = None
+    watch_folder: str = ""
+    watch_folders: list[str] = []
+    watch_folder_labels: list[str] = []
+    indexed_files: int = 0
+    status: str = "stopped"
+    enabled: bool = False
+
+    @field_validator("watch_folders", mode="before")
+    @classmethod
+    def coerce_watch_folders(cls, value: object) -> list[str]:
+        return list(value) if isinstance(value, list) else []
+
+    @field_validator("watch_folder_labels", mode="before")
+    @classmethod
+    def coerce_watch_folder_labels(cls, value: object) -> list[str]:
+        return list(value) if isinstance(value, list) else []
+
+
+class PhotoMonitorSettingsResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    enabled: bool
+    watch_folder: str
+    watch_folders: list[str] = []
+    watch_folder_labels: list[str] = []
+    recursive: bool
+    scan_interval_seconds: int
+    max_events: int
+    auto_delete_days: int
+
+    @field_validator("watch_folders", mode="before")
+    @classmethod
+    def coerce_watch_folders(cls, value: object) -> list[str]:
+        return list(value) if isinstance(value, list) else []
+
+    @field_validator("watch_folder_labels", mode="before")
+    @classmethod
+    def coerce_watch_folder_labels(cls, value: object) -> list[str]:
+        return list(value) if isinstance(value, list) else []
+
+
+class PhotoMonitorSettingsUpdateRequest(BaseModel):
+    enabled: bool
+    watch_folder: str = ""
+    watch_folders: list[str] = Field(default_factory=list)
+    recursive: bool = True
+    scan_interval_seconds: Literal[5, 10, 30, 60] = 10
+    max_events: Literal[100, 500, 1000] = 500
+    auto_delete_days: Literal[0, 30, 90] = 0
+
+    @model_validator(mode="after")
+    def normalize_watch_folders(self) -> "PhotoMonitorSettingsUpdateRequest":
+        folders = [item.strip() for item in self.watch_folders if item.strip()]
+        if len(folders) != len(set(folders)):
+            raise ValueError("Duplicate watch folders are not allowed")
+        if not folders and self.watch_folder.strip():
+            folders = [self.watch_folder.strip()]
+        if not folders:
+            raise ValueError("At least one watch folder is required")
+        unique: list[str] = []
+        seen: set[str] = set()
+        for item in folders:
+            if item in seen:
+                continue
+            seen.add(item)
+            unique.append(item)
+        self.watch_folders = unique
+        self.watch_folder = unique[0]
+        return self
 
 
 class BackupStatusResponse(BaseModel):

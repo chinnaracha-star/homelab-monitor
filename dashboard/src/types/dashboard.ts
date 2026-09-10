@@ -342,6 +342,43 @@ export interface PhotoServicesSummary {
   stats: PhotoStats
 }
 
+export interface PhotoEvent {
+  id: number
+  filename: string
+  folder: string
+  size_bytes: number
+  created_at: string
+  telegram_sent: boolean
+}
+
+export interface PhotoEventList {
+  items: PhotoEvent[]
+}
+
+export interface PhotoMonitorStats {
+  today_count: number
+  last_photo: string | null
+  last_folder?: string | null
+  last_update: string | null
+  watch_folder: string
+  watch_folders?: string[]
+  watch_folder_labels?: string[]
+  indexed_files?: number
+  status?: string
+  enabled: boolean
+}
+
+export interface PhotoMonitorSettings {
+  enabled: boolean
+  watch_folder: string
+  watch_folders?: string[]
+  watch_folder_labels?: string[]
+  recursive: boolean
+  scan_interval_seconds: 5 | 10 | 30 | 60
+  max_events: 100 | 500 | 1000
+  auto_delete_days: 0 | 30 | 90
+}
+
 export interface BackupDestination {
   hostname: string
   ip: string

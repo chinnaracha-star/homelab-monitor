@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 TEST_DATABASE_PATH = Path(tempfile.gettempdir()) / f"homelab-monitor-tests-{os.getpid()}.db"
@@ -20,14 +21,19 @@ os.environ["HOMELAB_TELEGRAM_CHAT_ID"] = ""
 os.environ["HOMELAB_TELEGRAM_ENABLED"] = "true"
 os.environ["TELEGRAM_ENABLED"] = "true"
 os.environ["HOMELAB_NOTIFICATION_WORKER_ENABLED"] = "false"
+os.environ["HOMELAB_PHOTO_WATCHER_ENABLED"] = "false"
+os.environ["HOMELAB_BOOTSTRAP_ADMIN_PASSWORD"] = ""
+os.environ["HOMELAB_BOOTSTRAP_OPERATOR_PASSWORD"] = ""
+os.environ["HOMELAB_BOOTSTRAP_VIEWER_PASSWORD"] = ""
 
 from homelab_monitor.alert_stability import reset_stability_windows  # noqa: E402
 from homelab_monitor.auth.passwords import hash_password  # noqa: E402
 from homelab_monitor.database import Base, get_engine  # noqa: E402
 from homelab_monitor.main import app  # noqa: E402
-from homelab_monitor.models import User  # noqa: E402
+from homelab_monitor.models import PhotoEvent, PhotoMonitorSettings, User  # noqa: E402
 from homelab_monitor.notification_history import reset_notification_history  # noqa: E402
 from homelab_monitor.notification_queue import reset_notification_queue  # noqa: E402
+from homelab_monitor.photo_watcher import reset_photo_watcher_service  # noqa: E402
 
 
 def _remove_sqlite(path: Path) -> None:
@@ -89,10 +95,16 @@ def reset_alert_stability_windows() -> Iterator[None]:
     reset_stability_windows()
     reset_notification_queue()
     reset_notification_history()
+    reset_photo_watcher_service()
+    with Session(get_engine()) as db:
+        db.execute(delete(PhotoEvent))
+        db.execute(delete(PhotoMonitorSettings))
+        db.commit()
     yield
     reset_stability_windows()
     reset_notification_queue()
     reset_notification_history()
+    reset_photo_watcher_service()
 
 
 @pytest.fixture

@@ -50,9 +50,15 @@ services:
       HOMELAB_QUMAGIE_URL: ${HOMELAB_QUMAGIE_URL:-}
       HOMELAB_QUMAGIE_API_KEY: ${HOMELAB_QUMAGIE_API_KEY:-}
       HOMELAB_BACKUP_URL: ${HOMELAB_BACKUP_URL:-}
+      HOMELAB_PHOTO_WATCH_FOLDER: ${HOMELAB_PHOTO_WATCH_FOLDER:-/mnt/picture-all}
+      HOMELAB_PHOTO_WATCHER_ENABLED: ${HOMELAB_PHOTO_WATCHER_ENABLED:-true}
     volumes:
       - homelab-data:/var/lib/homelab-monitor
       - homelab-logs:/var/log/homelab-monitor
+      
+      - /mnt/picture-all:/mnt/picture-all:ro
+      # Bind-mount the NAS photo share when the host path exists:
+      # - ${HOMELAB_PHOTO_WATCH_FOLDER:-/mnt/picture-all}:/mnt/picture-all:ro
     expose:
       - "8000"
     healthcheck:

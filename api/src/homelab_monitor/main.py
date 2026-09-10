@@ -13,6 +13,7 @@ from homelab_monitor.infrastructure_monitor import run_infrastructure_monitor
 from homelab_monitor.logging import RequestLoggingMiddleware, configure_logging
 from homelab_monitor.notification_worker import run_notification_worker
 from homelab_monitor.offline_monitor import run_offline_monitor
+from homelab_monitor.photo_watcher import run_photo_watcher
 from homelab_monitor.realtime import hub
 from homelab_monitor.routers import (
     agents,
@@ -30,6 +31,7 @@ from homelab_monitor.routers import (
     infrastructure,
     insights,
     notifications,
+    photos,
     predictions,
     realtime,
     system,
@@ -50,6 +52,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         asyncio.create_task(run_infrastructure_monitor(get_settings())),
         asyncio.create_task(run_telegram_reports(get_settings())),
         asyncio.create_task(run_notification_worker(get_settings())),
+        asyncio.create_task(run_photo_watcher(get_settings())),
     ]
     try:
         yield
@@ -95,6 +98,7 @@ def create_app() -> FastAPI:
     application.include_router(predictions.router)
     application.include_router(realtime.router)
     application.include_router(system.router)
+    application.include_router(photos.router)
     return application
 
 

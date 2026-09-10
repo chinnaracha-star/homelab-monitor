@@ -12,6 +12,8 @@ vi.mock('../api/dashboard', () => ({
   sendTestNotification: vi.fn(),
   sendTelegramTestReport: vi.fn(),
   getRemoteAccess: vi.fn(),
+  getPhotoMonitorSettings: vi.fn(),
+  updatePhotoMonitorSettings: vi.fn(),
 }))
 
 import {
@@ -20,6 +22,8 @@ import {
   sendTelegramTestReport,
   sendTestNotification,
   updateNotificationSettings,
+  getPhotoMonitorSettings,
+  updatePhotoMonitorSettings,
 } from '../api/dashboard'
 
 const mockedGet = vi.mocked(getNotificationSettings)
@@ -109,6 +113,16 @@ describe('Settings page', () => {
     mockedRemote.mockReset()
     mockedRemote.mockResolvedValue(remote)
     mockedGet.mockResolvedValue(settings)
+    vi.mocked(getPhotoMonitorSettings).mockResolvedValue({
+      enabled: false,
+      watch_folder: '/mnt/picture-all',
+      watch_folders: ['/mnt/picture-all', '/mnt/pictures-ss22'],
+      recursive: true,
+      scan_interval_seconds: 10,
+      max_events: 500,
+      auto_delete_days: 0,
+    })
+    vi.mocked(updatePhotoMonitorSettings).mockImplementation(async (payload) => payload)
     mockedUpdate.mockResolvedValue({
       ...settings,
       discord: { enabled: true, configured: true, webhook_url_set: true },
@@ -126,6 +140,7 @@ describe('Settings page', () => {
     expect(screen.getByRole('heading', { name: 'Telegram Test' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Deployment' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Application' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Photo Monitor Settings' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Remote Access' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Copy URL' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Open Dashboard' })).toBeInTheDocument()
@@ -252,5 +267,33 @@ describe('Settings page', () => {
       '_blank',
       'noopener,noreferrer',
     )
+  })
+
+  it('saves Photo Monitor settings', async () => {
+    const user = userEvent.setup()
+    renderSettings()
+    expect(await screen.findByRole('heading', { name: 'Photo Monitor Settings' })).toBeInTheDocument()
+    await user.click(screen.getByLabelText('Enable Photo Monitor'))
+    await user.click(screen.getByRole('button', { name: 'Save Photo Monitor settings' }))
+    await waitFor(() => expect(updatePhotoMonitorSettings).toHaveBeenCalled())
+    expect(await screen.findByText('Photo Monitor settings saved')).toBeInTheDocument()
+  })
+
+  it('adds a watch folder from settings', async () => {
+    const user = userEvent.setup()
+    renderSettings()
+    expect(await screen.findByText('Pictures-All')).toBeInTheDocument()
+    expect(screen.getByText('Pictures-SS22')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Add folder'), '/mnt/pictures-ae')
+    await user.click(screen.getByRole('button', { name: '+ Add Folder' }))
+    expect(screen.getByText('Pictures-ae')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save Photo Monitor settings' }))
+    await waitFor(() => expect(updatePhotoMonitorSettings).toHaveBeenCalled())
+    const payload = vi.mocked(updatePhotoMonitorSettings).mock.calls.at(-1)?.[0]
+    expect(payload?.watch_folders).toEqual([
+      '/mnt/picture-all',
+      '/mnt/pictures-ss22',
+      '/mnt/pictures-ae',
+    ])
   })
 })

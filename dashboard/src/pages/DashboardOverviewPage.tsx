@@ -12,6 +12,7 @@ import {
   getCapacitySystem,
   getDashboardOverview,
   getPhotoServices,
+  getPhotoMonitorStats,
 } from '../api/dashboard'
 import { ConnectionLost } from '../components/ConnectionLost'
 import { GroupCard } from '../components/GroupCard'
@@ -27,6 +28,7 @@ import { useLivePolling } from '../hooks/useDashboardSocket'
 import { useOptionalPwa } from '../pwa/PwaProvider'
 import { formatBytes, formatPercent } from '../utils/bytes'
 import { dashboardHealthStatus, estimatedFullLabel, metricStatus } from '../utils/healthStatus'
+import { displayFolderName, watchFolderList } from '../utils/photoFolders'
 import { formatThaiDateTime } from '../utils/thaiDate'
 import styles from './Pages.module.css'
 import groupStyles from './GroupsPage.module.css'
@@ -59,6 +61,7 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
   const temperature = useLivePolling(getAnalyticsTemperature, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
   const photos = useLivePolling(getAnalyticsPhotos, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
   const photoServices = useLivePolling(getPhotoServices, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const photoMonitor = useLivePolling(getPhotoMonitorStats, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
   const pwa = useOptionalPwa()
   const cached =
     Boolean(overview.data && overview.error) ||
@@ -77,7 +80,8 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
     memory.isRefreshing ||
     temperature.isRefreshing ||
     photos.isRefreshing ||
-    photoServices.isRefreshing
+    photoServices.isRefreshing ||
+    photoMonitor.isRefreshing
   const lastUpdated =
     [
       overview.lastUpdated,
@@ -91,6 +95,7 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
       temperature.lastUpdated,
       photos.lastUpdated,
       photoServices.lastUpdated,
+      photoMonitor.lastUpdated,
     ]
       .filter((value): value is Date => value !== null)
       .sort((left, right) => right.getTime() - left.getTime())[0] ?? null
@@ -240,6 +245,56 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
             ]}
           />
         </section>
+      </section>
+
+      <section className={styles.section} aria-labelledby="overview-photo-monitor-title">
+        <h2 className={styles.sectionTitle} id="overview-photo-monitor-title">
+          Photo Monitor
+        </h2>
+        {photoMonitor.error ? (
+          <SectionError title="Photo Monitor API failed" onRetry={photoMonitor.retry} />
+        ) : null}
+        {photoMonitor.data ? (
+          <>
+            <section className={styles.statGrid} aria-label="Photo Monitor">
+              <StatCard
+                label="Status"
+                value={photoMonitor.data.enabled ? '🟢 Running' : 'Stopped'}
+              />
+              <StatCard
+                label="Watching"
+                value={`${watchFolderList(photoMonitor.data).length} folder${
+                  watchFolderList(photoMonitor.data).length === 1 ? '' : 's'
+                }`}
+              />
+              <StatCard label="Today's Photos" value={photoMonitor.data.today_count} />
+              <StatCard label="Last Photo" value={photoMonitor.data.last_photo ?? '—'} />
+              <StatCard label="Last Folder" value={photoMonitor.data.last_folder ?? '—'} />
+              <StatCard
+                label="Last Update"
+                value={
+                  photoMonitor.data.last_update
+                    ? formatThaiDateTime(photoMonitor.data.last_update, false)
+                    : '—'
+                }
+              />
+              <StatCard
+                label="Indexed Files"
+                value={`${(photoMonitor.data.indexed_files ?? 0).toLocaleString()} files indexed`}
+              />
+            </section>
+            <ul className={styles.folderList} aria-label="Watch folders">
+              {(photoMonitor.data.watch_folder_labels?.length
+                ? photoMonitor.data.watch_folder_labels
+                : watchFolderList(photoMonitor.data).map(displayFolderName)
+              ).map((label) => (
+                <li key={label}>
+                  <p className={styles.folderChip}>{label}</p>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </section>
 
       <section className={styles.section} aria-labelledby="overview-capacity-title">

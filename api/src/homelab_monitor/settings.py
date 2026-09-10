@@ -83,6 +83,18 @@ class Settings(BaseSettings):
     qumagie_url: str = ""
     qumagie_api_key: SecretStr | None = None
     backup_url: str = ""
+    photo_watch_folder: str = "/mnt/picture-all"
+    photo_watch_folders: list[str] = Field(
+        default_factory=lambda: [
+            "/mnt/picture-all",
+            "/mnt/pictures-ss22",
+            "/mnt/pictures-ae",
+            "/mnt/picture-mae",
+            "/mnt/picture-por",
+            "/mnt/pictures-solarboy",
+        ]
+    )
+    photo_watcher_enabled: bool = True
     tailscale_bin: str = "tailscale"
     tailscale_socket: str = "/var/run/tailscale/tailscaled.sock"
     tailscale_timeout_seconds: float = Field(default=2.0, gt=0, le=15)

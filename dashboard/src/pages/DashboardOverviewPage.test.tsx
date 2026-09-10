@@ -18,6 +18,7 @@ vi.mock('../api/dashboard', () => ({
   getAnalyticsTemperature: vi.fn(),
   getAnalyticsPhotos: vi.fn(),
   getPhotoServices: vi.fn(),
+  getPhotoMonitorStats: vi.fn(),
 }))
 
 import {
@@ -33,6 +34,7 @@ import {
   getCapacitySystem,
   getDashboardOverview,
   getPhotoServices,
+  getPhotoMonitorStats,
 } from '../api/dashboard'
 
 const overview: DashboardOverview = {
@@ -158,6 +160,17 @@ describe('Dashboard overview backup cards', () => {
       services: [],
       stats: { indexed_photos: 79119 },
     } as never)
+    vi.mocked(getPhotoMonitorStats).mockResolvedValue({
+      today_count: 128,
+      last_photo: 'IMG_20260910_140012.jpg',
+      last_folder: 'Pictures-All',
+      last_update: '2026-09-10T07:00:00Z',
+      watch_folder: '/mnt/picture-all',
+      watch_folders: ['/mnt/picture-all'],
+      watch_folder_labels: ['Pictures-All'],
+      indexed_files: 63086,
+      enabled: true,
+    })
   })
 
   it('keeps existing summary cards and adds backup cards', async () => {
@@ -168,6 +181,11 @@ describe('Dashboard overview backup cards', () => {
     expect(screen.getByLabelText('Total Reports 4')).toBeInTheDocument()
     expect(screen.getByLabelText('Total Groups 0')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Backup' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Photo Monitor' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Status 🟢 Running')).toBeInTheDocument()
+    expect(screen.getByLabelText('Watching 1 folder')).toBeInTheDocument()
+    expect(screen.getAllByText('Pictures-All').length).toBeGreaterThan(0)
+    expect(screen.getByLabelText(`Indexed Files ${Number(63086).toLocaleString()} files indexed`)).toBeInTheDocument()
     expect(screen.getByLabelText('Backup TS-253 Pro')).toBeInTheDocument()
     expect(screen.getByLabelText('Healthy healthy')).toBeInTheDocument()
     expect(screen.getByLabelText('Status Online')).toBeInTheDocument()

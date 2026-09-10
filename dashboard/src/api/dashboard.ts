@@ -19,6 +19,10 @@ import type {
   InfrastructureSnapshot,
   InfrastructureSummary,
   PhotoServicesSummary,
+  PhotoEventList,
+  PhotoEvent,
+  PhotoMonitorStats,
+  PhotoMonitorSettings,
   BackupStatus,
   AnalyticsOverview,
   AnalyticsCpu,
@@ -245,6 +249,33 @@ export async function getInfrastructureService(service: string): Promise<Infrast
 
 export async function getPhotoServices(): Promise<PhotoServicesSummary> {
   const response = await apiClient.get<PhotoServicesSummary>('/photo-services')
+  return response.data
+}
+
+export async function getPhotoEvents(limit = 20): Promise<PhotoEventList> {
+  const response = await apiClient.get<PhotoEventList>('/photos', { params: { limit } })
+  return response.data
+}
+
+export async function getLatestPhoto(): Promise<PhotoEvent> {
+  const response = await apiClient.get<PhotoEvent>('/photos/latest')
+  return response.data
+}
+
+export async function getPhotoMonitorStats(): Promise<PhotoMonitorStats> {
+  const response = await apiClient.get<PhotoMonitorStats>('/photos/stats')
+  return response.data
+}
+
+export async function getPhotoMonitorSettings(): Promise<PhotoMonitorSettings> {
+  const response = await apiClient.get<PhotoMonitorSettings>('/photos/settings')
+  return response.data
+}
+
+export async function updatePhotoMonitorSettings(
+  payload: PhotoMonitorSettings,
+): Promise<PhotoMonitorSettings> {
+  const response = await apiClient.put<PhotoMonitorSettings>('/photos/settings', payload)
   return response.data
 }
 

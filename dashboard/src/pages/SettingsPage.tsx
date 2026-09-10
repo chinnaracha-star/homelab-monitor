@@ -11,6 +11,7 @@ import { SectionError } from '../components/SectionError'
 import { OverviewSkeleton } from '../components/Skeleton'
 import { RemoteAccessCard } from '../components/RemoteAccessCard'
 import { PwaSettingsCard } from '../components/PwaSettingsCard'
+import { PhotoMonitorSettingsCard } from '../components/PhotoMonitorSettingsCard'
 import { getErrorMessage } from '../utils/errors'
 import { formatThaiDateTime } from '../utils/thaiDate'
 import userStyles from './UsersPage.module.css'
@@ -653,6 +654,7 @@ export function SettingsPage() {
           </div>
         </form>
       ) : null}
+      <PhotoMonitorSettingsCard canConfigure={canConfigure} />
       <section className={styles.reportsSection} aria-labelledby="deployment-title">
         <h2 className={styles.channelTitle} id="deployment-title">
           Deployment

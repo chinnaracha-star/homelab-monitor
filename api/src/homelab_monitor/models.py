@@ -230,6 +230,34 @@ class NotificationSettings(Base):
     )
 
 
+class PhotoEvent(Base):
+    __tablename__ = "photo_events"
+    __table_args__ = (UniqueConstraint("folder", "filename", name="uq_photo_events_folder_filename"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    folder: Mapped[str] = mapped_column(String(1000), nullable=False, index=True)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    telegram_sent: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
+
+class PhotoMonitorSettings(Base):
+    __tablename__ = "photo_monitor_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    watch_folder: Mapped[str] = mapped_column(String(1000), default="")
+    watch_folders: Mapped[list[str]] = mapped_column(JSON, default=list)
+    recursive: Mapped[bool] = mapped_column(Boolean, default=True)
+    scan_interval_seconds: Mapped[int] = mapped_column(Integer, default=10)
+    max_events: Mapped[int] = mapped_column(Integer, default=500)
+    auto_delete_days: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class OpsSnapshot(Base):
     __tablename__ = "ops_snapshots"
 
