@@ -747,6 +747,7 @@ class CapacityStorageResponse(BaseModel):
     average_weekly_growth: float = 0
     estimated_days_remaining: float | None = None
     estimated_full_date: str = ""
+    estimated_full_in: str = "Unknown"
     risk: str = "unknown"
     series: list[AnalyticsSeriesPoint] = []
 

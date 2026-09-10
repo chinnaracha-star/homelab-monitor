@@ -113,7 +113,14 @@ def test_history_order_filters_duration_and_statistics(
             severity="critical",
             value=41,
         )
-        _alert(db, agent, "memory_high", opened=now - timedelta(minutes=10), severity="warning")
+        _alert(
+            db,
+            agent,
+            "memory_high",
+            opened=now - timedelta(minutes=10),
+            severity="warning",
+            value=85,
+        )
     headers = auth_header()
     history = client.get("/api/v1/alerts/history", headers=headers).json()
     assert [item["alert_type"] for item in history] == ["memory_high", "cpu_high"]

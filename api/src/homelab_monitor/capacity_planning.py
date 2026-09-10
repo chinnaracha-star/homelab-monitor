@@ -22,6 +22,12 @@ from homelab_monitor.trends import TrendService
 GIB = 1024**3
 
 
+def estimated_full_in(days: float | None, growth_per_day: float) -> str:
+    if growth_per_day <= 0 or days is None:
+        return "Unknown"
+    return f"{round(days)} Days"
+
+
 def _risk_from_days(days: float | None, growth: float) -> str:
     if growth <= 0 or days is None:
         return "unknown"
@@ -166,6 +172,9 @@ class CapacityPlanningService:
             average_weekly_growth=float(trend.weekly_growth_bytes),
             estimated_days_remaining=trend.estimated_days_until_full,
             estimated_full_date=trend.estimated_full_date,
+            estimated_full_in=estimated_full_in(
+                trend.estimated_days_until_full, trend.growth_per_day
+            ),
             risk=risk,
             series=trend.series,
         )

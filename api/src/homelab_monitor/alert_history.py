@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from homelab_monitor.alert_engine import alert_duration_seconds, as_alert_utc
+from homelab_monitor.alert_severity import alert_payload_severity
 from homelab_monitor.models import Agent, Alert
 from homelab_monitor.schemas import AlertHistoryEntry, AlertStatisticsResponse
 
@@ -25,7 +26,11 @@ def to_history_entry(
     return AlertHistoryEntry(
         id=alert.id,
         alert_type=alert.kind,
-        severity=alert.severity,
+        severity=(
+            alert_payload_severity(alert.kind, alert.current_value, alert.severity)
+            if alert.status == "active"
+            else alert.severity
+        ),
         started_at=started_at,
         recovered_at=recovered_at,
         duration_seconds=alert_duration_seconds(

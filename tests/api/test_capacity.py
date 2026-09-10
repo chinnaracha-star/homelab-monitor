@@ -126,6 +126,7 @@ def test_capacity_no_growth(
     ).json()
     assert storage["average_daily_growth"] == 0
     assert storage["risk"] == "unknown"
+    assert storage["estimated_full_in"] == "Unknown"
 
 
 def test_capacity_forecast_score_and_recommendations(
@@ -210,6 +211,7 @@ def test_capacity_forecast_score_and_recommendations(
     assert storage["current_free"] == 4200
     assert storage["average_daily_growth"] == 800
     assert storage["estimated_days_remaining"] == 5.25
+    assert storage["estimated_full_in"] == "5 Days"
     assert storage["risk"] == "critical"
     assert storage["estimated_full_date"]
 

@@ -13,6 +13,7 @@ from homelab_monitor.agent_presence import (
     to_agent_summary,
 )
 from homelab_monitor.alert_engine import alert_duration_seconds
+from homelab_monitor.alert_severity import alert_payload_severity
 from homelab_monitor.auth.dependencies import require_roles
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
@@ -205,7 +206,11 @@ def _alert_response(
         agent_name=agent_name,
         kind=alert.kind,
         resource=alert.resource,
-        severity=alert.severity,
+        severity=(
+            alert_payload_severity(alert.kind, alert.current_value, alert.severity)
+            if alert.status == "active"
+            else alert.severity
+        ),
         current_value=alert.current_value,
         threshold=alert.threshold,
         message=alert.message,

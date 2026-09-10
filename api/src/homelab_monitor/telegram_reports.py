@@ -9,6 +9,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from homelab_monitor.alert_history import list_alert_history
+from homelab_monitor.alert_severity import (
+    CRITICAL,
+    WARNING,
+    alert_payload_severity,
+    telegram_alert_line,
+)
 from homelab_monitor.analytics import AnalyticsService
 from homelab_monitor.capacity_planning import CapacityPlanningService, _bytes_label
 from homelab_monitor.database import get_engine
@@ -42,14 +48,6 @@ WEEKDAYS = {
     "friday": 4,
     "saturday": 5,
     "sunday": 6,
-}
-ALERT_LABELS = {
-    "cpu_high": "CPU High",
-    "memory_high": "Memory High",
-    "disk_high": "Storage Warning",
-    "temperature_high": "Temperature High",
-    "agent_offline": "Agent Offline",
-    "backup_failed": "Backup Failed",
 }
 MONTHS = (
     "",
@@ -146,6 +144,43 @@ def _agent_badge(overview) -> str:
 
 def _agent_emoji(overview) -> str:
     return _agent_badge(overview).split(" ", 1)[0]
+
+
+def _hourly_alert_section(alerts: list) -> list[str]:
+    ranked: list[tuple[str, object]] = []
+    for item in alerts:
+        severity = alert_payload_severity(item.alert_type, item.peak_value, item.severity)
+        if severity in {WARNING, CRITICAL}:
+            ranked.append((severity, item))
+    warnings = [item for severity, item in ranked if severity == WARNING]
+    criticals = [item for severity, item in ranked if severity == CRITICAL]
+    if not warnings and not criticals:
+        return ["✅ Everything looks healthy."]
+    lines: list[str] = []
+    if warnings:
+        lines.append("⚠ Warning")
+        lines.extend(
+            f"• {telegram_alert_line(item.alert_type, WARNING, item.peak_value)}"
+            for item in warnings
+        )
+    if criticals:
+        if lines:
+            lines.append("")
+        lines.append("🚨 Critical")
+        lines.extend(
+            f"• {telegram_alert_line(item.alert_type, CRITICAL, item.peak_value)}"
+            for item in criticals
+        )
+    return lines
+
+
+def _actionable_alert_count(alerts: list) -> int:
+    return sum(
+        1
+        for item in alerts
+        if alert_payload_severity(item.alert_type, item.peak_value, item.severity)
+        in {WARNING, CRITICAL}
+    )
 
 
 def next_hourly(local: datetime, interval: int) -> datetime:
@@ -296,7 +331,7 @@ class TelegramReportService:
             data["backup_status"],
             "",
             "⚠ Active Alerts",
-            str(len(alerts)),
+            str(_actionable_alert_count(alerts)),
             "",
             "📊 Health Score",
             f"{round(data['score'])} / 100",
@@ -304,12 +339,7 @@ class TelegramReportService:
             "━━━━━━━━━━━━━━",
             "",
         ]
-        if alerts:
-            lines.extend(
-                f"• {ALERT_LABELS.get(item.alert_type, item.alert_type)}" for item in alerts
-            )
-        else:
-            lines.append("Everything looks healthy.")
+        lines.extend(_hourly_alert_section(alerts))
         return "\n".join(lines)
 
     def build_test_report(self, db: Session, *, now: datetime | None = None) -> str:

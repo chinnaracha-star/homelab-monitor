@@ -6,9 +6,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from homelab_monitor.database import get_engine
-from homelab_monitor.models import Notification
+from homelab_monitor.models import Agent, Alert, Notification
 from homelab_monitor.notifications.config import load_payload, save_payload
 from homelab_monitor.notifications.telegram import TelegramProvider
+from homelab_monitor.security import hash_agent_token
 from homelab_monitor.settings import get_settings
 from homelab_monitor.telegram_reports import (
     TelegramReportService,
@@ -20,6 +21,7 @@ from homelab_monitor.telegram_reports import (
 def _reset() -> None:
     with Session(get_engine()) as db:
         db.execute(delete(Notification))
+        db.execute(delete(Alert))
         payload = load_payload(db)
         payload["reports"] = reports_payload({})
         payload.pop("telegram", None)
@@ -250,3 +252,71 @@ def test_manual_test_report_jwt_rbac_disabled_success_retry_and_history(
     assert retried.json()["status"] == "sent"
     assert retried.json()["recipient"] == "test_report"
     assert "HomeLab Test Report" in sent[-1]
+
+
+def test_hourly_report_groups_warning_and_critical_and_skips_info(monkeypatch) -> None:
+    _reset()
+    sent: list[str] = []
+    monkeypatch.setattr(TelegramProvider, "send", lambda self, message: sent.append(message))
+    hourly_at = datetime(2026, 9, 10, 1, 0, tzinfo=UTC)
+    with Session(get_engine()) as db:
+        agent = Agent(
+            name="hourly-alerts",
+            hostname="hourly-alerts.local",
+            version="0.1.0",
+            token_hash=hash_agent_token("hourly-alerts-token"),
+            status="online",
+            capabilities=["ubuntu"],
+        )
+        db.add(agent)
+        db.flush()
+        db.add_all(
+            [
+                Alert(
+                    agent_id=agent.id,
+                    kind="cpu_high",
+                    resource="cpu",
+                    status="active",
+                    severity="info",
+                    current_value=40,
+                    threshold=70,
+                    message="cpu info",
+                    opened_at=hourly_at,
+                    last_observed_at=hourly_at,
+                ),
+                Alert(
+                    agent_id=agent.id,
+                    kind="disk_high",
+                    resource="/",
+                    status="active",
+                    severity="warning",
+                    current_value=82,
+                    threshold=80,
+                    message="disk warning",
+                    opened_at=hourly_at,
+                    last_observed_at=hourly_at,
+                ),
+                Alert(
+                    agent_id=agent.id,
+                    kind="temperature_high",
+                    resource="cpu",
+                    status="active",
+                    severity="critical",
+                    current_value=81,
+                    threshold=75,
+                    message="temp critical",
+                    opened_at=hourly_at,
+                    last_observed_at=hourly_at,
+                ),
+            ]
+        )
+        _configure(db, hourly_enabled=True)
+        rows = process_due_reports(db, get_settings(), now=hourly_at)
+        assert rows[0].status == "sent"
+    body = sent[-1]
+    assert "⚠ Warning" in body
+    assert "• Storage above 80%" in body
+    assert "🚨 Critical" in body
+    assert "• Temperature above 81°C" in body
+    assert "High CPU Usage" not in body
+    assert "CPU High" not in body

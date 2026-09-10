@@ -10,9 +10,18 @@ vi.mock('../api/dashboard', () => ({
   getAgents: vi.fn(),
   getActiveAlerts: vi.fn(),
   getBackupStatus: vi.fn(),
+  getCapacityStorage: vi.fn(),
+  getCapacitySystem: vi.fn(),
 }))
 
-import { getActiveAlerts, getAgents, getBackupStatus, getDashboardOverview } from '../api/dashboard'
+import {
+  getActiveAlerts,
+  getAgents,
+  getBackupStatus,
+  getCapacityStorage,
+  getCapacitySystem,
+  getDashboardOverview,
+} from '../api/dashboard'
 
 const overview: DashboardOverview = {
   agents: { total: 2, online: 1, offline: 1 },
@@ -79,6 +88,27 @@ describe('Dashboard overview backup cards', () => {
     ])
     vi.mocked(getActiveAlerts).mockResolvedValue([])
     vi.mocked(getBackupStatus).mockResolvedValue(backup)
+    vi.mocked(getCapacityStorage).mockResolvedValue({
+      current_used: 9.3 * 1024 ** 4,
+      current_free: 2.7 * 1024 ** 4,
+      capacity: 12 * 1024 ** 4,
+      average_daily_growth: 1,
+      average_weekly_growth: 7,
+      estimated_days_remaining: 138,
+      estimated_full_date: '2027-01-26',
+      estimated_full_in: '138 Days',
+      risk: 'healthy',
+      series: [],
+    })
+    vi.mocked(getCapacitySystem).mockResolvedValue({
+      cpu_trend: 'stable',
+      memory_trend: 'stable',
+      storage_trend: 'stable',
+      backup_trend: 'stable',
+      overall_score: 64,
+      bottleneck: 'none',
+      health: { healthy_count: 1, warning_count: 0, critical_count: 0, unknown_count: 0 },
+    })
   })
 
   it('keeps existing summary cards and adds backup cards', async () => {
@@ -92,6 +122,34 @@ describe('Dashboard overview backup cards', () => {
     expect(screen.getByLabelText('Backup TS-253 Pro')).toBeInTheDocument()
     expect(screen.getByLabelText('Healthy healthy')).toBeInTheDocument()
     expect(screen.getByLabelText('Status Online')).toBeInTheDocument()
+  })
+
+  it('shows health and capacity forecast cards', async () => {
+    renderPage()
+    expect(await screen.findByLabelText('Health Good')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Storage Used/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Estimated Full 138 Days')).toBeInTheDocument()
+  })
+
+  it('shows Critical health when a critical alert is active', async () => {
+    vi.mocked(getActiveAlerts).mockResolvedValue([
+      {
+        id: 'alert-1',
+        agent_id: 'agent-online',
+        agent_name: 'mini-pc',
+        kind: 'cpu_high',
+        resource: 'cpu',
+        severity: 'critical',
+        current_value: 96,
+        threshold: 90,
+        message: 'CPU high',
+        opened_at: '2026-09-10T01:00:00Z',
+        last_observed_at: '2026-09-10T01:00:00Z',
+        status: 'active',
+      },
+    ])
+    renderPage()
+    expect(await screen.findByLabelText('Health Critical')).toBeInTheDocument()
   })
 
   it('shows the PWA install button and offline shell', async () => {

@@ -313,6 +313,6 @@ def test_active_alerts_include_agent_context(
     alert = next(item for item in response.json() if item["agent_id"] == agent_id)
     assert alert["agent_name"] == "dashboard-active-alert"
     assert alert["kind"] == "cpu_high"
-    assert alert["severity"] == "warning"
+    assert alert["severity"] == "critical"
     assert alert["current_value"] == 100
     assert alert["threshold"] == get_settings().alert_cpu_threshold_percent

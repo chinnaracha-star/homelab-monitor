@@ -48,7 +48,12 @@ def _agent(db: Session, name: str) -> Agent:
 
 
 def _alert(
-    db: Session, agent: Agent, kind: str, opened: datetime, severity: str = "warning"
+    db: Session,
+    agent: Agent,
+    kind: str,
+    opened: datetime,
+    severity: str = "warning",
+    value: float = 95,
 ) -> Alert:
     alert = Alert(
         agent_id=agent.id,
@@ -56,7 +61,7 @@ def _alert(
         resource="system",
         status="active",
         severity=severity,
-        current_value=95,
+        current_value=value,
         threshold=90,
         message=kind,
         opened_at=opened,
@@ -93,11 +98,11 @@ def test_correlation_groups_related_metrics(
     start = datetime(2026, 9, 8, 10, 0, tzinfo=UTC)
     with Session(get_engine()) as db:
         agent = _agent(db, "corr-agent")
-        _alert(db, agent, "cpu_high", start, "critical")
-        _alert(db, agent, "memory_high", start + timedelta(minutes=2), "warning")
-        _alert(db, agent, "temperature_high", start + timedelta(minutes=4), "warning")
+        _alert(db, agent, "cpu_high", start, "critical", 96)
+        _alert(db, agent, "memory_high", start + timedelta(minutes=2), "warning", 85)
+        _alert(db, agent, "temperature_high", start + timedelta(minutes=4), "warning", 66)
         other = _agent(db, "corr-other")
-        _alert(db, other, "cpu_high", start, "warning")
+        _alert(db, other, "cpu_high", start, "warning", 75)
     headers = auth_header()
     incidents = client.get("/api/v1/incidents", headers=headers).json()
     grouped = next(item for item in incidents if item["agent_name"] == "corr-agent")

@@ -1,5 +1,12 @@
 import { memo, useMemo } from 'react'
-import { getActiveAlerts, getAgents, getBackupStatus, getDashboardOverview } from '../api/dashboard'
+import {
+  getActiveAlerts,
+  getAgents,
+  getBackupStatus,
+  getCapacityStorage,
+  getCapacitySystem,
+  getDashboardOverview,
+} from '../api/dashboard'
 import { ConnectionLost } from '../components/ConnectionLost'
 import { GroupCard } from '../components/GroupCard'
 import { LastUpdated } from '../components/LastUpdated'
@@ -12,7 +19,8 @@ import { StatusBadge } from '../components/StatusBadge'
 import { LIVE_PAGE_POLL } from '../constants'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import { useOptionalPwa } from '../pwa/PwaProvider'
-import { formatPercent } from '../utils/bytes'
+import { formatBytes, formatPercent } from '../utils/bytes'
+import { dashboardHealthStatus, estimatedFullLabel } from '../utils/healthStatus'
 import { formatThaiDateTime } from '../utils/thaiDate'
 import styles from './Pages.module.css'
 import groupStyles from './GroupsPage.module.css'
@@ -26,6 +34,8 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
   const agents = useLivePolling(getAgents, AGENT_EVENTS, LIVE_PAGE_POLL)
   const alerts = useLivePolling(getActiveAlerts, ALERT_EVENTS, LIVE_PAGE_POLL)
   const backup = useLivePolling(getBackupStatus, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const storage = useLivePolling(getCapacityStorage, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
+  const system = useLivePolling(getCapacitySystem, OVERVIEW_EVENTS, LIVE_PAGE_POLL)
   const pwa = useOptionalPwa()
   const cached =
     Boolean(overview.data && overview.error) ||
@@ -33,10 +43,22 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
     Boolean(alerts.data && alerts.error)
   const hasCachedShell = Boolean(overview.data || agents.data || alerts.data)
 
-  const isRefreshing = overview.isRefreshing || agents.isRefreshing || alerts.isRefreshing
-  const lastUpdated = [overview.lastUpdated, agents.lastUpdated, alerts.lastUpdated]
-    .filter((value): value is Date => value !== null)
-    .sort((left, right) => right.getTime() - left.getTime())[0] ?? null
+  const isRefreshing =
+    overview.isRefreshing ||
+    agents.isRefreshing ||
+    alerts.isRefreshing ||
+    storage.isRefreshing ||
+    system.isRefreshing
+  const lastUpdated =
+    [
+      overview.lastUpdated,
+      agents.lastUpdated,
+      alerts.lastUpdated,
+      storage.lastUpdated,
+      system.lastUpdated,
+    ]
+      .filter((value): value is Date => value !== null)
+      .sort((left, right) => right.getTime() - left.getTime())[0] ?? null
 
   const warningCount = useMemo(() => {
     if (!agents.data || !alerts.data) {
@@ -47,6 +69,20 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
       (agent) => agent.status !== 'offline' && agentsWithAlerts.has(agent.id),
     ).length
   }, [agents.data, alerts.data])
+
+  const healthLabel = useMemo(() => {
+    const severities = (alerts.data ?? [])
+      .filter((alert) => alert.status !== 'recovered')
+      .map((alert) => alert.severity)
+    return dashboardHealthStatus(severities, system.data?.overall_score ?? null)
+  }, [alerts.data, system.data?.overall_score])
+
+  const storageUsedLabel = storage.data
+    ? `${formatBytes(storage.data.current_used)} / ${formatBytes(storage.data.capacity)}`
+    : '—'
+  const estimatedFull =
+    storage.data?.estimated_full_in ||
+    estimatedFullLabel(storage.data?.estimated_days_remaining, storage.data?.average_daily_growth ?? 0)
 
   return (
     <section className={styles.page}>
@@ -85,6 +121,29 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
             <StatCard label="Offline" value={overview.data.agents.offline} />
             <StatCard label="Total Reports" value={overview.data.reports.total} />
             <StatCard label="Total Groups" value={overview.data.groups.total} />
+          </section>
+        ) : null}
+      </section>
+
+      <section className={styles.section} aria-labelledby="overview-health-title">
+        <h2 className={styles.sectionTitle} id="overview-health-title">
+          Health
+        </h2>
+        {system.error ? <SectionError title="Health API failed" onRetry={system.retry} /> : null}
+        <section className={styles.statGrid} aria-label="Health status">
+          <StatCard label="Health" value={healthLabel} />
+        </section>
+      </section>
+
+      <section className={styles.section} aria-labelledby="overview-capacity-title">
+        <h2 className={styles.sectionTitle} id="overview-capacity-title">
+          Capacity
+        </h2>
+        {storage.error ? <SectionError title="Capacity API failed" onRetry={storage.retry} /> : null}
+        {storage.data ? (
+          <section className={styles.statGrid} aria-label="Storage capacity">
+            <StatCard label="Storage Used" value={storageUsedLabel} />
+            <StatCard label="Estimated Full" value={estimatedFull} />
           </section>
         ) : null}
       </section>

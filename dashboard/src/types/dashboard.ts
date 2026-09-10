@@ -518,6 +518,7 @@ export interface CapacityStorage {
   average_weekly_growth: number
   estimated_days_remaining: number | null
   estimated_full_date: string
+  estimated_full_in?: string
   risk: string
   series: AnalyticsSeriesPoint[]
 }

@@ -51,7 +51,14 @@ OPERATOR_LABEL = {
     "==": "equal to",
     "!=": "not equal to",
 }
-SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "warning": 0}
+SEVERITY_RANK = {
+    "critical": 4,
+    "high": 3,
+    "medium": 2,
+    "warning": 2,
+    "low": 1,
+    "info": 0,
+}
 
 
 def preview_sentence(metric: str, operator: str, threshold: float, severity: str) -> str:

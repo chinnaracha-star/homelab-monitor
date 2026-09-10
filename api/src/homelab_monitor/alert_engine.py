@@ -13,6 +13,7 @@ from homelab_monitor.alert_rules.evaluate import (
     load_effective_rules,
 )
 from homelab_monitor.alert_rules.metrics import extract_system_samples, offline_sample
+from homelab_monitor.alert_severity import alert_payload_severity
 from homelab_monitor.models import Agent, Alert
 from homelab_monitor.settings import Settings
 
@@ -82,7 +83,9 @@ class AlertEngine:
                 breached=evaluated.breached,
                 observed_at=observed_at,
                 message=evaluated.message,
-                severity=evaluated.severity,
+                severity=alert_payload_severity(
+                    evaluated.kind, evaluated.value, evaluated.severity
+                ),
                 cooldown_seconds=evaluated.cooldown_seconds,
             )
             if event is not None:
@@ -158,7 +161,9 @@ class AlertEngine:
                 breached=offline,
                 observed_at=observed_at,
                 message=message,
-                severity=evaluated.severity,
+                severity=alert_payload_severity(
+                    "agent_offline", max(0, elapsed), evaluated.severity
+                ),
                 cooldown_seconds=evaluated.cooldown_seconds,
             )
             if event is not None:
@@ -256,6 +261,7 @@ class AlertEngine:
             alert.current_value = value
             alert.threshold = threshold
             alert.message = message
+            alert.severity = severity
             alert.last_observed_at = observed_at
             return event
 

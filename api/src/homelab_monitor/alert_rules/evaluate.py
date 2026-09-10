@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from homelab_monitor.alert_rules import SEVERITY_RANK
 from homelab_monitor.alert_rules.metrics import MetricSample
+from homelab_monitor.alert_severity import CRITICAL, WARNING, WARNING_MIN
 from homelab_monitor.models import Agent, AgentGroupMember, AlertRule
 from homelab_monitor.settings import Settings
 
@@ -52,63 +53,31 @@ def compare(operator: str, value: float, threshold: float) -> bool:
     return False
 
 
+def _rule(metric: str, threshold: float, severity: str) -> RuleView:
+    return RuleView(
+        metric=metric,
+        operator=">",
+        threshold=threshold,
+        severity=severity,
+        enabled=True,
+        cooldown_seconds=0,
+        applies_to="all",
+        group_id=None,
+        agent_id=None,
+    )
+
+
 def fallback_rules(settings: Settings) -> list[RuleView]:
     return [
-        RuleView(
-            metric="cpu_percent",
-            operator=">",
-            threshold=settings.alert_cpu_threshold_percent,
-            severity="warning",
-            enabled=True,
-            cooldown_seconds=0,
-            applies_to="all",
-            group_id=None,
-            agent_id=None,
-        ),
-        RuleView(
-            metric="memory_percent",
-            operator=">",
-            threshold=settings.alert_memory_threshold_percent,
-            severity="warning",
-            enabled=True,
-            cooldown_seconds=0,
-            applies_to="all",
-            group_id=None,
-            agent_id=None,
-        ),
-        RuleView(
-            metric="disk_percent",
-            operator=">",
-            threshold=settings.alert_disk_threshold_percent,
-            severity="warning",
-            enabled=True,
-            cooldown_seconds=0,
-            applies_to="all",
-            group_id=None,
-            agent_id=None,
-        ),
-        RuleView(
-            metric="temperature_celsius",
-            operator=">",
-            threshold=settings.alert_temperature_threshold_celsius,
-            severity="warning",
-            enabled=True,
-            cooldown_seconds=0,
-            applies_to="all",
-            group_id=None,
-            agent_id=None,
-        ),
-        RuleView(
-            metric="agent_offline",
-            operator=">",
-            threshold=float(settings.agent_offline_after_seconds),
-            severity="warning",
-            enabled=True,
-            cooldown_seconds=0,
-            applies_to="all",
-            group_id=None,
-            agent_id=None,
-        ),
+        _rule("cpu_percent", WARNING_MIN["cpu_percent"], WARNING),
+        _rule("cpu_percent", max(settings.alert_cpu_threshold_percent, 90.0), CRITICAL),
+        _rule("memory_percent", WARNING_MIN["memory_percent"], WARNING),
+        _rule("memory_percent", max(settings.alert_memory_threshold_percent, 90.0), CRITICAL),
+        _rule("disk_percent", WARNING_MIN["disk_percent"], WARNING),
+        _rule("disk_percent", max(settings.alert_disk_threshold_percent, 90.0), CRITICAL),
+        _rule("temperature_celsius", WARNING_MIN["temperature_celsius"], WARNING),
+        _rule("temperature_celsius", 75.0, CRITICAL),
+        _rule("agent_offline", float(settings.agent_offline_after_seconds), WARNING),
     ]
 
 
