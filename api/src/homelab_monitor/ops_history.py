@@ -1,4 +1,5 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone, tzinfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,6 +8,7 @@ from homelab_monitor.connectors.base import ConnectorSnapshot
 from homelab_monitor.connectors.http import as_int, as_str
 from homelab_monitor.database import get_engine
 from homelab_monitor.models import OpsSnapshot
+from homelab_monitor.settings import get_settings
 
 MOCK_STORAGE_TODAY = 4_980_000_000_000
 MOCK_STORAGE_YESTERDAY = 4_850_000_000_000
@@ -42,6 +44,8 @@ def mock_backup_history() -> list[dict[str, str]]:
 
 
 def record_photo_snapshot(stats: dict, *, observed_at: datetime | None = None) -> None:
+    if get_settings().infrastructure_mock:
+        return
     payload = {
         "indexed_photos": as_int(stats.get("indexed_photos")),
         "storage_used": as_int(stats.get("storage_used")),
@@ -74,7 +78,7 @@ def photo_trends(stats: dict, *, use_mock: bool) -> tuple[dict[str, int], dict[s
         now = datetime.now(UTC)
         current_used = as_int(stats.get("storage_used"))
         current_photos = as_int(stats.get("indexed_photos"))
-        start_today = _start_of_day(now)
+        start_today = _start_of_local_day(now)
         start_yesterday = start_today - timedelta(days=1)
         start_week = start_today - timedelta(days=7)
         used_today = current_used
@@ -138,8 +142,22 @@ def _record(kind: str, payload: dict, *, observed_at: datetime | None) -> None:
         db.commit()
 
 
+def _local_timezone() -> tzinfo:
+    try:
+        return ZoneInfo("Asia/Bangkok")
+    except ZoneInfoNotFoundError:
+        return timezone(timedelta(hours=7))
+
+
 def _start_of_day(value: datetime) -> datetime:
     return value.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _start_of_local_day(value: datetime, tz: tzinfo | None = None) -> datetime:
+    zone = tz or _local_timezone()
+    local = value.astimezone(zone)
+    start = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start.astimezone(UTC)
 
 
 def _value_at_or_before(db: Session, kind: str, field: str, at: datetime) -> int | None:

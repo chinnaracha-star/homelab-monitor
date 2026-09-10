@@ -62,7 +62,8 @@ def get_photo_services(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> PhotoServicesResponse:
     collected_at, services, stats = get_infrastructure_service().photo_services()
-    record_photo_snapshot(stats, observed_at=collected_at)
+    if not settings.infrastructure_mock:
+        record_photo_snapshot(stats, observed_at=collected_at)
     storage_history, photo_growth = photo_trends(stats, use_mock=settings.infrastructure_mock)
     stats = {
         **stats,

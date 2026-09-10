@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 from fastapi.testclient import TestClient
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from homelab_monitor.connectors.immich import ImmichConnector
@@ -12,7 +13,7 @@ from homelab_monitor.database import get_engine
 from homelab_monitor.infrastructure import InfrastructureService
 from homelab_monitor.infrastructure_monitor import refresh_infrastructure
 from homelab_monitor.models import OpsSnapshot
-from homelab_monitor.ops_history import photo_trends
+from homelab_monitor.ops_history import _start_of_local_day, photo_trends
 from homelab_monitor.realtime import hub
 
 
@@ -218,7 +219,7 @@ def test_all_roles_can_read_photo_services(
 
 def test_live_photo_trends_use_stored_snapshots() -> None:
     now = datetime.now(UTC)
-    start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_today = _start_of_local_day(now)
     start_yesterday = start_today - timedelta(days=1)
     start_week = start_today - timedelta(days=7)
     with Session(get_engine()) as db:
@@ -252,3 +253,36 @@ def test_live_photo_trends_use_stored_snapshots() -> None:
     assert growth["today"] == 250
     assert growth["yesterday"] == 180
     assert growth["this_week"] == 1200
+
+
+def test_mock_photo_refresh_does_not_overwrite_nas_snapshots(
+    client: TestClient,
+    auth_header: Callable[..., dict[str, str]],
+) -> None:
+    now = datetime.now(UTC)
+    with Session(get_engine()) as db:
+        db.execute(delete(OpsSnapshot).where(OpsSnapshot.kind == "photo"))
+        db.add(
+            OpsSnapshot(
+                kind="photo",
+                observed_at=now,
+                payload={
+                    "indexed_photos": 79119,
+                    "storage_used": 113582165922,
+                    "capacity_bytes": 12000000000000,
+                },
+            )
+        )
+        db.commit()
+    refresh_infrastructure()
+    response = client.get("/api/v1/photo-services", headers=auth_header())
+    assert response.status_code == 200
+    with Session(get_engine()) as db:
+        rows = list(
+            db.scalars(
+                select(OpsSnapshot)
+                .where(OpsSnapshot.kind == "photo")
+                .order_by(OpsSnapshot.observed_at.desc())
+            ).all()
+        )
+        assert {int(row.payload.get("indexed_photos") or 0) for row in rows} == {79119}

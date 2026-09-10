@@ -7,7 +7,12 @@ from homelab_monitor.agent_presence import online_count, presence_for_agents
 from homelab_monitor.connectors.http import as_int, as_str
 from homelab_monitor.history import aggregate_history, as_utc
 from homelab_monitor.models import Agent, Alert, MetricHistory, Notification, OpsSnapshot
-from homelab_monitor.ops_history import _start_of_day, _status_from_payload, _value_at_or_before
+from homelab_monitor.ops_history import (
+    _start_of_day,
+    _start_of_local_day,
+    _status_from_payload,
+    _value_at_or_before,
+)
 from homelab_monitor.schemas import (
     AnalyticsBackupResponse,
     AnalyticsCpuResponse,
@@ -90,7 +95,7 @@ def _photo_growth(db: Session, now: datetime) -> tuple[int, dict[str, int], dict
     latest = _latest_photo(db)
     current_used = as_int(latest.payload.get("storage_used")) if latest else 0
     current_photos = as_int(latest.payload.get("indexed_photos")) if latest else 0
-    start_today = _start_of_day(now)
+    start_today = _start_of_local_day(now)
     start_yesterday = start_today - timedelta(days=1)
     start_week = start_today - timedelta(days=7)
     used_yesterday = _value_at_or_before(db, "photo", "storage_used", start_today) or 0

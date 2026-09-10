@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
+from homelab_monitor.analytics import AnalyticsService
 from homelab_monitor.database import get_engine
 from homelab_monitor.models import (
     Agent,
@@ -16,6 +17,7 @@ from homelab_monitor.models import (
     Notification,
     OpsSnapshot,
 )
+from homelab_monitor.ops_history import _start_of_local_day
 
 REGISTRATION_KEY = "test-registration-key-at-least-24-chars"
 
@@ -103,8 +105,9 @@ def test_analytics_aggregates_history_and_ops(
     agent_id = _register(client)
     now = datetime.now(UTC)
     older = now - timedelta(hours=2)
-    yesterday = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=2)
-    last_week = now - timedelta(days=8)
+    start_today = _start_of_local_day(now)
+    yesterday = start_today - timedelta(minutes=1)
+    last_week = start_today - timedelta(days=8)
     with Session(get_engine()) as db:
         db.add_all(
             [
@@ -207,3 +210,52 @@ def test_analytics_aggregates_history_and_ops(
     assert overview["daily"]["agents_total"] == 1
     assert overview["daily"]["history_points_today"] >= 1
     assert overview["daily"]["notifications_today"] >= 1
+
+
+def test_photos_today_counts_from_local_midnight() -> None:
+    _reset_analytics_sources()
+    now = datetime(2026, 9, 10, 0, 33, tzinfo=UTC)
+    start_today = _start_of_local_day(now)
+    with Session(get_engine()) as db:
+        db.add_all(
+            [
+                OpsSnapshot(
+                    kind="photo",
+                    observed_at=start_today - timedelta(minutes=5),
+                    payload={"indexed_photos": 79100, "storage_used": 1000},
+                ),
+                OpsSnapshot(
+                    kind="photo",
+                    observed_at=now,
+                    payload={"indexed_photos": 79119, "storage_used": 1100},
+                ),
+            ]
+        )
+        db.commit()
+        photos = AnalyticsService().photos(db, now=now)
+        overview = AnalyticsService().overview(db, now=now)
+    assert photos.today == 19
+    assert overview.photos_today == 19
+
+
+def test_photos_today_resets_at_local_midnight() -> None:
+    _reset_analytics_sources()
+    just_after_midnight = datetime(2026, 9, 9, 17, 5, tzinfo=UTC)
+    with Session(get_engine()) as db:
+        db.add_all(
+            [
+                OpsSnapshot(
+                    kind="photo",
+                    observed_at=datetime(2026, 9, 9, 16, 55, tzinfo=UTC),
+                    payload={"indexed_photos": 79100, "storage_used": 1000},
+                ),
+                OpsSnapshot(
+                    kind="photo",
+                    observed_at=just_after_midnight,
+                    payload={"indexed_photos": 79100, "storage_used": 1000},
+                ),
+            ]
+        )
+        db.commit()
+        photos = AnalyticsService().photos(db, now=just_after_midnight)
+    assert photos.today == 0

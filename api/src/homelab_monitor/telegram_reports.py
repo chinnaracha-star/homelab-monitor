@@ -144,6 +144,10 @@ def _agent_badge(overview) -> str:
     return f"🟢 {line}"
 
 
+def _agent_emoji(overview) -> str:
+    return _agent_badge(overview).split(" ", 1)[0]
+
+
 def next_hourly(local: datetime, interval: int) -> datetime:
     aligned_hour = (local.hour // interval) * interval
     slot = local.replace(hour=aligned_hour, minute=0, second=0, microsecond=0)
@@ -254,15 +258,14 @@ class TelegramReportService:
 
     def _hourly(self, db: Session, now: datetime) -> str:
         data = self._snapshot(db, now)
-        local = now.astimezone(timezone(timedelta(hours=7)))
-        agent_line = _agent_line(data["overview"])
+        tz = report_timezone(str(reports_payload(load_payload(db))["timezone"]))
+        local = now.astimezone(tz)
         used = data["storage"].current_used
-        capacity = 0
         _, detail, _ = self.analytics.photo_detail(db, now=now)
         capacity = int(detail.get("capacity") or 0)
-        storage_line = f"{_pct(data['storage'].used_percent)}"
+        storage_lines = [_pct(data["storage"].used_percent)]
         if used or capacity:
-            storage_line += f"\n({_bytes_label(float(used))} / {_bytes_label(float(capacity))})"
+            storage_lines.append(f"({_bytes_label(float(used))} / {_bytes_label(float(capacity))})")
         alerts = data["alerts"]
         lines = [
             "🏠 HomeLab Hourly Report",
@@ -271,8 +274,8 @@ class TelegramReportService:
             "",
             "━━━━━━━━━━━━━━",
             "",
-            "🟢 Agent",
-            agent_line,
+            f"{_agent_emoji(data['overview'])} Agent",
+            _agent_line(data["overview"]),
             "",
             "🖥 CPU",
             _pct(data["cpu"].current),
@@ -281,7 +284,7 @@ class TelegramReportService:
             _pct(data["memory"].current),
             "",
             "💾 Storage",
-            storage_line,
+            *storage_lines,
             "",
             "🌡 Temperature",
             f"{_num(data['temperature'].current)}°C",
@@ -306,7 +309,7 @@ class TelegramReportService:
                 f"• {ALERT_LABELS.get(item.alert_type, item.alert_type)}" for item in alerts
             )
         else:
-            lines.append("✅ Everything looks healthy.")
+            lines.append("Everything looks healthy.")
         return "\n".join(lines)
 
     def build_test_report(self, db: Session, *, now: datetime | None = None) -> str:

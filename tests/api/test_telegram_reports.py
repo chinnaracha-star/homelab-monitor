@@ -82,6 +82,9 @@ def test_hourly_daily_weekly_generation_and_history(monkeypatch) -> None:
         assert rows[0].recipient == "hourly_report"
         assert rows[0].status == "sent"
         assert "HomeLab Hourly Report" in sent[-1]
+        assert "📷 Photos Today" in sent[-1]
+        assert "Everything looks healthy." in sent[-1]
+        assert "• Status:" not in sent[-1]
         again = process_due_reports(db, settings, now=hourly_at)
         assert again == []
     daily_at = datetime(2026, 9, 8, 1, 5, tzinfo=UTC)
@@ -211,7 +214,7 @@ def test_manual_test_report_jwt_rbac_disabled_success_retry_and_history(
         now = datetime(2026, 9, 8, 9, 42, 18, tzinfo=UTC)
         body = TelegramReportService().build_test_report(db, now=now)
     assert "HomeLab Test Report" in body
-    assert "Telegram connection successful" in body
+    assert "Telegram connected" in body
     assert "8 September 2026" in body
     assert "16:42:18" in body
     assert "Settings → Send Test Report" in body
