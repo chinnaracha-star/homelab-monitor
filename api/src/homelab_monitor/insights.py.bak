@@ -107,7 +107,7 @@ class InsightService:
                 else "Storage capacity should be reviewed."
             )
             return _item(summary, "warning", "Consider adding larger disks.")
-        if storage.average_daily_growth > 0:
+        if storage.average_daily_growth > 0 and storage.trend == "rising":
             return _item("Storage is growing rapidly.", "warning")
         return _item("Storage usage is stable.", "info")
 
