@@ -15,7 +15,7 @@ from homelab_monitor.notifications.retry import retry_transient
 from homelab_monitor.photo_baseline import baseline_file_path, load_baseline, save_baseline
 from homelab_monitor.photo_events import PhotoEventRepository, resolved_watch_folders
 from homelab_monitor.photo_folders import inspect_watch_folder
-from homelab_monitor.photo_telegram import format_new_photo_message, format_new_photos_batch_message
+from homelab_monitor.photo_telegram import format_new_photo_message
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram import TelegramNotificationError, TelegramNotifier
@@ -25,7 +25,7 @@ logger = logging.getLogger("homelab_monitor.photo_watcher")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".gif", ".bmp", ".webp"}
 IGNORE_SUFFIXES = {".tmp", ".part"}
 ALLOWED_INTERVALS = {5, 10, 30, 60}
-PHOTO_BATCH_WINDOW_SECONDS = 10
+PHOTO_BATCH_WINDOW_SECONDS = 0
 STABLE_SIZE_SETTLE_SECONDS = 0.2
 ALLOWED_MAX_EVENTS = {100, 500, 1000}
 ALLOWED_AUTO_DELETE_DAYS = {0, 30, 90}
@@ -76,11 +76,42 @@ def _entry_is_file(path: Path) -> bool | None:
         return None
 
 
-def iter_image_files(watch_folder: Path, recursive: bool) -> list[Path]:
+def _directory_mtime(path: Path) -> float | None:
+    try:
+        return os.stat(path, follow_symlinks=False).st_mtime
+    except OSError:
+        return None
+
+
+def iter_image_files(
+    watch_folder: Path,
+    recursive: bool,
+    *,
+    dir_mtimes: dict[str, float] | None = None,
+    skip_unchanged: bool = False,
+) -> list[Path]:
     if not watch_folder.is_dir():
         logger.info("scan_ended reason=not_a_directory folder=%s", watch_folder)
         return []
     files: list[Path] = []
+    cache = dir_mtimes if dir_mtimes is not None else {}
+
+    def consider_directory(current: Path, names: list[str]) -> None:
+        key = os.path.normpath(str(current))
+        mtime = _directory_mtime(current)
+        if skip_unchanged and mtime is not None and cache.get(key) == mtime:
+            return
+        for name in names:
+            if name.startswith("."):
+                continue
+            try:
+                candidate = current / name
+                if _include_candidate(candidate, watch_folder):
+                    files.append(candidate)
+            except Exception:
+                logger.exception("SKIP: candidate_failed file=%s", name)
+        if mtime is not None:
+            cache[key] = mtime
 
     def on_walk_error(error: OSError) -> None:
         logger.warning(
@@ -95,27 +126,15 @@ def iter_image_files(watch_folder: Path, recursive: bool) -> list[Path]:
                 watch_folder, followlinks=False, onerror=on_walk_error
             ):
                 dirnames[:] = [name for name in dirnames if not name.startswith(".")]
-                current = Path(dirpath)
-                for name in filenames:
-                    if name.startswith("."):
-                        continue
-                    try:
-                        candidate = current / name
-                        if _include_candidate(candidate, watch_folder):
-                            files.append(candidate)
-                    except Exception:
-                        logger.exception("SKIP: candidate_failed file=%s", name)
+                consider_directory(Path(dirpath), filenames)
         else:
+            names: list[str] = []
             with os.scandir(watch_folder) as entries:
                 for entry in entries:
                     if entry.name.startswith("."):
                         continue
-                    try:
-                        candidate = Path(entry.path)
-                        if _include_candidate(candidate, watch_folder):
-                            files.append(candidate)
-                    except Exception:
-                        logger.exception("SKIP: candidate_failed file=%s", entry.name)
+                    names.append(entry.name)
+            consider_directory(watch_folder, names)
     except OSError as exc:
         logger.info(
             "scan_ended reason=walk_failed folder=%s error=%s",
@@ -201,6 +220,7 @@ class PhotoWatcherService:
         self.settle_seconds = settle_seconds
         self._pending: list[_PendingPhoto] = []
         self._pending_since: datetime | None = None
+        self._dir_mtimes: dict[str, float] = {}
         self.indexed_files = 0
         self.last_folders: list[str] = []
         self.events_today = 0
@@ -221,6 +241,7 @@ class PhotoWatcherService:
     def reset_baseline(self) -> None:
         self._primed = set()
         self._seen = {}
+        self._dir_mtimes = {}
         self._dirty = True
         self._persist()
 
@@ -301,7 +322,12 @@ class PhotoWatcherService:
                 folders_scanned += 1
                 logger.info("scanning_files folder=%s recursive=%s", watch_root, config.recursive)
                 walk_started = time.perf_counter()
-                discovered = iter_image_files(Path(watch_root), config.recursive)
+                discovered = iter_image_files(
+                    Path(watch_root),
+                    config.recursive,
+                    dir_mtimes=self._dir_mtimes,
+                    skip_unchanged=watch_root in self._primed,
+                )
                 self._cycle_scan_ms += (time.perf_counter() - walk_started) * 1000
                 scanned += len(discovered)
                 added, folder_skipped, folder_telegram = self._scan_folder(
@@ -314,6 +340,9 @@ class PhotoWatcherService:
                 created += added
                 skipped += folder_skipped
                 telegram_ok += folder_telegram
+                telegram_ok += self.flush_photo_notifications(
+                    db, repo, send_text=send_text, now=datetime.now(UTC)
+                )
                 logger.info("scan_complete folder=%s files=%s", watch_root, len(discovered))
             except Exception:
                 logger.exception("scan_ended reason=folder_exception folder=%s", watch_root)
@@ -330,7 +359,7 @@ class PhotoWatcherService:
             hub.notify_ingest(reason="photo_monitor", agent_id=None, alerts_changed=False)
         else:
             db.commit()
-        telegram_ok = self.flush_photo_notifications(
+        telegram_ok += self.flush_photo_notifications(
             db, repo, send_text=send_text, now=datetime.now(UTC)
         )
         db.commit()
@@ -547,37 +576,35 @@ class PhotoWatcherService:
             return 0
         notifier = self._resolve_notifier()
         sender = send_text or (notifier.send_text if notifier is not None else None)
-        if sender is None:
+        if sender is None and notifier is None:
             self.telegram_failed_total += 1
             return 0
-        grouped: dict[str, list[_PendingPhoto]] = {}
-        for item in self._pending:
-            grouped.setdefault(item.folder, []).append(item)
         sent_ids: list[int] = []
         messages = 0
-        for folder, items in grouped.items():
+        for item in list(self._pending):
             send_started = time.perf_counter()
             try:
-                logger.info("telegram_send_begin folder=%s count=%s", folder, len(items))
-                self._deliver_photo_group(items, folder, sender=sender, notifier=notifier)
+                logger.info("telegram_send_begin folder=%s file=%s", item.folder, item.filename)
+                self._deliver_one_photo(item, sender=sender, notifier=notifier)
             except TelegramNotificationError:
                 self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
                 logger.exception("photo_telegram_failed")
                 self.telegram_failed_total += 1
-                return messages
+                continue
             except Exception:
                 self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
                 logger.exception("photo_telegram_failed")
                 self.telegram_failed_total += 1
-                return messages
+                continue
             self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
-            logger.info("telegram_send_complete folder=%s count=%s", folder, len(items))
-            logger.info("telegram_sent folder=%s file=%s", folder, items[0].filename)
-            sent_ids.extend(item.event_id for item in items)
+            logger.info("telegram_send_complete folder=%s file=%s", item.folder, item.filename)
+            logger.info("telegram_sent folder=%s file=%s", item.folder, item.filename)
+            sent_ids.append(item.event_id)
             messages += 1
             self.telegram_ok_total += 1
             self.last_successful_telegram = datetime.now(UTC)
-        repo.mark_telegram_sent(sent_ids)
+        if sent_ids:
+            repo.mark_telegram_sent(sent_ids)
         sent = set(sent_ids)
         self._pending = [item for item in self._pending if item.event_id not in sent]
         if not self._pending:
@@ -606,34 +633,28 @@ class PhotoWatcherService:
         if restored and self._pending_since is None:
             self._pending_since = datetime(1970, 1, 1, tzinfo=UTC)
 
-    def _deliver_photo_group(
+    def _deliver_one_photo(
         self,
-        items: list[_PendingPhoto],
-        folder: str,
+        item: _PendingPhoto,
         *,
-        sender: Callable[[str], dict],
+        sender: Callable[[str], dict] | None,
         notifier: TelegramNotifier | None,
     ) -> None:
-        if len(items) == 1:
-            item = items[0]
-            message = format_new_photo_message(
-                filename=item.filename,
-                folder=folder,
-                size_bytes=item.size_bytes,
-                created_at=item.created_at,
-            )
-            image = Path(item.image_path) if item.image_path else Path(item.folder) / item.filename
-            if notifier is not None:
-                try:
-                    retry_transient(lambda: notifier.send_photo(image, caption=message))
-                    return
-                except Exception:
-                    logger.warning("photo_send_photo_fallback file=%s", item.filename)
-        else:
-            message = format_new_photos_batch_message(
-                folder=folder,
-                filenames=[item.filename for item in items],
-            )
+        message = format_new_photo_message(
+            filename=item.filename,
+            folder=item.folder,
+            size_bytes=item.size_bytes,
+            created_at=item.created_at,
+        )
+        image = Path(item.image_path) if item.image_path else Path(item.folder) / item.filename
+        if notifier is not None:
+            try:
+                retry_transient(lambda: notifier.send_photo(image, caption=message))
+                return
+            except Exception:
+                logger.warning("photo_send_photo_fallback file=%s", item.filename)
+        if sender is None:
+            raise TelegramNotificationError("Telegram sender unavailable")
         retry_transient(lambda send=sender, text=message: send(text))
 
     def _resolve_notifier(self) -> TelegramNotifier | None:

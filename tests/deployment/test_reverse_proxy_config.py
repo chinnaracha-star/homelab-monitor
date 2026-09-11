@@ -46,14 +46,30 @@ def test_compose_keeps_dashboard_loopback_only_and_api_internal() -> None:
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     production = (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8")
 
-    assert '"127.0.0.1:${HOMELAB_DASHBOARD_PORT:-8080}:8080"' in compose
-    assert '"127.0.0.1:80:8080"' in production
+    assert '"127.0.0.1:${HOMELAB_DASHBOARD_PORT:-18081}:8080"' in compose
+    assert '"127.0.0.1:${HOMELAB_DASHBOARD_PORT:-18081}:8080"' in production
+    assert "HOMELAB_TELEGRAM_ENABLED: ${HOMELAB_TELEGRAM_ENABLED:-true}" in compose
+    assert "HOMELAB_DASHBOARD_HEALTH_URL: ${HOMELAB_DASHBOARD_HEALTH_URL:-}" in compose
+    assert "http://dashboard:8080" not in compose
     assert "networks:\n  backend:\n  egress:\n" in compose
     assert "internal: true" not in compose
     assert "api:\n" in compose
     assert "      - backend\n      - egress" in compose
     assert "dashboard:\n" in compose
     assert compose.count("      - backend") == 2
+    assert 'max-size: "10m"' in compose
+    assert "homelab-data:" in compose
+    assert "homelab-logs:" in compose
+    assert "/mnt/picture-all:/mnt/picture-all:ro" in compose
+    assert "/mnt/pictures-solarboy:/mnt/pictures-solarboy:ro" in compose
+    assert "mem_limit: 768m" in production
+    assert "mem_limit: 128m" in production
+
+    tailscale = (ROOT / "docker-compose.tailscale.yml").read_text(encoding="utf-8")
+    assert "tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro" in tailscale
+    assert '"127.0.0.1:18081:8080"' in tailscale
+    assert 'expose:\n      - "8000"' in compose
+    assert "8000:8000" not in compose
 
 
 def test_full_nginx_configs_preserve_tailnet_https_scheme() -> None:

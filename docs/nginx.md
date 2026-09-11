@@ -12,6 +12,7 @@ Nginx serves the React dashboard and reverse-proxies the FastAPI process.
 | `/api/v1/ws/` | FastAPI WebSocket endpoint with explicit upgrade handling |
 | `/ws/` | FastAPI `/api/v1/ws/` |
 | `/health` | FastAPI `/health` |
+| `/openapi.json`, `/docs`, `/redoc` | FastAPI OpenAPI (operator LAN / Tailscale only) |
 
 The dashboard WebSocket client uses `/api/v1/ws/dashboard`. That path and the
 backward-compatible `/ws/` alias have dedicated upgrade handling, bounded idle
@@ -31,7 +32,9 @@ REST requests do not carry WebSocket upgrade headers.
 - `gzip` is on for text, JavaScript, JSON, CSS, SVG, and web manifests
 - `/assets/` is cached for 31536000 seconds
 - `index.html` and SPA routes use `no-store`
-- PWA manifests and common service-worker entry filenames use `no-store`
+- PWA manifests, `sw.js`, `service-worker.js`, `workbox-*.js`, and
+  `registerSW.js` use `no-cache, no-store, must-revalidate`
+- `offline.html` uses `no-cache`
 
 ## Response security
 
@@ -50,6 +53,6 @@ sudo nginx -c /etc/homelab-monitor/nginx.conf -t
 sudo systemctl enable --now homelab-monitor-dashboard.service
 ```
 
-The production Compose overlay binds nginx to `127.0.0.1:80`. Keep the existing
-Tailscale HTTPS endpoint forwarding to that loopback listener; do not publish
-the listener directly to the LAN or internet.
+The production Compose overlay binds nginx to `127.0.0.1:18081`. Keep Tailscale
+HTTPS forwarding to that loopback listener; do not publish the listener
+directly to the LAN or internet.

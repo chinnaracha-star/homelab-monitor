@@ -22,24 +22,22 @@ docker compose up -d --build
 `--env-file .env.production.example` only for a dry run. Production must use a
 private `.env` with unique secrets.
 
-The dashboard listens on `http://127.0.0.1:8080` by default (`HOMELAB_DASHBOARD_PORT`
-overrides the host port). The API is not published on the host; nginx proxies
-`/api`, `/ws`, and `/health`.
+The dashboard is published on `http://127.0.0.1:18081` by default
+(`HOMELAB_DASHBOARD_PORT`). The API is not published on the host; nginx proxies
+`/api`, `/ws`, and `/health`. Operator checklist:
+[production-checklist.md](production-checklist.md).
 
-Production bind to loopback HTTP:
+Production bind to loopback HTTP (same host port **18081**, plus log rotation
+and a read-only API rootfs):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-That publishes `127.0.0.1:80`. Put TLS on a LAN reverse proxy or tunnel in
-front of it.
-
 For phones and laptops outside the home, use Tailscale Serve against loopback
 instead of a public proxy. See [remote-access.md](remote-access.md). Example:
 
 ```bash
-export HOMELAB_DASHBOARD_PORT=18081
 docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d --build
 sudo tailscale serve --bg 18081
 ```

@@ -419,12 +419,11 @@ def test_telegram_inline_keyboard_uses_configured_urls(monkeypatch) -> None:
         lambda self: RemoteAccessResponse(),
     )
     empty = telegram_reply_markup(get_settings().model_copy(update={"dashboard_health_url": ""}))
-    assert empty is not None
-    assert empty["inline_keyboard"][0][0]["text"] == "🏠 Dashboard"
+    assert empty is None
     markup = telegram_reply_markup(
         get_settings().model_copy(
             update={
-                "dashboard_health_url": "http://127.0.0.1:18081/",
+                "dashboard_health_url": "http://dashboard:8080/",
                 "immich_url": "https://immich.example/",
                 "qnap_url": "",
             }
@@ -432,4 +431,4 @@ def test_telegram_inline_keyboard_uses_configured_urls(monkeypatch) -> None:
     )
     assert markup is not None
     labels = [row[0]["text"] for row in markup["inline_keyboard"]]
-    assert labels == ["🏠 Dashboard", "📷 Immich"]
+    assert labels == ["📷 Immich"]

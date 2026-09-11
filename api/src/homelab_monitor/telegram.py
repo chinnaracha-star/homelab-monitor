@@ -11,6 +11,7 @@ from homelab_monitor import __version__
 from homelab_monitor.alert_engine import AlertEvent
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram_links import (
+    is_telegram_button_url,
     resolve_dashboard_url,
     resolve_immich_url,
     resolve_qnap_url,
@@ -190,7 +191,7 @@ def telegram_reply_markup(settings: Settings | None = None) -> dict | None:
         ("💾 QNAP", resolve_qnap_url(settings)),
     )
     for label, url in mapping:
-        if url:
+        if is_telegram_button_url(url):
             buttons.append({"text": label, "url": url})
     if not buttons:
         return None

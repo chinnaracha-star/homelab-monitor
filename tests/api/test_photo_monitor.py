@@ -550,10 +550,10 @@ def test_scan_continues_when_one_folder_raises(tmp_path: Path, monkeypatch) -> N
 
     real_iter = watcher.iter_image_files
 
-    def flaky_iter(folder, recursive):
+    def flaky_iter(folder, recursive, **_kwargs):
         if folder == Path(bad):
             raise RuntimeError("cifs blew up")
-        return real_iter(folder, recursive)
+        return real_iter(folder, recursive, **_kwargs)
 
     monkeypatch.setattr(watcher, "iter_image_files", flaky_iter)
     with Session(get_engine()) as db:
@@ -606,7 +606,7 @@ def test_persisted_baseline_survives_restart_and_notifies_offline_photos(
         assert restarted.scan_once(db, send_text=sent.append) == 0
 
 
-def test_photo_batch_window_sends_one_message(tmp_path: Path) -> None:
+def test_each_new_photo_sends_its_own_telegram(tmp_path: Path) -> None:
     from homelab_monitor.photo_telegram import format_new_photos_batch_message
 
     message = format_new_photos_batch_message(
@@ -614,15 +614,12 @@ def test_photo_batch_window_sends_one_message(tmp_path: Path) -> None:
         filenames=["IMG001.jpg", "IMG002.jpg", "IMG003.jpg", "IMG004.jpg"],
     )
     assert "📷 4 New Photos" in message
-    assert "Pictures-SS22" in message
-    assert "IMG001.jpg" in message
-    assert "+3 more" in message
 
     watch = tmp_path / "pictures-ss22"
     watch.mkdir()
     (watch / "seed.jpg").write_bytes(b"old")
     settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(watch))
-    service = PhotoWatcherService(settings, batch_window_seconds=10, settle_seconds=0)
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
     sent: list[str] = []
     with Session(get_engine()) as db:
         row = PhotoEventRepository(db).ensure_settings(settings)
@@ -635,21 +632,12 @@ def test_photo_batch_window_sends_one_message(tmp_path: Path) -> None:
         created = service.scan_once(db, send_text=sent.append)
         latest = PhotoEventRepository(db).latest()
         assert created == 2
-        assert sent == []
+        assert len(sent) == 2
+        assert all("📷 New Photo Detected" in item for item in sent)
+        assert "a.jpg" in sent[0]
+        assert "b.jpg" in sent[1]
         assert latest is not None
-        assert latest.telegram_sent is False
-        service._pending_since = datetime.now(UTC) - timedelta(seconds=11)
-        flushed = service.flush_photo_notifications(
-            db,
-            PhotoEventRepository(db),
-            send_text=sent.append,
-            now=datetime.now(UTC),
-        )
-        db.commit()
-        assert flushed == 1
-        assert len(sent) == 1
-        assert "2 New Photos" in sent[0]
-        assert PhotoEventRepository(db).latest().telegram_sent is True
+        assert latest.telegram_sent is True
 
 
 def test_single_photo_falls_back_to_text_when_send_photo_fails(tmp_path: Path, monkeypatch) -> None:

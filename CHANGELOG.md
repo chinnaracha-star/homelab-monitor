@@ -48,7 +48,7 @@ First release candidate. Package, API, and dashboard version strings report
 
 See [docs/known-limitations.md](docs/known-limitations.md). Summary: in-memory
 notification queue and delivery history; Discord/Slack/email not on the live
-alert path; SQLite without an official backup runbook; infrastructure mock
-defaults to on.
+alert path; infrastructure mock defaults to on; SQLite backup is host scripts
+not Compose snapshots.
 
 [1.0.0-rc1]: docs/release-notes-v1.0.0-rc1.md

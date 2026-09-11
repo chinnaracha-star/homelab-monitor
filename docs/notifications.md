@@ -18,6 +18,14 @@ Statuses recorded on successful or dropped attempts: `sent`, `failed`.
 Queue and history are process-local. An API restart drops pending jobs and
 clears Notification Center delivery history and metrics.
 
+**Durability is postponed to v1.1.** There is no SQLite or Redis outbox in this
+RC. That is an accepted operational limitation, not an unfinished sprint task.
+Risks: lost activate/recover Telegram messages during `docker compose restart
+api`, lost delivery metrics, and no replay of the in-memory FIFO after a crash.
+Mitigation: keep the API process up (`restart: unless-stopped`), batch window
+is 10s, and scheduled reports persist last-sent in `notification_settings`
+(those are not the in-memory alert queue).
+
 ## APIs
 
 | Method | Path | Roles |

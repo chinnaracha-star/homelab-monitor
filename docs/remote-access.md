@@ -92,7 +92,6 @@ Bind Serve to the loopback dashboard port. Example with Compose overlay
 `docker-compose.tailscale.yml` (host port `18081`):
 
 ```bash
-export HOMELAB_DASHBOARD_PORT=18081
 docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d --build
 sudo tailscale serve --bg 18081
 ```

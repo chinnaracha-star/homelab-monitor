@@ -8,7 +8,9 @@ dashboard.
 
 > **v1.0.0-rc1** — first release candidate. Set bootstrap passwords before
 > exposing the dashboard. See [release notes](docs/release-notes-v1.0.0-rc1.md),
-> [changelog](CHANGELOG.md), and [known limitations](docs/known-limitations.md).
+> [changelog](CHANGELOG.md), [known limitations](docs/known-limitations.md),
+> [operator runbook](docs/operator-runbook.md), and
+> [production readiness](docs/production-readiness.md).
 
 ## Architecture
 
@@ -55,12 +57,13 @@ Log in at `/login` with the bootstrap admin user. JWT, roles, and user admin:
 cp .env.production.example .env
 # Replace secrets and HOMELAB_BOOTSTRAP_ADMIN_PASSWORD
 docker compose up -d --build
-curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:18081/health
 ```
 
-Only the dashboard is published (`127.0.0.1:8080` by default). Nginx proxies
-`/api`, `/ws`, and `/health`. Production overlay and Tailscale Serve:
+Only the dashboard is published (`127.0.0.1:18081` by default). Nginx proxies
+`/api`, `/ws`, and `/health`. Production overlay, checklist, and Tailscale Serve:
 [docker](docs/docker.md), [deployment](docs/deployment.md),
+[production checklist](docs/production-checklist.md),
 [nginx](docs/nginx.md), [remote access](docs/remote-access.md), [PWA](docs/pwa.md).
 
 ## Environment variables
@@ -77,7 +80,8 @@ Never commit a filled-in `.env`.
 | `HOMELAB_BOOTSTRAP_OPERATOR_PASSWORD` | Optional; creates `operator` when set |
 | `HOMELAB_BOOTSTRAP_VIEWER_PASSWORD` | Optional; creates `viewer` when set |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Telegram Bot API |
-| `HOMELAB_TELEGRAM_ENABLED` | Delivery on/off (`false` in examples) |
+| `HOMELAB_TELEGRAM_ENABLED` | Delivery on/off (default `true`; needs token and chat ID) |
+| `HOMELAB_DASHBOARD_PORT` | Host loopback port for the dashboard (`18081`) |
 | `HOMELAB_NOTIFICATION_WORKER_ENABLED` | Background Telegram worker |
 | `HOMELAB_INFRASTRUCTURE_MOCK` | Synthetic NAS/photo snapshots when `true` |
 | `HOMELAB_QNAP_*` / `HOMELAB_IMMICH_*` / `HOMELAB_QUMAGIE_*` | Live connectors |
@@ -145,7 +149,7 @@ Alerts use [alert rules](docs/alert-rules.md). History charts:
 | No Telegram messages | Token, chat ID, `HOMELAB_TELEGRAM_ENABLED=true`, worker enabled; history is empty after restart |
 | Photo/QNAP data looks fake | `HOMELAB_INFRASTRUCTURE_MOCK=true` (default) |
 | Dashboard empty after refresh | Confirm nginx `/api` proxy and `VITE_API_BASE_URL=/api/v1` in the image |
-| Port 8080 busy | `HOMELAB_DASHBOARD_PORT=18081` |
+| Port 18081 busy | Set `HOMELAB_DASHBOARD_PORT` to a free loopback port |
 | Health 503 | SQLite volume permissions / migrations (`alembic upgrade head`) |
 
 Tests:

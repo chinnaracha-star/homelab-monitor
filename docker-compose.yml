@@ -30,12 +30,12 @@ services:
       HOMELAB_AGENT_OFFLINE_AFTER_SECONDS: ${HOMELAB_AGENT_OFFLINE_AFTER_SECONDS:-180}
       HOMELAB_ALERT_EVALUATION_INTERVAL_SECONDS: ${HOMELAB_ALERT_EVALUATION_INTERVAL_SECONDS:-30}
       HOMELAB_FORWARDED_ALLOW_IPS: ${HOMELAB_FORWARDED_ALLOW_IPS:-*}
-      HOMELAB_DASHBOARD_HEALTH_URL: ${HOMELAB_DASHBOARD_HEALTH_URL:-http://dashboard:8080/}
+      HOMELAB_DASHBOARD_HEALTH_URL: ${HOMELAB_DASHBOARD_HEALTH_URL:-}
       TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-      TELEGRAM_REQUEST_TIMEOUT: ${TELEGRAM_REQUEST_TIMEOUT:-10}
-      HOMELAB_TELEGRAM_ENABLED: ${HOMELAB_TELEGRAM_ENABLED:-false}
+      TELEGRAM_REQUEST_TIMEOUT: ${TELEGRAM_REQUEST_TIMEOUT:-30}
+      HOMELAB_TELEGRAM_ENABLED: ${HOMELAB_TELEGRAM_ENABLED:-true}
       HOMELAB_NOTIFICATION_WORKER_ENABLED: ${HOMELAB_NOTIFICATION_WORKER_ENABLED:-true}
       HOMELAB_INFRASTRUCTURE_MOCK: ${HOMELAB_INFRASTRUCTURE_MOCK:-true}
       HOMELAB_INFRASTRUCTURE_REFRESH_SECONDS: ${HOMELAB_INFRASTRUCTURE_REFRESH_SECONDS:-30}
@@ -81,6 +81,11 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - backend
       - egress
@@ -94,7 +99,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${HOMELAB_DASHBOARD_PORT:-8080}:8080"
+      - "127.0.0.1:${HOMELAB_DASHBOARD_PORT:-18081}:8080"
     read_only: true
     tmpfs:
       - /tmp:mode=1777
@@ -112,6 +117,11 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - backend
 

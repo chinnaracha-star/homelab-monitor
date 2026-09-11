@@ -18,8 +18,9 @@ connector layer and snapshot cache.
 
 ## Connectors
 
-Mock mode remains the default (`HOMELAB_INFRASTRUCTURE_MOCK=true`). Live mode
-issues **GET** requests only.
+**Mock ON** (`HOMELAB_INFRASTRUCTURE_MOCK=true`, default): synthetic snapshots.
+**Mock OFF**: live mode issues **GET** requests only after URLs and keys are set.
+See [production-checklist.md](production-checklist.md).
 
 ### Immich
 

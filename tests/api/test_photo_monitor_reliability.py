@@ -114,7 +114,7 @@ def test_windows_explorer_copy_into_every_watch_folder(tmp_path: Path) -> None:
         _write_image(folder / "from-pc.heic")
     created = _scan(service, sent.append)
     assert created == 18
-    assert len(sent) == 6
+    assert len(sent) == 18
     assert _event_count() == 18
     assert _scan(service, sent.append) == 0
     assert _event_count() == 18
@@ -138,7 +138,7 @@ def test_smb_tmp_and_part_rename_detected_once(tmp_path: Path) -> None:
     part_file.rename(watch / "DSC_0002.jpg")
     created = _scan(service, sent.append)
     assert created == 2
-    assert len(sent) == 1
+    assert len(sent) == 2
     assert _scan(service, sent.append) == 0
     assert _event_count() == 2
 
@@ -164,7 +164,7 @@ def test_multiple_files_none_lost_or_duplicated(tmp_path: Path, caplog) -> None:
         assert "Elapsed database time" in caplog.text
         assert "Elapsed telegram time" in caplog.text
         assert elapsed < 30
-    assert len(sent) == 3
+    assert len(sent) == 160
     assert _event_count() == 160
     assert _scan(service, sent.append) == 0
 
@@ -190,7 +190,7 @@ def test_large_images_are_detected_without_timeout(tmp_path: Path) -> None:
     created = _scan(service, sent.append)
     assert time.perf_counter() - started < 15
     assert created == 4
-    assert len(sent) == 1
+    assert len(sent) == 4
     with Session(get_engine()) as db:
         rows = PhotoEventRepository(db).list_latest(10)
         by_name = {row.filename: row for row in rows}
@@ -274,8 +274,8 @@ def test_telegram_outage_stores_event_and_recovers(tmp_path: Path) -> None:
         assert created == 1
         assert rows["online.jpg"].telegram_sent is True
         assert rows["offline.jpg"].telegram_sent is True
-    assert service.telegram_ok_total == 1
-    assert service.telegram_failed_total == 1
+    assert service.telegram_ok_total == 2
+    assert service.telegram_failed_total >= 1
     service.log_health()
 
 
@@ -298,7 +298,7 @@ def test_one_thousand_mixed_uploads_are_complete(tmp_path: Path) -> None:
         expected += 1
     created = _scan(service, sent.append)
     assert created == expected
-    assert len(sent) == 1
+    assert len(sent) == expected
     assert _event_count() == expected
     assert _scan(service, sent.append) == 0
     assert _event_count() == expected

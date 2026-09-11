@@ -34,9 +34,21 @@ if [[ -z "$LOG_DEST" ]]; then
   fi
 fi
 
+if [[ -f "$SOURCE/SHA256SUMS" ]] && command -v sha256sum >/dev/null 2>&1; then
+  (cd "$SOURCE" && sha256sum -c SHA256SUMS)
+fi
+
 if [[ -f "$SOURCE/sqlite/homelab-monitor.db" ]]; then
   mkdir -p "$(dirname "$DB_DEST")"
   cp -- "$SOURCE/sqlite/homelab-monitor.db" "$DB_DEST"
+  rm -f -- "$DB_DEST-wal" "$DB_DEST-shm"
+  if command -v sqlite3 >/dev/null 2>&1; then
+    check="$(sqlite3 "$DB_DEST" "PRAGMA integrity_check;")"
+    if [[ "$check" != "ok" ]]; then
+      echo "error: restored SQLite integrity_check failed: $check" >&2
+      exit 1
+    fi
+  fi
   echo "restored database to $DB_DEST"
 else
   echo "warning: backup has no SQLite database" >&2
@@ -59,4 +71,4 @@ elif [[ -f "$SOURCE/config/config.tar.gz" ]]; then
   echo "set HOMELAB_RESTORE_CONFIG_DIR to extract it automatically"
 fi
 
-echo "stop the API before replacing a live database, then start it and run alembic upgrade head"
+echo "stop the API before replacing a live database, then start it so Alembic can apply newer revisions"

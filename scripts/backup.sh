@@ -26,12 +26,13 @@ if [[ -z "$LOG_DIR" ]]; then
   fi
 fi
 
+# Do not archive a live .env (secrets). Pack example files and deploy units only.
 if [[ -z "$CONFIG_PATHS" ]]; then
   CONFIG_PATHS=""
   for candidate in \
     /etc/homelab-monitor \
-    "$ROOT_DIR/.env" \
     "$ROOT_DIR/.env.production.example" \
+    "$ROOT_DIR/.env.example" \
     "$ROOT_DIR/deploy/systemd" \
     "$ROOT_DIR/deploy/nginx"
   do
@@ -51,6 +52,13 @@ if [[ -n "$DB_PATH" && -f "$DB_PATH" ]]; then
     cp -- "$DB_PATH" "$DEST/sqlite/homelab-monitor.db"
     [[ -f "$DB_PATH-wal" ]] && cp -- "$DB_PATH-wal" "$DEST/sqlite/homelab-monitor.db-wal"
     [[ -f "$DB_PATH-shm" ]] && cp -- "$DB_PATH-shm" "$DEST/sqlite/homelab-monitor.db-shm"
+  fi
+  if command -v sqlite3 >/dev/null 2>&1; then
+    check="$(sqlite3 "$DEST/sqlite/homelab-monitor.db" "PRAGMA integrity_check;")"
+    if [[ "$check" != "ok" ]]; then
+      echo "error: SQLite integrity_check failed: $check" >&2
+      exit 1
+    fi
   fi
 else
   echo "warning: SQLite database not found; skipping database backup" >&2
@@ -73,5 +81,16 @@ else
   echo "warning: no configuration paths found; skipping config backup" >&2
 fi
 
-printf '%s\n' "$STAMP" > "$DEST/MANIFEST"
+{
+  echo "stamp=$STAMP"
+  echo "db_source=${DB_PATH:-}"
+} > "$DEST/MANIFEST"
+
+if command -v sha256sum >/dev/null 2>&1; then
+  (
+    cd "$DEST"
+    find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+  )
+fi
+
 echo "$DEST"

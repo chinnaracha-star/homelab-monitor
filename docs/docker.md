@@ -37,12 +37,13 @@ the API network.
 cp .env.production.example .env
 # set HOMELAB_REGISTRATION_KEY, HOMELAB_JWT_SECRET, and HOMELAB_BOOTSTRAP_ADMIN_PASSWORD
 docker compose up -d --build
-curl -fsS http://127.0.0.1:8080/health
-curl -fsS http://127.0.0.1:8080/
-
-If host port 8080 is already in use, set `HOMELAB_DASHBOARD_PORT` (for example
-`18081`) when running Compose.
+curl -fsS http://127.0.0.1:18081/health
+curl -fsS http://127.0.0.1:18081/
 ```
+
+Host port defaults to `18081` (`HOMELAB_DASHBOARD_PORT`). Nginx inside the
+dashboard container still listens on `8080`.
+
 
 Stop:
 
@@ -60,11 +61,19 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 Differences:
 
-- dashboard published as `127.0.0.1:80`
+- dashboard published as `127.0.0.1:18081` (same as the base file; overlay does
+  not move the service to host port 80)
 - API container root filesystem is read-only (data and log volumes stay writable)
-- json-file log rotation
+- json-file log rotation (also in the base file)
+- API `mem_limit: 768m` / `cpus: "1.0"`; dashboard `128m` / `0.50`
 - `cap_drop: ALL` and `no-new-privileges` on both services
 - explicit internal nginx-to-API network; API-only egress network
+
+JSON log rotation (`10m` × 5 files) is on both services in the base file.
+Healthchecks: API `GET http://127.0.0.1:8000/health` (40s start period),
+dashboard `GET /` on container port 8080. Restart policy is `unless-stopped`.
+Named volumes: `homelab-data` (SQLite), `homelab-logs`. Photo folders are
+bind-mounted read-only. The API is `expose: 8000` only (not published).
 
 ## Security defaults
 

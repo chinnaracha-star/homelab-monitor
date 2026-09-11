@@ -9,9 +9,18 @@ backup systems.
 Dashboard → InfrastructureService → Connectors → Snapshot → REST → Realtime
 ```
 
-Mock mode is on by default (`HOMELAB_INFRASTRUCTURE_MOCK=true`). No NAS or
-Docker socket is required. One connector failure is isolated; the remaining
-snapshots still return, and the last successful snapshot is cached.
+**Mock ON** (`HOMELAB_INFRASTRUCTURE_MOCK=true`, default): synthetic Photo
+Services, QNAP, Immich, and backup snapshots. No NAS required. Use this for
+first boot.
+
+**Mock OFF** (`HOMELAB_INFRASTRUCTURE_MOCK=false`): live GET-only connectors.
+Set Immich, QNAP, and backup URLs before turning mock off or those tiles error.
+
+Photo Monitor folder watching is independent of mock mode. Startup checklist:
+[production-checklist.md](production-checklist.md).
+
+One connector failure is isolated; the remaining snapshots still return, and
+the last successful snapshot is cached.
 
 ## APIs
 

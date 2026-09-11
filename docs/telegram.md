@@ -13,7 +13,12 @@ TELEGRAM_API_BASE_URL=https://api.telegram.org
 TELEGRAM_BOT_TOKEN=replace-with-the-bot-token
 TELEGRAM_CHAT_ID=replace-with-the-chat-id
 TELEGRAM_REQUEST_TIMEOUT=30
+HOMELAB_TELEGRAM_ENABLED=true
 ```
+
+`HOMELAB_TELEGRAM_ENABLED` defaults to **true** in Settings, Compose, and env
+examples so production does not silently disable Telegram. Delivery still no-ops
+when the bot token or chat ID is empty.
 
 The Bot API base URL is configurable and is not embedded in the notifier.
 `TELEGRAM_BOT_TOKEN` is loaded as a secret value. HTTP client logging is held at

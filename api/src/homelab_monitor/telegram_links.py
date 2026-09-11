@@ -30,6 +30,9 @@ def _origin_from_request(request: Request) -> str | None:
     return f"{proto.strip()}://{host}".rstrip("/")
 
 
+_BLOCKED_BUTTON_HOSTS = {"dashboard", "api", "localhost", "127.0.0.1", "::1"}
+
+
 def _clean_url(value: str | None) -> str | None:
     text = (value or "").strip().rstrip("/")
     if not text:
@@ -38,6 +41,19 @@ def _clean_url(value: str | None) -> str | None:
     if not parsed.netloc:
         return None
     return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/") or None
+
+
+def is_telegram_button_url(value: str | None) -> bool:
+    """Telegram inline buttons reject Docker DNS, localhost, and raw IPs."""
+    parsed = urlparse(value or "")
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host or host in _BLOCKED_BUTTON_HOSTS:
+        return False
+    if all(part.isdigit() for part in host.split(".")):
+        return False
+    return "." in host
 
 
 def _tailnet_url(settings: Settings) -> str | None:
@@ -54,16 +70,16 @@ def _localhost_url(settings: Settings) -> str:
 
 def resolve_dashboard_url(settings: Settings | None = None) -> str | None:
     config = settings or get_settings()
-    configured = _clean_url(config.dashboard_health_url)
-    if configured:
-        return configured
-    current = _clean_url(_request_origin.get())
-    if current:
-        return current
-    tailnet = _clean_url(_tailnet_url(config))
-    if tailnet:
-        return tailnet
-    return _clean_url(_localhost_url(config))
+    candidates = (
+        _clean_url(config.dashboard_health_url),
+        _clean_url(_request_origin.get()),
+        _clean_url(_tailnet_url(config)),
+        _clean_url(_localhost_url(config)),
+    )
+    for candidate in candidates:
+        if is_telegram_button_url(candidate):
+            return candidate
+    return None
 
 
 def resolve_immich_url(settings: Settings | None = None) -> str | None:
