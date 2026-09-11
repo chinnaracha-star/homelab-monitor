@@ -20,11 +20,17 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
         registerType: 'prompt',
         injectRegister: false,
+        manifestFilename: 'manifest.webmanifest',
         includeAssets: [
           'favicon.svg',
           'apple-touch-icon.png',
+          'offline.html',
+          'offline.css',
           'icons/icon-32.png',
           'icons/icon-192.png',
           'icons/icon-512.png',
@@ -32,48 +38,8 @@ export default defineConfig(({ mode }) => {
           'icons/icon-maskable-512.png',
         ],
         manifest: pwaManifest,
-        workbox: {
+        injectManifest: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,webp}'],
-          navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api\//, /^\/health$/, /^\/ws\//],
-          runtimeCaching: [
-            {
-              urlPattern: ({ url }) => url.pathname.includes('/auth/'),
-              handler: 'NetworkOnly',
-            },
-            {
-              urlPattern: ({ request, url }) =>
-                request.method === 'GET' && url.pathname.startsWith('/api/'),
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'homelab-api-get',
-                networkTimeoutSeconds: 4,
-                expiration: {
-                  maxEntries: 100,
-                  maxAgeSeconds: 60 * 60 * 24,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-            {
-              urlPattern: ({ request }) =>
-                request.destination === 'style' ||
-                request.destination === 'script' ||
-                request.destination === 'worker' ||
-                request.destination === 'font' ||
-                request.destination === 'image',
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'homelab-static',
-                expiration: {
-                  maxEntries: 80,
-                  maxAgeSeconds: 60 * 60 * 24 * 30,
-                },
-              },
-            },
-          ],
         },
         devOptions: {
           enabled: false,

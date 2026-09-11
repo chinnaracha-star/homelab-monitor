@@ -8,12 +8,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from homelab_monitor import __version__
 from homelab_monitor.alert_history import list_alert_history
 from homelab_monitor.alert_severity import (
     CRITICAL,
     WARNING,
     alert_payload_severity,
-    telegram_alert_line,
 )
 from homelab_monitor.analytics import AnalyticsService
 from homelab_monitor.capacity_planning import CapacityPlanningService, _bytes_label
@@ -23,8 +23,10 @@ from homelab_monitor.insights import InsightService
 from homelab_monitor.models import Notification
 from homelab_monitor.notifications.config import load_payload, save_payload
 from homelab_monitor.notifications.dispatcher import dispatch_telegram_report
-from homelab_monitor.ops_history import _status_from_payload
+from homelab_monitor.ops_history import _start_of_local_day, _status_from_payload
+from homelab_monitor.photo_events import PhotoEventRepository
 from homelab_monitor.settings import Settings
+from homelab_monitor.telegram_links import resolve_dashboard_url
 from homelab_monitor.trends import TrendService
 
 logger = logging.getLogger("homelab_monitor.telegram_reports")
@@ -64,24 +66,9 @@ MONTHS = (
     "November",
     "December",
 )
-SHORT_MONTHS = (
-    "",
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-)
-HOURLY_RULE = "━━━━━━━━━━━━━━━━━━━━"
-HOURLY_LABEL_WIDTH = 14
+HOURLY_RULE = "━━━━━━━━━━━━━━"
 TICK_SECONDS = 60
+REPORT_SPRINT = "10.2.8.3"
 HOURLY_RECOMMENDATIONS = {
     "cpu_high": "Check CPU load",
     "memory_high": "Check memory usage",
@@ -134,30 +121,10 @@ def _english_date(local: datetime) -> str:
     return f"{local.day} {MONTHS[local.month]} {local.year}"
 
 
-def _short_english_date(local: datetime) -> str:
-    return f"{local.day} {SHORT_MONTHS[local.month]} {local.year}"
-
-
-def _hourly_kv(icon: str, label: str, value: str) -> str:
-    return f"{icon} {label:<{HOURLY_LABEL_WIDTH}} {value}"
-
-
 def _temperature_label(value: float | None) -> str:
     if value is None:
         return "—"
-    return f"{_num(value)}°C"
-
-
-def _health_emoji(*, score: float | None, alert_count: int) -> str:
-    if alert_count > 0:
-        return "⚠️"
-    if score is None:
-        return "⚪"
-    if score >= 80:
-        return "💚"
-    if score >= 60:
-        return "💛"
-    return "❤️"
+    return f"{round(value)}°C"
 
 
 def _actionable_alerts(alerts: list) -> list:
@@ -167,14 +134,6 @@ def _actionable_alerts(alerts: list) -> list:
         if severity in {WARNING, CRITICAL}:
             ranked.append(item)
     return ranked
-
-
-def _hourly_alert_lines(alerts: list) -> list[str]:
-    lines: list[str] = []
-    for item in _actionable_alerts(alerts):
-        severity = alert_payload_severity(item.alert_type, item.peak_value, item.severity)
-        lines.append(f"• {telegram_alert_line(item.alert_type, severity, item.peak_value)}")
-    return lines
 
 
 def _hourly_recommendations(alerts: list, backup_status: str) -> list[str]:
@@ -190,161 +149,308 @@ def _hourly_recommendations(alerts: list, backup_status: str) -> list[str]:
     return recs
 
 
-def _format_last_backup(value: str, tz: tzinfo) -> str | None:
-    if not value:
-        return None
-    parsed = _parse_sent(value)
-    if parsed is None:
-        return value
-    local = parsed.astimezone(tz)
-    return f"{_short_english_date(local)} • {local.strftime('%H:%M')}"
-
-
 def _pct(value: float | None) -> str:
     if value is None:
         return "—"
     return f"{round(value)}%"
 
 
-def _num(value: float | None) -> str:
-    if value is None:
-        return "—"
-    return str(round(value, 2) if isinstance(value, float) else value)
+BAR_WIDTH = 10
 
 
-def _agent_line(overview) -> str:
-    agents = overview.daily
-    if agents.agents_total == 0:
-        return "Unknown"
-    if agents.agents_online == agents.agents_total:
-        return "Online"
-    if agents.agents_online == 0:
-        return "Offline"
-    return f"{agents.agents_online}/{agents.agents_total} Online"
+def _progress_bar(percent: float | None) -> str:
+    if percent is None:
+        return "░" * BAR_WIDTH
+    filled = max(0, min(BAR_WIDTH, round(float(percent) / (100 / BAR_WIDTH))))
+    return ("█" * filled) + ("░" * (BAR_WIDTH - filled))
 
 
-def _agent_badge(overview) -> str:
-    line = _agent_line(overview)
-    if line == "Offline":
-        return f"🔴 {line}"
-    if line == "Unknown":
-        return f"⚪ {line}"
-    return f"🟢 {line}"
+def _usage_status(percent: float | None) -> str:
+    if percent is None:
+        return "⚪"
+    if percent >= 90:
+        return "🔴"
+    if percent >= 80:
+        return "🟡"
+    return "🟢"
 
 
-def _agent_emoji(overview) -> str:
-    return _agent_badge(overview).split(" ", 1)[0]
+def _health_status(score: float | None) -> str:
+    if score is None:
+        return "⚪"
+    if score >= 80:
+        return "🟢"
+    if score >= 50:
+        return "🟡"
+    return "🔴"
 
 
-def _hourly_alert_section(alerts: list) -> list[str]:
-    lines = _hourly_alert_lines(alerts)
-    if not lines:
-        return ["Everything looks healthy.", "", "No action required."]
+def _metric_block(label: str, percent: float | None) -> list[str]:
+    return [
+        f"{_usage_status(percent)} {label}",
+        _progress_bar(percent),
+        _pct(percent),
+        "",
+    ]
+
+
+def _health_block(score: float | None) -> list[str]:
+    score_label = "—" if score is None else f"{round(score)} / 100"
+    return [
+        f"{_health_status(score)} Health",
+        _progress_bar(score),
+        score_label,
+        "",
+    ]
+
+
+def _section(title: str, *blocks: list[str]) -> list[str]:
+    lines = ["", HOURLY_RULE, "", title, ""]
+    for block in blocks:
+        lines.extend(block)
     return lines
 
 
-def _actionable_alert_count(alerts: list) -> int:
-    return len(_actionable_alerts(alerts))
+def _format_last_backup_time(value: str, tz: tzinfo) -> str:
+    if not value:
+        return "—"
+    parsed = _parse_sent(value)
+    if parsed is None:
+        return value
+    return parsed.astimezone(tz).strftime("%H:%M")
+
+
+def _backup_status_label(status: str) -> str:
+    normalized = (status or "Unknown").strip() or "Unknown"
+    lowered = normalized.lower()
+    if lowered == "success":
+        return "✅ Success"
+    if lowered in {"failed", "error", "critical"}:
+        return f"❌ {normalized}"
+    return normalized
+
+
+def _dashboard_url() -> str:
+    return resolve_dashboard_url() or "—"
+
+
+def _timezone_label(tz: tzinfo | None) -> str:
+    key = getattr(tz, "key", None)
+    if isinstance(key, str) and key:
+        return key
+    return "Asia/Bangkok"
+
+
+def _report_footer(local: datetime, dashboard_url: str) -> list[str]:
+    lines = [
+        "",
+        HOURLY_RULE,
+        "",
+        "Version",
+        f"v{__version__}",
+        "",
+        "Sprint",
+        REPORT_SPRINT,
+        "",
+        "Generated",
+        _english_date(local),
+        local.strftime("%H:%M:%S"),
+        "",
+        "Timezone",
+        _timezone_label(local.tzinfo),
+    ]
+    if dashboard_url and dashboard_url != "—":
+        lines.extend(["", "Dashboard", dashboard_url])
+    return lines
+
+
+def _executive_header(subtitle: str) -> list[str]:
+    return [
+        HOURLY_RULE,
+        "",
+        "🏠 HomeLab Monitor",
+        "",
+        subtitle,
+        "",
+        HOURLY_RULE,
+        "",
+    ]
+
+
+def _compact_metric(emoji_label: str, value: str, bar: str | None = None) -> list[str]:
+    lines = [emoji_label, "", value, ""]
+    if bar:
+        lines[2:2] = [bar, ""]
+    return lines
+
+
+def _recommendation_block(recommendation: str) -> list[str]:
+    text = recommendation.strip() or "Everything looks healthy."
+    if text == "Everything looks healthy.":
+        text = "Everything looks healthy.\n\nContinue monitoring."
+    return [text, ""]
+
+
+def _indexed_label(value: int) -> str:
+    return f"{value:,}"
+
+
+def _photo_new_today(db: Session, now: datetime) -> str:
+    try:
+        return str(PhotoEventRepository(db).today_count(now))
+    except SQLAlchemyError:
+        return "—"
+
+
+def _recovered_today(db: Session, now: datetime) -> int:
+    start = _start_of_local_day(now)
+    count = 0
+    for item in list_alert_history(db, now=now):
+        if item.status != "recovered" or item.recovered_at is None:
+            continue
+        if as_utc(item.recovered_at) >= start:
+            count += 1
+    return count
+
+
+def _recommendation_text(
+    *,
+    alerts: list,
+    backup_status: str,
+    insight: str | None,
+) -> str:
+    recs = _hourly_recommendations(alerts, backup_status)
+    if recs:
+        return recs[0]
+    return insight or "Everything looks healthy."
+
+
+def _stack(*rows: tuple[str, str]) -> list[str]:
+    lines: list[str] = []
+    for label, value in rows:
+        lines.extend([label, value, ""])
+    return lines
 
 
 def format_hourly_report(
     *,
     local: datetime,
-    agent_line: str,
-    agent_emoji: str,
-    health_score: float | None,
     cpu: float | None,
     memory: float | None,
-    storage_percent: float | None,
-    storage_used: float | None,
-    storage_capacity: float | None,
     temperature: float | None,
-    photos_today: int,
+    storage_percent: float | None,
+    photos_new_today: str,
+    immich_indexed: str,
     backup_status: str,
-    last_backup: str = "",
-    alerts: list | None = None,
+    last_backup: str,
+    active_alerts: int,
+    recovered_today: int,
+    health_score: float | None,
+    recommendation: str,
+    dashboard_url: str,
+    title: str = "🏠 HomeLab Hourly Report",
 ) -> str:
-    items = alerts or []
-    alert_count = _actionable_alert_count(items)
-    score_label = "—" if health_score is None else f"{round(health_score)} / 100"
-    storage_lines = [_hourly_kv("💾", "Storage", _pct(storage_percent))]
-    if storage_used or storage_capacity:
-        indent = " " * (3 + HOURLY_LABEL_WIDTH)
-        used_label = _bytes_label(float(storage_used or 0))
-        cap_label = _bytes_label(float(storage_capacity or 0))
-        storage_lines.append(f"{indent} {used_label} / {cap_label}")
-    activity = [
-        _hourly_kv("📷", "Photos Today", str(photos_today)),
-        _hourly_kv("💾", "Backup", backup_status or "Unknown"),
-    ]
-    backup_stamp = _format_last_backup(last_backup, local.tzinfo or timezone(timedelta(hours=7)))
-    if backup_stamp:
-        indent = " " * (3 + HOURLY_LABEL_WIDTH)
-        activity.append(f"{indent} {backup_stamp}")
-    activity.append(_hourly_kv("🚨", "Active Alerts", str(alert_count)))
-    if alert_count:
-        summary = [
-            HOURLY_RULE,
-            "",
-            "⚠️ System Summary",
-            "",
-            f"{alert_count} Active Alert" + ("" if alert_count == 1 else "s"),
-            "",
-            *_hourly_alert_lines(items),
-        ]
-        recs = _hourly_recommendations(items, backup_status)
-        if recs:
-            summary.extend(["", "Recommendation", ""])
-            summary.extend(f"• {item}" for item in recs)
-        summary.extend(["", HOURLY_RULE])
-    else:
-        summary = [
-            HOURLY_RULE,
-            "",
-            "✅ System Summary",
-            "",
-            "Everything looks healthy.",
-            "",
-            "No action required.",
-            "",
-            HOURLY_RULE,
-        ]
+    tz = local.tzinfo or timezone(timedelta(hours=7))
+    backup_time = _format_last_backup_time(last_backup, tz)
+    header_status = _health_status(health_score)
+    score_label = "—" if health_score is None else f"{round(health_score)}%"
+    subtitle = "🧪 Test Report" if "Test Report" in title else "Hourly Executive Report"
     return "\n".join(
         [
-            HOURLY_RULE,
-            "",
-            "🏠 HomeLab Monitor",
-            "📊 Hourly Report",
-            "",
-            f"🕒 {_short_english_date(local)} • {local.strftime('%H:%M')}",
-            "",
-            HOURLY_RULE,
-            "",
-            "🖥️ System Status",
-            "",
-            _hourly_kv(agent_emoji, "Agent", agent_line),
-            _hourly_kv(
-                _health_emoji(score=health_score, alert_count=alert_count),
-                "Health Score",
+            *_executive_header(subtitle),
+            *_compact_metric(
+                f"{header_status} Health",
                 score_label,
+                _progress_bar(health_score),
             ),
-            "",
+            *_compact_metric("🖥 CPU", _pct(cpu), _progress_bar(cpu)),
+            *_compact_metric("🧠 Memory", _pct(memory), _progress_bar(memory)),
+            *_compact_metric("💾 Storage", _pct(storage_percent), _progress_bar(storage_percent)),
+            *_compact_metric("📷 Photos Today", photos_new_today),
+            *_compact_metric("📷 Immich Indexed", immich_indexed),
+            *_compact_metric("🌡 Temperature", _temperature_label(temperature)),
+            *_compact_metric("💾 Backup", _backup_status_label(backup_status)),
+            *_compact_metric("🕒 Last Backup", backup_time),
+            *_compact_metric("⚠ Alerts", str(active_alerts)),
+            *_compact_metric("Recovered Today", str(recovered_today)),
             HOURLY_RULE,
             "",
-            "📈 Resource Usage",
+            "💡 Recommendation",
             "",
-            _hourly_kv("🖥️", "CPU", _pct(cpu)),
-            _hourly_kv("🧠", "Memory", _pct(memory)),
-            *storage_lines,
-            _hourly_kv("🌡️", "Temperature", _temperature_label(temperature)),
-            "",
+            *_recommendation_block(recommendation),
+            *_report_footer(local, dashboard_url),
+        ]
+    )
+
+
+def format_daily_report(
+    *,
+    local: datetime,
+    cpu_average: float | None,
+    memory_average: float | None,
+    temperature_average: float | None,
+    storage_growth: str,
+    photo_growth: str,
+    backup_success: str,
+    alerts_yesterday: int,
+    health_score: float | None,
+    recommendation: str,
+    dashboard_url: str,
+) -> str:
+    header_status = _health_status(health_score)
+    score_label = "—" if health_score is None else f"{round(health_score)}%"
+    return "\n".join(
+        [
+            *_executive_header("Daily Executive Report"),
+            *_compact_metric(
+                f"{header_status} Health",
+                score_label,
+                _progress_bar(health_score),
+            ),
+            *_compact_metric("🖥 CPU", _pct(cpu_average), _progress_bar(cpu_average)),
+            *_compact_metric("🧠 Memory", _pct(memory_average), _progress_bar(memory_average)),
+            *_compact_metric("🌡 Temperature", _temperature_label(temperature_average)),
+            *_compact_metric("💾 Storage", storage_growth),
+            *_compact_metric("📷 Photos Today", photo_growth),
+            *_compact_metric("💾 Backup", backup_success),
+            *_compact_metric("⚠ Alerts", str(alerts_yesterday)),
             HOURLY_RULE,
             "",
-            "📸 Activity",
+            "💡 Recommendation",
             "",
-            *activity,
+            *_recommendation_block(recommendation),
+            *_report_footer(local, dashboard_url),
+        ]
+    )
+
+
+def format_weekly_report(
+    *,
+    local: datetime,
+    cpu_average: float | None,
+    memory_average: float | None,
+    storage_growth: str,
+    photo_growth: str,
+    backup_success: str,
+    forecast: str,
+    recommendation: str,
+    dashboard_url: str,
+) -> str:
+    return "\n".join(
+        [
+            *_executive_header("Weekly Executive Report"),
+            *_compact_metric("🖥 CPU", _pct(cpu_average), _progress_bar(cpu_average)),
+            *_compact_metric("🧠 Memory", _pct(memory_average), _progress_bar(memory_average)),
+            *_compact_metric("💾 Storage", storage_growth),
+            *_compact_metric("📷 Photos Today", photo_growth),
+            *_compact_metric("💾 Backup", backup_success),
+            *_compact_metric("📈 Capacity", forecast),
+            HOURLY_RULE,
             "",
-            *summary,
+            "💡 Recommendation",
+            "",
+            *_recommendation_block(recommendation),
+            *_report_footer(local, dashboard_url),
         ]
     )
 
@@ -444,6 +550,7 @@ class TelegramReportService:
             status = _status_from_payload(latest_backup.payload)
             backup_status = "Success" if status == "success" else status.title()
         alerts = list_alert_history(db, status="active", now=now)
+        current_photos, _, _ = self.analytics.photo_detail(db, now=now)
         return {
             "overview": overview,
             "cpu": cpu,
@@ -455,31 +562,34 @@ class TelegramReportService:
             "score": system.overall_score,
             "backup_status": backup_status,
             "alerts": alerts,
+            "indexed_photos": current_photos,
         }
 
     def _hourly(self, db: Session, now: datetime) -> str:
         data = self._snapshot(db, now)
         tz = report_timezone(str(reports_payload(load_payload(db))["timezone"]))
         local = now.astimezone(tz)
-        used = data["storage"].current_used
-        _, detail, _ = self.analytics.photo_detail(db, now=now)
-        capacity = int(detail.get("capacity") or 0)
         last_backup = getattr(data["backup"], "last_backup", "") or ""
+        insight = self.insights.overview(db).recommendation
         return format_hourly_report(
             local=local,
-            agent_line=_agent_line(data["overview"]),
-            agent_emoji=_agent_emoji(data["overview"]),
-            health_score=data["score"],
             cpu=data["cpu"].current,
             memory=data["memory"].current,
-            storage_percent=data["storage"].used_percent,
-            storage_used=float(used or 0),
-            storage_capacity=float(capacity or 0),
             temperature=data["temperature"].current,
-            photos_today=int(data["photos"].today),
+            storage_percent=data["storage"].used_percent,
+            photos_new_today=_photo_new_today(db, now),
+            immich_indexed=_indexed_label(int(data["indexed_photos"])),
             backup_status=data["backup_status"],
             last_backup=last_backup,
-            alerts=data["alerts"],
+            active_alerts=len(data["alerts"]),
+            recovered_today=_recovered_today(db, now),
+            health_score=data["score"],
+            recommendation=_recommendation_text(
+                alerts=data["alerts"],
+                backup_status=data["backup_status"],
+                insight=insight,
+            ),
+            dashboard_url=_dashboard_url(),
         )
 
     def build_test_report(self, db: Session, *, now: datetime | None = None) -> str:
@@ -487,103 +597,58 @@ class TelegramReportService:
         data = self._snapshot(db, clock)
         tz = report_timezone(str(reports_payload(load_payload(db))["timezone"]))
         local = clock.astimezone(tz)
-        footer = (
-            "✅ Everything looks healthy."
-            if not data["alerts"]
-            else "Active alerts are listed in the live dashboard."
-        )
-        return "\n".join(
-            [
-                "🏠 HomeLab Test Report",
-                "━━━━━━━━━━━━━━━━",
-                "✅ Status: Telegram connected",
-                f"🕒 Time: {_english_date(local)} {local.strftime('%H:%M:%S')}",
-                "━━━━━━━━━━━━━━━━",
-                "",
-                "📡 Agent",
-                f"• Status: {_agent_badge(data['overview'])}",
-                "",
-                "📊 System Metrics",
-                f"• ⚙️ CPU: {_pct(data['cpu'].current)}",
-                f"• 🧠 Memory: {_pct(data['memory'].current)}",
-                f"• 💾 Storage: {_pct(data['storage'].used_percent)}",
-                f"• 🌡 Temperature: {_num(data['temperature'].current)}°C",
-                "",
-                "❤️ Health",
-                f"• Score: {round(data['score'])} / 100",
-                f"• Result: {footer}",
-                "",
-                "━━━━━━━━━━━━━━━━",
-                "Settings → Send Test Report",
-            ]
+        last_backup = getattr(data["backup"], "last_backup", "") or ""
+        insight = self.insights.overview(db).recommendation
+        return format_hourly_report(
+            title="🧪 Test Report",
+            local=local,
+            cpu=data["cpu"].current,
+            memory=data["memory"].current,
+            temperature=data["temperature"].current,
+            storage_percent=data["storage"].used_percent,
+            photos_new_today=_photo_new_today(db, clock),
+            immich_indexed=_indexed_label(int(data["indexed_photos"])),
+            backup_status=data["backup_status"],
+            last_backup=last_backup,
+            active_alerts=len(data["alerts"]),
+            recovered_today=_recovered_today(db, clock),
+            health_score=data["score"],
+            recommendation=_recommendation_text(
+                alerts=data["alerts"],
+                backup_status=data["backup_status"],
+                insight=insight,
+            ),
+            dashboard_url=_dashboard_url(),
         )
 
     def _daily(self, db: Session, now: datetime) -> str:
         data = self._snapshot(db, now)
-        local = now.astimezone(timezone(timedelta(hours=7)))
-        start_today = now.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        tz = report_timezone(str(reports_payload(load_payload(db))["timezone"]))
+        local = now.astimezone(tz)
+        start_today = _start_of_local_day(now)
         yesterday = [
             item
             for item in list_alert_history(db, now=now)
             if item.started_at is not None
             and start_today - timedelta(days=1) <= as_utc(item.started_at) < start_today
         ]
-        recommendation = self.insights.overview(db).recommendation or (
-            "Everything is operating normally."
-        )
-        footer = "Everything is operating normally." if not yesterday else recommendation
-        return "\n".join(
-            [
-                "🌅 HomeLab Daily Report",
-                "",
-                "Date",
-                "",
-                _english_date(local),
-                "",
-                "━━━━━━━━━━━━━━",
-                "",
-                "CPU Average",
-                _pct(data["overview"].cpu_average),
-                "",
-                "Memory Average",
-                _pct(data["overview"].memory_average),
-                "",
-                "Temperature Average",
-                f"{_num(data['overview'].temperature_average)}°C",
-                "",
-                "Storage Growth",
-                _bytes_label(float(data["storage"].daily_growth_bytes)),
-                "",
-                "Photo Growth",
-                f"+{data['photos'].today}",
-                "",
-                "Backup Success Rate",
-                _pct(data["backup"].success_rate),
-                "",
-                "Photos Today",
-                str(data["photos"].today),
-                "",
-                "Alerts Yesterday",
-                str(len(yesterday)),
-                "",
-                "Current Health Score",
-                f"{round(data['score'])} / 100",
-                "",
-                "Top Recommendation",
-                recommendation,
-                "",
-                "━━━━━━━━━━━━━━",
-                "",
-                footer,
-            ]
+        recommendation = self.insights.overview(db).recommendation or ("Everything looks healthy.")
+        return format_daily_report(
+            local=local,
+            cpu_average=data["overview"].cpu_average,
+            memory_average=data["overview"].memory_average,
+            temperature_average=data["overview"].temperature_average,
+            storage_growth=_bytes_label(float(data["storage"].daily_growth_bytes)),
+            photo_growth=f"+{data['photos'].today}",
+            backup_success=_pct(data["backup"].success_rate),
+            alerts_yesterday=len(yesterday),
+            health_score=data["score"],
+            recommendation=recommendation,
+            dashboard_url=_dashboard_url(),
         )
 
     def _weekly(self, db: Session, now: datetime) -> str:
         data = self._snapshot(db, now)
-        week_ago = now - timedelta(days=7)
-        history = list_alert_history(db, now=now)
-        week_alerts = [item for item in history if as_utc(item.started_at) >= week_ago]
-        recovered = [item for item in week_alerts if item.status == "recovered"]
         cpu_trend = self.trends.cpu(db, now=now)
         memory_trend = self.trends.memory(db, now=now)
         capacity = self.capacity.storage(db, now=now)
@@ -593,51 +658,19 @@ class TelegramReportService:
             forecast = "Capacity forecast is unknown."
         else:
             forecast = f"Estimated capacity remaining {days} days."
-        recommendation = insight.recommendation or "No critical issues detected."
-        return "\n".join(
-            [
-                "📅 HomeLab Weekly Report",
-                "",
-                "Week Summary",
-                "",
-                "━━━━━━━━━━━━━━",
-                "",
-                "Average CPU",
-                _pct(cpu_trend.average_7d),
-                "",
-                "Average Memory",
-                _pct(memory_trend.average_7d),
-                "",
-                "Storage Growth",
-                _bytes_label(float(data["storage"].weekly_growth_bytes)),
-                "",
-                "Photo Growth",
-                f"+{data['photos'].this_week}",
-                "",
-                "Backup Success",
-                _pct(data["backup"].success_rate),
-                "",
-                "Total Alerts",
-                str(len(week_alerts)),
-                "",
-                "Recovered Alerts",
-                str(len(recovered)),
-                "",
-                "Health Score",
-                f"{round(data['score'])} / 100",
-                "",
-                "Top Recommendation",
-                recommendation,
-                "",
-                "Capacity Forecast",
-                forecast,
-                "",
-                "━━━━━━━━━━━━━━",
-                "",
-                "No critical issues detected."
-                if insight.severity in {"info", "healthy", "unknown", ""}
-                else recommendation,
-            ]
+        tz = report_timezone(str(reports_payload(load_payload(db))["timezone"]))
+        local = now.astimezone(tz)
+        recommendation = insight.recommendation or "Everything looks healthy."
+        return format_weekly_report(
+            local=local,
+            cpu_average=cpu_trend.average_7d,
+            memory_average=memory_trend.average_7d,
+            storage_growth=_bytes_label(float(data["storage"].weekly_growth_bytes)),
+            photo_growth=f"+{data['photos'].this_week}",
+            backup_success=_pct(data["backup"].success_rate),
+            forecast=forecast,
+            recommendation=recommendation,
+            dashboard_url=_dashboard_url(),
         )
 
 

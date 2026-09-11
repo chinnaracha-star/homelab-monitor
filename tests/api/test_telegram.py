@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -303,4 +304,29 @@ def test_network_failure_is_telegram_error() -> None:
     with pytest.raises(TelegramNotificationError, match="network failure"):
         notifier.send_text("hello")
     notifier.close()
+    notifier.close()
+
+
+def test_send_photo_uses_multipart_payload(tmp_path: Path) -> None:
+    image = tmp_path / "shot.jpg"
+    image.write_bytes(b"jpeg-bytes")
+    captured: httpx.Request | None = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal captured
+        captured = request
+        return httpx.Response(200, json={"ok": True, "result": {}})
+
+    notifier = _notifier(handler)
+    notifier.send_photo(image, caption="📷 New Photo Detected")
+    assert captured is not None
+    assert str(captured.url).endswith("/sendPhoto")
+    assert b"jpeg-bytes" in captured.read()
+    notifier.close()
+
+
+def test_send_photo_missing_file_raises(tmp_path: Path) -> None:
+    notifier = _notifier(lambda _request: httpx.Response(200, json={"ok": True, "result": {}}))
+    with pytest.raises(TelegramNotificationError, match="unavailable"):
+        notifier.send_photo(tmp_path / "missing.jpg", caption="caption")
     notifier.close()

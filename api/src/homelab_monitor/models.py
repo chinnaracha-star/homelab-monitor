@@ -232,7 +232,9 @@ class NotificationSettings(Base):
 
 class PhotoEvent(Base):
     __tablename__ = "photo_events"
-    __table_args__ = (UniqueConstraint("folder", "filename", name="uq_photo_events_folder_filename"),)
+    __table_args__ = (
+        UniqueConstraint("folder", "filename", name="uq_photo_events_folder_filename"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     filename: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -250,7 +252,7 @@ class PhotoMonitorSettings(Base):
     watch_folder: Mapped[str] = mapped_column(String(1000), default="")
     watch_folders: Mapped[list[str]] = mapped_column(JSON, default=list)
     recursive: Mapped[bool] = mapped_column(Boolean, default=True)
-    scan_interval_seconds: Mapped[int] = mapped_column(Integer, default=10)
+    scan_interval_seconds: Mapped[int] = mapped_column(Integer, default=5)
     max_events: Mapped[int] = mapped_column(Integer, default=500)
     auto_delete_days: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(

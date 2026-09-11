@@ -52,6 +52,7 @@ services:
       HOMELAB_BACKUP_URL: ${HOMELAB_BACKUP_URL:-}
       HOMELAB_PHOTO_WATCH_FOLDER: ${HOMELAB_PHOTO_WATCH_FOLDER:-/mnt/picture-all}
       HOMELAB_PHOTO_WATCHER_ENABLED: ${HOMELAB_PHOTO_WATCHER_ENABLED:-true}
+      HOMELAB_PHOTO_SCAN_INTERVAL_SECONDS: ${HOMELAB_PHOTO_SCAN_INTERVAL_SECONDS:-5}
     volumes:
       - homelab-data:/var/lib/homelab-monitor
       - homelab-logs:/var/log/homelab-monitor

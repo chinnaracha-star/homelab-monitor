@@ -1,13 +1,20 @@
+import json
 import re
 import socket
 import time
 from datetime import UTC, datetime, timedelta, timezone
+from pathlib import Path
 
 import httpx
 
 from homelab_monitor import __version__
 from homelab_monitor.alert_engine import AlertEvent
 from homelab_monitor.settings import Settings
+from homelab_monitor.telegram_links import (
+    resolve_dashboard_url,
+    resolve_immich_url,
+    resolve_qnap_url,
+)
 
 ALERT_TITLES = {
     "agent_offline": "Agent Offline",
@@ -107,10 +114,22 @@ class TelegramNotifier:
     def verify_connection(self) -> dict:
         return self._request("GET", "getMe")
 
-    def _request(self, method: str, api_method: str, json: dict | None = None) -> dict:
+    def _request(
+        self,
+        method: str,
+        api_method: str,
+        json: dict | None = None,
+        *,
+        data: dict | None = None,
+        files: dict | None = None,
+    ) -> dict:
         kwargs: dict = {}
         if json is not None:
             kwargs["json"] = json
+        if data is not None:
+            kwargs["data"] = data
+        if files is not None:
+            kwargs["files"] = files
         response = self._send(method, api_method, kwargs)
         for _attempt in range(2):
             if response.status_code != 429:
@@ -131,7 +150,29 @@ class TelegramNotifier:
         return response
 
     def send_text(self, text: str) -> dict:
-        return self._request("POST", "sendMessage", json={"chat_id": self._chat_id, "text": text})
+        payload: dict = {"chat_id": self._chat_id, "text": text}
+        markup = telegram_reply_markup()
+        if markup is not None:
+            payload["reply_markup"] = markup
+        return self._request("POST", "sendMessage", json=payload)
+
+    def send_photo(self, image_path: Path, *, caption: str) -> dict:
+        if not image_path.is_file():
+            raise TelegramNotificationError("photo file unavailable")
+        size = image_path.stat().st_size
+        if size <= 0 or size > 10 * 1024 * 1024:
+            raise TelegramNotificationError("photo file too large")
+        payload: dict = {"chat_id": self._chat_id, "caption": caption[:1024]}
+        markup = telegram_reply_markup()
+        if markup is not None:
+            payload["reply_markup"] = json.dumps(markup)
+        with image_path.open("rb") as handle:
+            return self._request(
+                "POST",
+                "sendPhoto",
+                data=payload,
+                files={"photo": (image_path.name, handle, "application/octet-stream")},
+            )
 
     def send_alert(self, event: AlertEvent) -> None:
         self.send_text(format_alert_message(event))
@@ -139,6 +180,21 @@ class TelegramNotifier:
     def close(self) -> None:
         if self._owns_client:
             self._client.close()
+
+
+def telegram_reply_markup(settings: Settings | None = None) -> dict | None:
+    buttons: list[dict[str, str]] = []
+    mapping = (
+        ("🏠 Dashboard", resolve_dashboard_url(settings)),
+        ("📷 Immich", resolve_immich_url(settings)),
+        ("💾 QNAP", resolve_qnap_url(settings)),
+    )
+    for label, url in mapping:
+        if url:
+            buttons.append({"text": label, "url": url})
+    if not buttons:
+        return None
+    return {"inline_keyboard": [[button] for button in buttons]}
 
 
 def telegram_config_error(api_base_url: str, bot_token: str, chat_id: str) -> str:

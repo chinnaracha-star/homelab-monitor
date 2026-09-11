@@ -1,7 +1,7 @@
 import asyncio
 import sys
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from homelab_monitor.database import get_engine
 from homelab_monitor.photo_events import PhotoEventRepository, apply_watch_folders
 from homelab_monitor.photo_folders import display_folder_name
-from homelab_monitor.photo_telegram import format_new_photo_message, format_photo_size
+from homelab_monitor.photo_telegram import format_new_photo_message
 from homelab_monitor.photo_watcher import PhotoWatcherService, is_image_file, run_photo_watcher
 from homelab_monitor.settings import get_settings
 
@@ -40,14 +40,12 @@ def test_format_new_photo_message_uses_english_layout() -> None:
         size_bytes=int(3.52 * 1024 * 1024),
         created_at=created,
     )
-    assert "📸 New Photo" in message
+    assert "📷 New Photo Detected" in message
     assert "Pictures-SS22" in message
     assert "/mnt/pictures-ss22" not in message
     assert "IMG_20260910_140012.jpg" in message
-    assert format_photo_size(int(3.52 * 1024 * 1024)) in message
-    assert "10 Sep 2026" in message
+    assert "10 September 2026" in message
     assert "14:00:12" in message
-    assert "QNAP NAS" in message
 
 
 def test_first_initialization_creates_enabled_watcher(caplog) -> None:
@@ -112,7 +110,7 @@ def test_watcher_baselines_existing_files_then_records_new_ones(
     watch.mkdir()
     (watch / "existing.jpg").write_bytes(b"old")
     settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(watch))
-    service = PhotoWatcherService(settings)
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
     sent: list[str] = []
 
     with Session(get_engine()) as db:
@@ -157,7 +155,7 @@ def test_telegram_sent_flag_is_false_when_notify_fails(tmp_path: Path) -> None:
     watch = tmp_path / "Picture-All"
     watch.mkdir()
     settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(watch))
-    service = PhotoWatcherService(settings)
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
 
     def fail_send(_text: str) -> dict:
         raise RuntimeError("telegram down")
@@ -231,7 +229,7 @@ def test_photos_list_includes_recent_event(
     watch = tmp_path / "Picture-All"
     watch.mkdir()
     settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(watch))
-    service = PhotoWatcherService(settings)
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
     with Session(get_engine()) as db:
         row = PhotoEventRepository(db).ensure_settings(settings)
         db.commit()
@@ -336,7 +334,7 @@ def test_watcher_scans_multiple_folders_with_independent_baselines(tmp_path: Pat
     (folder_a / "old-a.jpg").write_bytes(b"a")
     (folder_b / "old-b.jpg").write_bytes(b"b")
     settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(folder_a))
-    service = PhotoWatcherService(settings)
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
     sent: list[str] = []
     with Session(get_engine()) as db:
         row = PhotoEventRepository(db).ensure_settings(settings)
@@ -391,7 +389,7 @@ def test_watcher_continues_when_one_folder_is_unavailable(tmp_path: Path, caplog
     available.mkdir()
     (available / "old.jpg").write_bytes(b"old")
     settings = _monitor_settings(photo_watch_folders=[str(available), str(missing)])
-    service = PhotoWatcherService(settings)
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
     sent: list[str] = []
     with Session(get_engine()) as db:
         row = PhotoEventRepository(db).ensure_settings(settings)
@@ -420,7 +418,7 @@ def test_watcher_baselines_added_folder_and_drops_removed_folder(tmp_path: Path)
     (first / "keep.jpg").write_bytes(b"keep")
     (second / "existing-b.jpg").write_bytes(b"old")
     settings = _monitor_settings(photo_watch_folders=[str(first)])
-    service = PhotoWatcherService(settings)
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
     with Session(get_engine()) as db:
         row = PhotoEventRepository(db).ensure_settings(settings)
         row.enabled = True
@@ -447,7 +445,7 @@ def test_partial_upload_rename_creates_event(tmp_path: Path, caplog) -> None:
     watch = tmp_path / "picture-all"
     watch.mkdir()
     settings = _monitor_settings(photo_watch_folders=[str(watch)])
-    service = PhotoWatcherService(settings)
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
     with Session(get_engine()) as db:
         row = PhotoEventRepository(db).ensure_settings(settings)
         row.enabled = True
@@ -476,7 +474,7 @@ def test_recursive_scan_detects_new_file_in_subfolder(tmp_path: Path) -> None:
     nested.mkdir(parents=True)
     (nested / "old.jpg").write_bytes(b"old")
     settings = _monitor_settings(photo_watch_folders=[str(watch)])
-    service = PhotoWatcherService(settings)
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
     with Session(get_engine()) as db:
         row = PhotoEventRepository(db).ensure_settings(settings)
         row.enabled = True
@@ -546,7 +544,7 @@ def test_scan_continues_when_one_folder_raises(tmp_path: Path, monkeypatch) -> N
     bad.mkdir()
     (good / "keep.jpg").write_bytes(b"old")
     settings = _monitor_settings(photo_watch_folders=[str(bad), str(good)])
-    service = PhotoWatcherService(settings)
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
 
     import homelab_monitor.photo_watcher as watcher
 
@@ -582,7 +580,9 @@ def test_persisted_baseline_survives_restart_and_notifies_offline_photos(
     (watch / "existing.jpg").write_bytes(b"old")
     baseline = tmp_path / "photo_baseline.json"
     settings = _monitor_settings(photo_watch_folders=[str(watch)])
-    first = PhotoWatcherService(settings, baseline_path=baseline)
+    first = PhotoWatcherService(
+        settings, baseline_path=baseline, batch_window_seconds=0, settle_seconds=0
+    )
     with Session(get_engine()) as db:
         row = PhotoEventRepository(db).ensure_settings(settings)
         row.enabled = True
@@ -592,7 +592,9 @@ def test_persisted_baseline_survives_restart_and_notifies_offline_photos(
         assert first.scan_once(db, send_text=lambda _text: {}) == 0
     assert baseline.is_file()
     (watch / "while-off.png").write_bytes(b"new")
-    restarted = PhotoWatcherService(settings, baseline_path=baseline)
+    restarted = PhotoWatcherService(
+        settings, baseline_path=baseline, batch_window_seconds=0, settle_seconds=0
+    )
     sent: list[str] = []
     with Session(get_engine()) as db:
         created = restarted.scan_once(db, send_text=sent.append)
@@ -602,3 +604,87 @@ def test_persisted_baseline_survives_restart_and_notifies_offline_photos(
         assert latest.filename == "while-off.png"
         assert sent
         assert restarted.scan_once(db, send_text=sent.append) == 0
+
+
+def test_photo_batch_window_sends_one_message(tmp_path: Path) -> None:
+    from homelab_monitor.photo_telegram import format_new_photos_batch_message
+
+    message = format_new_photos_batch_message(
+        folder="/mnt/pictures-ss22",
+        filenames=["IMG001.jpg", "IMG002.jpg", "IMG003.jpg", "IMG004.jpg"],
+    )
+    assert "📷 4 New Photos" in message
+    assert "Pictures-SS22" in message
+    assert "IMG001.jpg" in message
+    assert "+3 more" in message
+
+    watch = tmp_path / "pictures-ss22"
+    watch.mkdir()
+    (watch / "seed.jpg").write_bytes(b"old")
+    settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(watch))
+    service = PhotoWatcherService(settings, batch_window_seconds=10, settle_seconds=0)
+    sent: list[str] = []
+    with Session(get_engine()) as db:
+        row = PhotoEventRepository(db).ensure_settings(settings)
+        row.recursive = False
+        db.commit()
+        assert service.scan_once(db, send_text=sent.append) == 0
+    (watch / "a.jpg").write_bytes(b"a")
+    (watch / "b.jpg").write_bytes(b"b")
+    with Session(get_engine()) as db:
+        created = service.scan_once(db, send_text=sent.append)
+        latest = PhotoEventRepository(db).latest()
+        assert created == 2
+        assert sent == []
+        assert latest is not None
+        assert latest.telegram_sent is False
+        service._pending_since = datetime.now(UTC) - timedelta(seconds=11)
+        flushed = service.flush_photo_notifications(
+            db,
+            PhotoEventRepository(db),
+            send_text=sent.append,
+            now=datetime.now(UTC),
+        )
+        db.commit()
+        assert flushed == 1
+        assert len(sent) == 1
+        assert "2 New Photos" in sent[0]
+        assert PhotoEventRepository(db).latest().telegram_sent is True
+
+
+def test_single_photo_falls_back_to_text_when_send_photo_fails(tmp_path: Path, monkeypatch) -> None:
+    from homelab_monitor.telegram import TelegramNotificationError
+
+    watch = tmp_path / "pictures-ss22"
+    watch.mkdir()
+    (watch / "seed.jpg").write_bytes(b"old")
+    settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(watch))
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
+    sent: list[str] = []
+
+    class FailingPhotoNotifier:
+        def send_photo(self, *_args, **_kwargs):
+            raise TelegramNotificationError("photo file too large")
+
+        def send_text(self, text: str) -> dict:
+            sent.append(text)
+            return {}
+
+    monkeypatch.setattr(
+        PhotoWatcherService, "_resolve_notifier", lambda self: FailingPhotoNotifier()
+    )
+    with Session(get_engine()) as db:
+        row = PhotoEventRepository(db).ensure_settings(settings)
+        row.recursive = False
+        db.commit()
+        assert service.scan_once(db) == 0
+    (watch / "IMG_1234.jpg").write_bytes(b"img")
+    with Session(get_engine()) as db:
+        created = service.scan_once(db, send_text=sent.append)
+        latest = PhotoEventRepository(db).latest()
+        assert created == 1
+        assert latest is not None
+        assert latest.telegram_sent is True
+        assert len(sent) == 1
+        assert "📷 New Photo Detected" in sent[0]
+        assert "IMG_1234.jpg" in sent[0]

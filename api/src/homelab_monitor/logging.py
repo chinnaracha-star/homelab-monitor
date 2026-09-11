@@ -10,6 +10,8 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
+from homelab_monitor.telegram_links import bind_request_origin, reset_request_origin
+
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -72,19 +74,21 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
         request.state.request_id = request_id
         started_at = time.perf_counter()
-
-        response = await call_next(request)
-        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
-        response.headers["x-request-id"] = request_id
-
-        logging.getLogger("homelab_monitor.http").info(
-            "request_completed",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": response.status_code,
-                "duration_ms": duration_ms,
-            },
-        )
-        return response
+        origin_token = bind_request_origin(request)
+        try:
+            response = await call_next(request)
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+            response.headers["x-request-id"] = request_id
+            logging.getLogger("homelab_monitor.http").info(
+                "request_completed",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "duration_ms": duration_ms,
+                },
+            )
+            return response
+        finally:
+            reset_request_origin(origin_token)

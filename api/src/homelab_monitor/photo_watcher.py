@@ -3,6 +3,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -10,10 +11,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from homelab_monitor.database import get_engine
+from homelab_monitor.notifications.retry import retry_transient
 from homelab_monitor.photo_baseline import baseline_file_path, load_baseline, save_baseline
 from homelab_monitor.photo_events import PhotoEventRepository, resolved_watch_folders
 from homelab_monitor.photo_folders import inspect_watch_folder
-from homelab_monitor.photo_telegram import format_new_photo_message
+from homelab_monitor.photo_telegram import format_new_photo_message, format_new_photos_batch_message
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram import TelegramNotificationError, TelegramNotifier
@@ -23,6 +25,8 @@ logger = logging.getLogger("homelab_monitor.photo_watcher")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".gif", ".bmp", ".webp"}
 IGNORE_SUFFIXES = {".tmp", ".part"}
 ALLOWED_INTERVALS = {5, 10, 30, 60}
+PHOTO_BATCH_WINDOW_SECONDS = 10
+STABLE_SIZE_SETTLE_SECONDS = 0.2
 ALLOWED_MAX_EVENTS = {100, 500, 1000}
 ALLOWED_AUTO_DELETE_DAYS = {0, 30, 90}
 
@@ -151,18 +155,52 @@ def file_created_at(path: Path) -> datetime:
     return stamp
 
 
+def wait_stable_size(path: Path, *, settle_seconds: float) -> int | None:
+    try:
+        first = path.stat().st_size
+        if settle_seconds > 0:
+            time.sleep(settle_seconds)
+        second = path.stat().st_size
+    except OSError:
+        return None
+    if first <= 0 or first != second:
+        return None
+    return second
+
+
+@dataclass
+class _PendingPhoto:
+    event_id: int
+    filename: str
+    folder: str
+    size_bytes: int
+    created_at: datetime
+    image_path: str = ""
+
+
 def _file_key(path: Path) -> tuple[str, str]:
     return (os.path.normpath(str(path.parent)), path.name)
 
 
 class PhotoWatcherService:
-    def __init__(self, settings: Settings, *, baseline_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        baseline_path: Path | None = None,
+        batch_window_seconds: float = PHOTO_BATCH_WINDOW_SECONDS,
+        settle_seconds: float = STABLE_SIZE_SETTLE_SECONDS,
+    ) -> None:
         self._settings = settings
         self._baseline_path = baseline_path or baseline_file_path(settings)
         self._seen = load_baseline(self._baseline_path)
         self._primed: set[str] = set(self._seen)
         self._dirty = False
         self._logged_enabled: bool | None = None
+        self.batch_window_seconds = batch_window_seconds
+        self.settle_seconds = settle_seconds
+        self._pending: list[_PendingPhoto] = []
+        self._pending_since: datetime | None = None
         self.indexed_files = 0
         self.last_folders: list[str] = []
         self.events_today = 0
@@ -236,6 +274,7 @@ class PhotoWatcherService:
             self._log_startup(folders)
             self._logged_enabled = True
         logger.info("recursive=%s folders=%s", config.recursive, len(folders))
+        self._restore_unsent(repo)
         created = 0
         scanned = 0
         skipped = 0
@@ -291,6 +330,10 @@ class PhotoWatcherService:
             hub.notify_ingest(reason="photo_monitor", agent_id=None, alerts_changed=False)
         else:
             db.commit()
+        telegram_ok = self.flush_photo_notifications(
+            db, repo, send_text=send_text, now=datetime.now(UTC)
+        )
+        db.commit()
         self._cycle_db_ms += (time.perf_counter() - commit_started) * 1000
         persist_started = time.perf_counter()
         self._persist()
@@ -325,19 +368,15 @@ class PhotoWatcherService:
             logger.warning("%s", reason)
 
     def log_health(self) -> None:
-        last_scan = (
-            self.last_successful_scan.isoformat() if self.last_successful_scan else "never"
-        )
+        last_scan = self.last_successful_scan.isoformat() if self.last_successful_scan else "never"
         last_telegram = (
-            self.last_successful_telegram.isoformat()
-            if self.last_successful_telegram
-            else "never"
+            self.last_successful_telegram.isoformat() if self.last_successful_telegram else "never"
         )
         baseline_size = sum(len(keys) for keys in self._seen.values())
         logger.info("Photo Monitor Health")
         logger.info("Running")
         logger.info("Watching folders %s", len(self.last_folders) or len(self._primed))
-        logger.info("Current queue 0")
+        logger.info("Current queue %s", len(self._pending))
         logger.info("Events today %s", self.events_today)
         logger.info(
             "Telegram OK/Failed %s/%s",
@@ -396,6 +435,7 @@ class PhotoWatcherService:
         path: Path,
         send_text: Callable[[str], dict] | None,
     ) -> tuple[int, int, int]:
+        del send_text
         folder, filename = _file_key(path)
         key = (folder, filename)
         in_seen = key in seen
@@ -418,36 +458,27 @@ class PhotoWatcherService:
             seen.add(key)
             self._dirty = True
             return 0, 1, 0
-        try:
-            stat_result = path.stat()
-            size_bytes = stat_result.st_size
-            created_at = datetime.fromtimestamp(stat_result.st_mtime, tz=UTC)
-            logger.debug(
-                "file_stat file=%s size=%s mtime=%s",
-                filename,
-                size_bytes,
-                created_at.isoformat(),
-            )
-        except OSError as exc:
-            _skip("stat failed", path, reason=exc.strerror or str(exc))
+        size_bytes = wait_stable_size(path, settle_seconds=self.settle_seconds)
+        if size_bytes is None:
+            _skip("size not stable", path, folder=watch_root)
             return 0, 1, 0
-        telegram_sent = self._notify(
-            send_text,
-            filename=filename,
-            folder=watch_root,
-            size_bytes=size_bytes,
-            created_at=created_at,
+        created_at = file_created_at(path)
+        logger.debug(
+            "file_stat file=%s size=%s mtime=%s",
+            filename,
+            size_bytes,
+            created_at.isoformat(),
         )
         logger.info("insert_begin folder=%s file=%s", folder, filename)
         try:
             insert_started = time.perf_counter()
             with db.begin_nested():
-                repo.add(
+                event = repo.add(
                     filename=filename,
                     folder=folder,
                     size_bytes=size_bytes,
                     created_at=created_at,
-                    telegram_sent=telegram_sent,
+                    telegram_sent=False,
                 )
             self._cycle_db_ms += (time.perf_counter() - insert_started) * 1000
         except IntegrityError:
@@ -457,60 +488,165 @@ class PhotoWatcherService:
             return 0, 1, 0
         logger.info("insert_complete folder=%s file=%s", folder, filename)
         logger.info("new_photo_detected folder=%s file=%s", watch_root, filename)
-        if telegram_sent:
-            logger.info("telegram_sent folder=%s file=%s", watch_root, filename)
-            self.telegram_ok_total += 1
-            self.last_successful_telegram = datetime.now(UTC)
-            sent = 1
-        else:
-            logger.warning("telegram_failed folder=%s file=%s", watch_root, filename)
-            self.telegram_failed_total += 1
-            sent = 0
+        self._queue_pending(
+            event_id=event.id,
+            filename=filename,
+            folder=watch_root,
+            size_bytes=size_bytes,
+            created_at=created_at,
+            image_path=str(path),
+        )
         seen.add(key)
         self._dirty = True
-        return 1, 0, sent
+        return 1, 0, 0
 
-    def _notify(
+    def _queue_pending(
         self,
-        send_text: Callable[[str], dict] | None,
         *,
+        event_id: int,
         filename: str,
         folder: str,
         size_bytes: int,
         created_at: datetime,
-    ) -> bool:
-        message = format_new_photo_message(
-            filename=filename,
-            folder=folder,
-            size_bytes=size_bytes,
-            created_at=created_at,
+        image_path: str = "",
+    ) -> None:
+        if self._pending_since is None:
+            self._pending_since = datetime.now(UTC)
+        self._pending.append(
+            _PendingPhoto(
+                event_id=event_id,
+                filename=filename,
+                folder=folder,
+                size_bytes=size_bytes,
+                created_at=created_at,
+                image_path=image_path,
+            )
         )
-        sender = send_text
+
+    def pending_flush_delay(self, now: datetime) -> int | None:
+        if not self._pending or self._pending_since is None:
+            return None
+        remain = self.batch_window_seconds - (now - self._pending_since).total_seconds()
+        if remain <= 0:
+            return 0
+        return max(1, int(remain))
+
+    def flush_photo_notifications(
+        self,
+        db: Session,
+        repo: PhotoEventRepository,
+        *,
+        send_text: Callable[[str], dict] | None,
+        now: datetime,
+    ) -> int:
+        del db
+        if not self._pending or self._pending_since is None:
+            return 0
+        elapsed = (now - self._pending_since).total_seconds()
+        if elapsed < self.batch_window_seconds:
+            return 0
+        notifier = self._resolve_notifier()
+        sender = send_text or (notifier.send_text if notifier is not None else None)
         if sender is None:
+            self.telegram_failed_total += 1
+            return 0
+        grouped: dict[str, list[_PendingPhoto]] = {}
+        for item in self._pending:
+            grouped.setdefault(item.folder, []).append(item)
+        sent_ids: list[int] = []
+        messages = 0
+        for folder, items in grouped.items():
+            send_started = time.perf_counter()
             try:
-                notifier = TelegramNotifier.from_settings(self._settings)
-            except ValueError:
-                logger.warning("photo_telegram_config_invalid")
-                return False
-            if notifier is None:
-                logger.warning("photo_telegram_not_configured folder=%s", folder)
-                return False
-            sender = notifier.send_text
-        logger.info("telegram_send_begin folder=%s file=%s", folder, filename)
-        send_started = time.perf_counter()
+                logger.info("telegram_send_begin folder=%s count=%s", folder, len(items))
+                self._deliver_photo_group(items, folder, sender=sender, notifier=notifier)
+            except TelegramNotificationError:
+                self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
+                logger.exception("photo_telegram_failed")
+                self.telegram_failed_total += 1
+                return messages
+            except Exception:
+                self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
+                logger.exception("photo_telegram_failed")
+                self.telegram_failed_total += 1
+                return messages
+            self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
+            logger.info("telegram_send_complete folder=%s count=%s", folder, len(items))
+            logger.info("telegram_sent folder=%s file=%s", folder, items[0].filename)
+            sent_ids.extend(item.event_id for item in items)
+            messages += 1
+            self.telegram_ok_total += 1
+            self.last_successful_telegram = datetime.now(UTC)
+        repo.mark_telegram_sent(sent_ids)
+        sent = set(sent_ids)
+        self._pending = [item for item in self._pending if item.event_id not in sent]
+        if not self._pending:
+            self._pending_since = None
+        return messages
+
+    def _restore_unsent(self, repo: PhotoEventRepository) -> None:
+        pending_ids = {item.event_id for item in self._pending}
+        restored = False
+        for event in repo.list_unsent():
+            if event.id in pending_ids:
+                continue
+            folder = event.folder
+            self._pending.append(
+                _PendingPhoto(
+                    event_id=event.id,
+                    filename=event.filename,
+                    folder=folder,
+                    size_bytes=event.size_bytes,
+                    created_at=event.created_at,
+                    image_path=os.path.join(event.folder, event.filename),
+                )
+            )
+            pending_ids.add(event.id)
+            restored = True
+        if restored and self._pending_since is None:
+            self._pending_since = datetime(1970, 1, 1, tzinfo=UTC)
+
+    def _deliver_photo_group(
+        self,
+        items: list[_PendingPhoto],
+        folder: str,
+        *,
+        sender: Callable[[str], dict],
+        notifier: TelegramNotifier | None,
+    ) -> None:
+        if len(items) == 1:
+            item = items[0]
+            message = format_new_photo_message(
+                filename=item.filename,
+                folder=folder,
+                size_bytes=item.size_bytes,
+                created_at=item.created_at,
+            )
+            image = Path(item.image_path) if item.image_path else Path(item.folder) / item.filename
+            if notifier is not None:
+                try:
+                    retry_transient(lambda: notifier.send_photo(image, caption=message))
+                    return
+                except Exception:
+                    logger.warning("photo_send_photo_fallback file=%s", item.filename)
+        else:
+            message = format_new_photos_batch_message(
+                folder=folder,
+                filenames=[item.filename for item in items],
+            )
+        retry_transient(lambda send=sender, text=message: send(text))
+
+    def _resolve_notifier(self) -> TelegramNotifier | None:
         try:
-            sender(message)
-        except TelegramNotificationError:
-            self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
-            logger.exception("photo_telegram_failed")
-            return False
-        except Exception:
-            self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
-            logger.exception("photo_telegram_failed")
-            return False
-        self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
-        logger.info("telegram_send_complete folder=%s file=%s", folder, filename)
-        return True
+            return TelegramNotifier.from_settings(self._settings)
+        except ValueError:
+            logger.warning("photo_telegram_config_invalid")
+            return None
+
+    def _drop_pending_folder(self, folder: str) -> None:
+        self._pending = [item for item in self._pending if item.folder != folder]
+        if not self._pending:
+            self._pending_since = None
 
 
 _service: PhotoWatcherService | None = None
@@ -532,10 +668,10 @@ def _next_interval(value: object) -> int:
     try:
         seconds = int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
-        return 10
+        return 5
     if seconds in ALLOWED_INTERVALS:
         return seconds
-    return 10
+    return 5
 
 
 async def run_photo_watcher(settings: Settings) -> None:
@@ -549,7 +685,7 @@ async def run_photo_watcher(settings: Settings) -> None:
         service = get_photo_watcher_service(settings)
         last_health = 0.0
         while True:
-            interval = 10
+            interval = 5
             try:
                 interval = await asyncio.to_thread(_scan_and_interval, settings, service)
                 logger.info("photo_watcher_scan_finished interval=%s", interval)
@@ -564,7 +700,7 @@ async def run_photo_watcher(settings: Settings) -> None:
             except Exception:
                 logger.exception("photo_watcher_failed")
                 logger.info("scan_ended reason=scan_exception")
-                interval = 10
+                interval = 5
             delay = max(_next_interval(interval), 5)
             logger.info("photo_watcher_sleep seconds=%s", delay)
             try:
@@ -586,5 +722,11 @@ def _scan_and_interval(settings: Settings, service: PhotoWatcherService) -> int:
         row = PhotoEventRepository(db).get_settings()
         if row is None:
             logger.info("scan_ended reason=settings_missing")
-            return 10
-        return _next_interval(row.scan_interval_seconds)
+            return 5
+        interval = _next_interval(row.scan_interval_seconds)
+        remaining = service.pending_flush_delay(datetime.now(UTC))
+        if remaining is None:
+            return interval
+        if remaining == 0:
+            return interval
+        return min(interval, remaining)

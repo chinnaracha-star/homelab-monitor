@@ -95,10 +95,12 @@ class Settings(BaseSettings):
         ]
     )
     photo_watcher_enabled: bool = True
+    photo_scan_interval_seconds: int = Field(default=5, ge=5, le=60)
     tailscale_bin: str = "tailscale"
     tailscale_socket: str = "/var/run/tailscale/tailscaled.sock"
     tailscale_timeout_seconds: float = Field(default=2.0, gt=0, le=15)
     dashboard_health_url: str = ""
+    dashboard_port: int = Field(default=18081, ge=1, le=65535)
 
 
 @lru_cache

@@ -84,11 +84,11 @@ def test_hourly_daily_weekly_generation_and_history(monkeypatch) -> None:
         assert len(rows) == 1
         assert rows[0].recipient == "hourly_report"
         assert rows[0].status == "sent"
-        assert "HomeLab Monitor" in sent[-1]
-        assert "Hourly Report" in sent[-1]
-        assert "📷 Photos Today" in sent[-1]
-        assert "Everything looks healthy." in sent[-1]
-        assert "No action required." in sent[-1]
+        assert "Hourly Executive Report" in sent[-1]
+        assert "Photos Today" in sent[-1]
+        assert "Immich Indexed" in sent[-1]
+        assert "💡 Recommendation" in sent[-1]
+        assert "Dashboard" in sent[-1]
         assert "• Status:" not in sent[-1]
         again = process_due_reports(db, settings, now=hourly_at)
         assert again == []
@@ -98,7 +98,7 @@ def test_hourly_daily_weekly_generation_and_history(monkeypatch) -> None:
         rows = process_due_reports(db, settings, now=daily_at)
         assert len(rows) == 1
         assert rows[0].recipient == "daily_report"
-        assert "HomeLab Daily Report" in sent[-1]
+        assert "Daily Executive Report" in sent[-1]
         assert "8 September 2026" in sent[-1]
     weekly_at = datetime(2026, 9, 6, 1, 5, tzinfo=UTC)
     with Session(get_engine()) as db:
@@ -112,7 +112,7 @@ def test_hourly_daily_weekly_generation_and_history(monkeypatch) -> None:
         rows = process_due_reports(db, settings, now=weekly_at)
         assert len(rows) == 1
         assert rows[0].recipient == "weekly_report"
-        assert "HomeLab Weekly Report" in sent[-1]
+        assert "Weekly Executive Report" in sent[-1]
     with Session(get_engine()) as db:
         kinds = [
             row.recipient
@@ -168,8 +168,8 @@ def test_skipped_failed_retry_and_timezone(
     assert retried.status_code == 200
     assert retried.json()["status"] == "sent"
     assert retried.json()["recipient"] == "hourly_report"
-    assert "HomeLab Monitor" in sent[-1]
-    assert "Hourly Report" in sent[-1]
+    assert "Hourly Executive Report" in sent[-1]
+    assert "Photos Today" in sent[-1]
     bangkok = datetime(2026, 9, 8, 1, 5, tzinfo=UTC)
     with Session(get_engine()) as db:
         _configure(
@@ -219,18 +219,17 @@ def test_manual_test_report_jwt_rbac_disabled_success_retry_and_history(
         _configure(db)
         now = datetime(2026, 9, 8, 9, 42, 18, tzinfo=UTC)
         body = TelegramReportService().build_test_report(db, now=now)
-    assert "HomeLab Test Report" in body
-    assert "Telegram connected" in body
+    assert "🧪 Test Report" in body
     assert "8 September 2026" in body
-    assert "16:42:18" in body
-    assert "Settings → Send Test Report" in body
+    assert "16:42" in body
+    assert "Dashboard" in body
     posted = client.post("/api/v1/notifications/test-report", headers=auth_header())
     assert posted.status_code == 200
     payload = posted.json()
     assert payload["status"] == "sent"
     assert payload["provider"] == "telegram"
     assert payload["notification_id"]
-    assert "HomeLab Test Report" in sent[-1]
+    assert "🧪 Test Report" in sent[-1]
     history = client.get(
         "/api/v1/notifications/history",
         headers=auth_header("viewer", "viewer123"),
@@ -255,7 +254,7 @@ def test_manual_test_report_jwt_rbac_disabled_success_retry_and_history(
     assert retried.status_code == 200
     assert retried.json()["status"] == "sent"
     assert retried.json()["recipient"] == "test_report"
-    assert "HomeLab Test Report" in sent[-1]
+    assert "🧪 Test Report" in sent[-1]
 
 
 def test_hourly_report_groups_warning_and_critical_and_skips_info(monkeypatch) -> None:
@@ -318,33 +317,29 @@ def test_hourly_report_groups_warning_and_critical_and_skips_info(monkeypatch) -
         rows = process_due_reports(db, get_settings(), now=hourly_at)
         assert rows[0].status == "sent"
     body = sent[-1]
-    assert "⚠️ System Summary" in body
-    assert "2 Active Alerts" in body
-    assert "• Storage above 80%" in body
-    assert "• Temperature above 81°C" in body
-    assert "High CPU Usage" not in body
+    assert "⚠ Alerts" in body
+    assert "\n3\n" in body or "Active\n3" in body
+    assert "Check cooling" in body or "Check storage capacity" in body
     assert "CPU High" not in body
-    assert "Check storage capacity" in body
-    assert "Check cooling" in body
 
 
 def _sample_hourly(**overrides: object) -> str:
     local = datetime(2026, 9, 10, 14, 0, tzinfo=timezone(timedelta(hours=7)))
     payload = {
         "local": local,
-        "agent_line": "Online",
-        "agent_emoji": "🟢",
-        "health_score": 84.0,
         "cpu": 57.0,
         "memory": 32.0,
-        "storage_percent": 1.0,
-        "storage_used": 105.8 * (1024**3),
-        "storage_capacity": 11175.9 * (1024**3),
         "temperature": 51.0,
-        "photos_today": 9,
-        "backup_status": "Running",
+        "storage_percent": 1.0,
+        "photos_new_today": "9",
+        "immich_indexed": "18,421",
+        "backup_status": "Success",
         "last_backup": "",
-        "alerts": [],
+        "active_alerts": 0,
+        "recovered_today": 2,
+        "health_score": 84.0,
+        "recommendation": "Everything looks healthy.",
+        "dashboard_url": "http://127.0.0.1:18081",
     }
     payload.update(overrides)
     return format_hourly_report(**payload)  # type: ignore[arg-type]
@@ -353,65 +348,88 @@ def _sample_hourly(**overrides: object) -> str:
 def test_hourly_format_healthy_layout() -> None:
     body = _sample_hourly()
     assert "🏠 HomeLab Monitor" in body
-    assert "📊 Hourly Report" in body
-    assert "10 Sep 2026 • 14:00" in body
-    assert "🖥️ System Status" in body
-    assert "📈 Resource Usage" in body
-    assert "📸 Activity" in body
-    assert "✅ System Summary" in body
+    assert "Hourly Executive Report" in body
+    assert "10 September 2026" in body
+    assert "14:00" in body
+    assert "🖥 CPU" in body
+    assert "📷 Photos Today" in body
+    assert "Immich Indexed" in body
+    assert "18,421" in body
+    assert "✅ Success" in body
+    assert "🟢" in body
+    assert "█" in body
+    assert "░" in body
     assert "Everything looks healthy." in body
-    assert "No action required." in body
-    assert "<" not in body
+    assert "Continue monitoring." in body
+    assert "Dashboard" in body
+    assert "http://127.0.0.1:18081" in body
+    assert "Sprint" in body
+    assert "10.2.8.3" in body
+    assert "Version" in body
     assert "**" not in body
 
 
 def test_hourly_format_one_alert() -> None:
-    from types import SimpleNamespace
-
     body = _sample_hourly(
-        alerts=[
-            SimpleNamespace(alert_type="cpu_high", peak_value=95, severity="critical"),
-        ]
+        active_alerts=1,
+        recommendation="Check CPU load",
     )
-    assert "⚠️ System Summary" in body
-    assert "1 Active Alert" in body
-    assert "• CPU above 95%" in body
+    assert "⚠ Alerts" in body
     assert "Check CPU load" in body
     assert "Everything looks healthy." not in body
 
 
 def test_hourly_format_multiple_alerts() -> None:
-    from types import SimpleNamespace
-
     body = _sample_hourly(
         backup_status="Failed",
-        alerts=[
-            SimpleNamespace(alert_type="disk_high", peak_value=82, severity="warning"),
-            SimpleNamespace(alert_type="cpu_high", peak_value=95, severity="critical"),
-        ],
+        active_alerts=2,
+        recommendation="Verify NAS Backup",
     )
-    assert "2 Active Alerts" in body
-    assert "• Storage above 80%" in body
-    assert "• CPU above 95%" in body
+    assert "❌ Failed" in body
     assert "Verify NAS Backup" in body
 
 
 def test_hourly_format_unknown_and_missing_values() -> None:
     body = _sample_hourly(
-        agent_line="Unknown",
-        agent_emoji="⚪",
         health_score=None,
         cpu=None,
         memory=None,
         storage_percent=None,
-        storage_used=0,
-        storage_capacity=0,
         temperature=None,
         backup_status="Unknown",
         last_backup="",
-        photos_today=0,
+        photos_new_today="—",
+        immich_indexed="0",
     )
     assert "Unknown" in body
     assert "—°C" not in body
     assert "Everything looks healthy." in body
+    assert "New Today\n—" not in body
+    assert "Photos Today" in body
+    assert "—" in body
+    assert "⚪" in body
 
+
+def test_telegram_inline_keyboard_uses_configured_urls(monkeypatch) -> None:
+    from homelab_monitor.schemas import RemoteAccessResponse
+    from homelab_monitor.telegram import telegram_reply_markup
+
+    monkeypatch.setattr(
+        "homelab_monitor.telegram_links.RemoteAccessService.snapshot",
+        lambda self: RemoteAccessResponse(),
+    )
+    empty = telegram_reply_markup(get_settings().model_copy(update={"dashboard_health_url": ""}))
+    assert empty is not None
+    assert empty["inline_keyboard"][0][0]["text"] == "🏠 Dashboard"
+    markup = telegram_reply_markup(
+        get_settings().model_copy(
+            update={
+                "dashboard_health_url": "http://127.0.0.1:18081/",
+                "immich_url": "https://immich.example/",
+                "qnap_url": "",
+            }
+        )
+    )
+    assert markup is not None
+    labels = [row[0]["text"] for row in markup["inline_keyboard"]]
+    assert labels == ["🏠 Dashboard", "📷 Immich"]

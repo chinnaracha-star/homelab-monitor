@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { getPhotoMonitorSettings, updatePhotoMonitorSettings } from '../api/dashboard'
+import type { PhotoMonitorSettings } from '../types/dashboard'
 import { SectionError } from './SectionError'
 import { getErrorMessage } from '../utils/errors'
 import { displayFolderName } from '../utils/photoFolders'

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from homelab_monitor.auth.dependencies import require_roles
 from homelab_monitor.database import get_db
 from homelab_monitor.errors import APIError
+from homelab_monitor.models import PhotoMonitorSettings
 from homelab_monitor.photo_events import (
     PhotoEventRepository,
     apply_watch_folders,
@@ -29,7 +30,6 @@ from homelab_monitor.schemas import (
     PhotoMonitorSettingsUpdateRequest,
     PhotoMonitorStatsResponse,
 )
-from homelab_monitor.models import PhotoMonitorSettings
 from homelab_monitor.settings import Settings, get_settings
 
 router = APIRouter(prefix="/api/v1/photos", tags=["photos"])

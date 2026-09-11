@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from homelab_monitor.models import PhotoEvent, PhotoMonitorSettings
@@ -76,7 +76,11 @@ class PhotoEventRepository:
             watch_folder=folders[0] if folders else "",
             watch_folders=folders,
             recursive=True,
-            scan_interval_seconds=10,
+            scan_interval_seconds=(
+                settings.photo_scan_interval_seconds
+                if settings.photo_scan_interval_seconds in {5, 10, 30, 60}
+                else 5
+            ),
             max_events=500,
             auto_delete_days=0,
         )
@@ -121,6 +125,22 @@ class PhotoEventRepository:
         self._db.flush()
         return event
 
+    def mark_telegram_sent(self, event_ids: list[int]) -> None:
+        if not event_ids:
+            return
+        self._db.execute(
+            update(PhotoEvent).where(PhotoEvent.id.in_(event_ids)).values(telegram_sent=True)
+        )
+
+    def list_unsent(self) -> list[PhotoEvent]:
+        return list(
+            self._db.scalars(
+                select(PhotoEvent)
+                .where(PhotoEvent.telegram_sent.is_(False))
+                .order_by(PhotoEvent.created_at.asc(), PhotoEvent.id.asc())
+            ).all()
+        )
+
     def list_latest(self, limit: int = 20) -> list[PhotoEvent]:
         return list(
             self._db.scalars(
@@ -157,9 +177,7 @@ class PhotoEventRepository:
                 clock = clock.replace(tzinfo=UTC)
             cutoff = clock - timedelta(days=auto_delete_days)
             self._db.execute(delete(PhotoEvent).where(PhotoEvent.created_at < cutoff))
-        extra = (
-            self._db.scalar(select(func.count()).select_from(PhotoEvent)) or 0
-        ) - max_events
+        extra = (self._db.scalar(select(func.count()).select_from(PhotoEvent)) or 0) - max_events
         if extra <= 0:
             return
         oldest_ids = list(

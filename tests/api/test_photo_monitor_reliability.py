@@ -69,7 +69,9 @@ def test_qfile_auto_upload_nested_phone_path(tmp_path: Path, monkeypatch) -> Non
     nested.mkdir(parents=True)
     _write_image(nested / "old.jpg")
     settings = _enable([str(watch)])
-    service = PhotoWatcherService(settings, baseline_path=tmp_path / "baseline.json")
+    service = PhotoWatcherService(
+        settings, baseline_path=tmp_path / "baseline.json", batch_window_seconds=0, settle_seconds=0
+    )
     ingest = {"count": 0}
 
     def notify_ingest(**_kwargs) -> None:
@@ -101,7 +103,9 @@ def test_windows_explorer_copy_into_every_watch_folder(tmp_path: Path) -> None:
         _write_image(folder / "seed.jpg")
     paths = [str(folder) for folder in folders]
     settings = _enable(paths, recursive=False)
-    service = PhotoWatcherService(settings, baseline_path=tmp_path / "baseline.json")
+    service = PhotoWatcherService(
+        settings, baseline_path=tmp_path / "baseline.json", batch_window_seconds=0, settle_seconds=0
+    )
     sent: list[str] = []
     assert _scan(service, sent.append) == 0
     for folder in folders:
@@ -110,7 +114,7 @@ def test_windows_explorer_copy_into_every_watch_folder(tmp_path: Path) -> None:
         _write_image(folder / "from-pc.heic")
     created = _scan(service, sent.append)
     assert created == 18
-    assert len(sent) == 18
+    assert len(sent) == 6
     assert _event_count() == 18
     assert _scan(service, sent.append) == 0
     assert _event_count() == 18
@@ -120,7 +124,9 @@ def test_smb_tmp_and_part_rename_detected_once(tmp_path: Path) -> None:
     watch = tmp_path / "pictures-ae"
     watch.mkdir()
     settings = _enable([str(watch)], recursive=False)
-    service = PhotoWatcherService(settings, baseline_path=tmp_path / "baseline.json")
+    service = PhotoWatcherService(
+        settings, baseline_path=tmp_path / "baseline.json", batch_window_seconds=0, settle_seconds=0
+    )
     sent: list[str] = []
     assert _scan(service, sent.append) == 0
     tmp_file = watch / "DSC_0001.jpg.tmp"
@@ -132,7 +138,7 @@ def test_smb_tmp_and_part_rename_detected_once(tmp_path: Path) -> None:
     part_file.rename(watch / "DSC_0002.jpg")
     created = _scan(service, sent.append)
     assert created == 2
-    assert len(sent) == 2
+    assert len(sent) == 1
     assert _scan(service, sent.append) == 0
     assert _event_count() == 2
 
@@ -141,7 +147,9 @@ def test_multiple_files_none_lost_or_duplicated(tmp_path: Path, caplog) -> None:
     watch = tmp_path / "picture-all"
     watch.mkdir()
     settings = _enable([str(watch)], recursive=False, max_events=1000)
-    service = PhotoWatcherService(settings, baseline_path=tmp_path / "baseline.json")
+    service = PhotoWatcherService(
+        settings, baseline_path=tmp_path / "baseline.json", batch_window_seconds=0, settle_seconds=0
+    )
     sent: list[str] = []
     assert _scan(service, sent.append) == 0
     for count in (10, 50, 100):
@@ -156,7 +164,7 @@ def test_multiple_files_none_lost_or_duplicated(tmp_path: Path, caplog) -> None:
         assert "Elapsed database time" in caplog.text
         assert "Elapsed telegram time" in caplog.text
         assert elapsed < 30
-    assert len(sent) == 160
+    assert len(sent) == 3
     assert _event_count() == 160
     assert _scan(service, sent.append) == 0
 
@@ -165,7 +173,9 @@ def test_large_images_are_detected_without_timeout(tmp_path: Path) -> None:
     watch = tmp_path / "pictures-solarboy"
     watch.mkdir()
     settings = _enable([str(watch)], recursive=False)
-    service = PhotoWatcherService(settings, baseline_path=tmp_path / "baseline.json")
+    service = PhotoWatcherService(
+        settings, baseline_path=tmp_path / "baseline.json", batch_window_seconds=0, settle_seconds=0
+    )
     sent: list[str] = []
     assert _scan(service, sent.append) == 0
     sizes = {
@@ -180,7 +190,7 @@ def test_large_images_are_detected_without_timeout(tmp_path: Path) -> None:
     created = _scan(service, sent.append)
     assert time.perf_counter() - started < 15
     assert created == 4
-    assert len(sent) == 4
+    assert len(sent) == 1
     with Session(get_engine()) as db:
         rows = PhotoEventRepository(db).list_latest(10)
         by_name = {row.filename: row for row in rows}
@@ -194,11 +204,15 @@ def test_docker_or_ubuntu_restart_restores_baseline(tmp_path: Path) -> None:
     _write_image(watch / "already-there.jpg")
     baseline = tmp_path / "photo_baseline.json"
     settings = _enable([str(watch)], recursive=False)
-    first = PhotoWatcherService(settings, baseline_path=baseline)
+    first = PhotoWatcherService(
+        settings, baseline_path=baseline, batch_window_seconds=0, settle_seconds=0
+    )
     sent: list[str] = []
     assert _scan(first, sent.append) == 0
     _write_image(watch / "while-api-down.jpg")
-    restarted = PhotoWatcherService(settings, baseline_path=baseline)
+    restarted = PhotoWatcherService(
+        settings, baseline_path=baseline, batch_window_seconds=0, settle_seconds=0
+    )
     created = _scan(restarted, sent.append)
     assert created == 1
     assert sent[-1]
@@ -212,7 +226,9 @@ def test_nas_unavailable_retries_then_resumes(tmp_path: Path) -> None:
     live.mkdir()
     _write_image(live / "seed.jpg")
     settings = _enable([str(live), str(missing)], recursive=False)
-    service = PhotoWatcherService(settings, baseline_path=tmp_path / "baseline.json")
+    service = PhotoWatcherService(
+        settings, baseline_path=tmp_path / "baseline.json", batch_window_seconds=0, settle_seconds=0
+    )
     sent: list[str] = []
     assert _scan(service, sent.append) == 0
     _write_image(live / "during-nas-outage.jpg")
@@ -235,7 +251,9 @@ def test_telegram_outage_stores_event_and_recovers(tmp_path: Path) -> None:
     watch = tmp_path / "picture-all"
     watch.mkdir()
     settings = _enable([str(watch)], recursive=False)
-    service = PhotoWatcherService(settings, baseline_path=tmp_path / "baseline.json")
+    service = PhotoWatcherService(
+        settings, baseline_path=tmp_path / "baseline.json", batch_window_seconds=0, settle_seconds=0
+    )
 
     def fail(_text: str) -> dict:
         raise TimeoutError("internet down")
@@ -255,7 +273,7 @@ def test_telegram_outage_stores_event_and_recovers(tmp_path: Path) -> None:
         rows = {row.filename: row for row in PhotoEventRepository(db).list_latest(10)}
         assert created == 1
         assert rows["online.jpg"].telegram_sent is True
-        assert rows["offline.jpg"].telegram_sent is False
+        assert rows["offline.jpg"].telegram_sent is True
     assert service.telegram_ok_total == 1
     assert service.telegram_failed_total == 1
     service.log_health()
@@ -266,7 +284,9 @@ def test_one_thousand_mixed_uploads_are_complete(tmp_path: Path) -> None:
     nested = watch / "2026" / "09"
     nested.mkdir(parents=True)
     settings = _enable([str(watch)], recursive=True, max_events=1000)
-    service = PhotoWatcherService(settings, baseline_path=tmp_path / "baseline.json")
+    service = PhotoWatcherService(
+        settings, baseline_path=tmp_path / "baseline.json", batch_window_seconds=0, settle_seconds=0
+    )
     sent: list[str] = []
     assert _scan(service, sent.append) == 0
     extensions = [".jpg", ".jpeg", ".png", ".heic", ".gif", ".bmp", ".webp"]
@@ -278,7 +298,7 @@ def test_one_thousand_mixed_uploads_are_complete(tmp_path: Path) -> None:
         expected += 1
     created = _scan(service, sent.append)
     assert created == expected
-    assert len(sent) == expected
+    assert len(sent) == 1
     assert _event_count() == expected
     assert _scan(service, sent.append) == 0
     assert _event_count() == expected

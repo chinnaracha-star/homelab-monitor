@@ -1160,7 +1160,7 @@ class PhotoMonitorSettingsUpdateRequest(BaseModel):
     watch_folder: str = ""
     watch_folders: list[str] = Field(default_factory=list)
     recursive: bool = True
-    scan_interval_seconds: Literal[5, 10, 30, 60] = 10
+    scan_interval_seconds: Literal[5, 10, 30, 60] = 5
     max_events: Literal[100, 500, 1000] = 500
     auto_delete_days: Literal[0, 30, 90] = 0
 
