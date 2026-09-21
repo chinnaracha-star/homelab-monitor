@@ -207,6 +207,7 @@ class PhotoWatcherService:
         self.telegram_ok_total = 0
         self.telegram_failed_total = 0
         self.last_successful_scan: datetime | None = None
+        self.last_scan_duration_ms: float | None = None
         self.last_successful_telegram: datetime | None = None
         self._cycle_scan_ms = 0.0
         self._cycle_db_ms = 0.0
@@ -341,6 +342,7 @@ class PhotoWatcherService:
         self.last_successful_scan = datetime.now(UTC)
         self.events_today = repo.today_count()
         elapsed_ms = (time.perf_counter() - cycle_started) * 1000
+        self.last_scan_duration_ms = round(elapsed_ms, 2)
         logger.info("Folders scanned: %s", folders_scanned)
         logger.info("Files discovered: %s", scanned)
         logger.info("New files: %s", created)

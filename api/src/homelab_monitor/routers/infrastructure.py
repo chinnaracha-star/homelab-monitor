@@ -96,7 +96,7 @@ def get_backup_status(
         )
     record_backup_snapshot(snapshot)
     history = backup_history_periods(snapshot, use_mock=settings.infrastructure_mock)
-    return backup_status_from_snapshot(snapshot, history=history)
+    return backup_status_from_snapshot(snapshot, history=history, settings=settings)
 
 
 @router.get(

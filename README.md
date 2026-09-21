@@ -6,9 +6,11 @@ Python agents send authenticated health reports to a FastAPI server. The server
 stores history, evaluates alerts, can notify Telegram, and serves a React
 dashboard.
 
-> **v1.0.0-rc1** — first release candidate. Set bootstrap passwords before
-> exposing the dashboard. See [release notes](docs/release-notes-v1.0.0-rc1.md),
-> [changelog](CHANGELOG.md), and [known limitations](docs/known-limitations.md).
+> **v1.0.0-rc2** — second release candidate. Set bootstrap passwords before
+> exposing the dashboard. See [release notes](docs/release-notes-v1.0.0-rc2.md),
+> [project status](PROJECT_STATUS.md), [changelog](CHANGELOG.md),
+> [RC2 checklist](docs/rc2-checklist.md), and
+> [known limitations](docs/known-limitations.md).
 
 ## Architecture
 
@@ -80,7 +82,7 @@ Never commit a filled-in `.env`.
 | `HOMELAB_TELEGRAM_ENABLED` | Delivery on/off (`false` in examples) |
 | `HOMELAB_NOTIFICATION_WORKER_ENABLED` | Background Telegram worker |
 | `HOMELAB_INFRASTRUCTURE_MOCK` | Synthetic NAS/photo snapshots when `true` |
-| `HOMELAB_QNAP_*` / `HOMELAB_IMMICH_*` / `HOMELAB_QUMAGIE_*` | Live connectors |
+| `HOMELAB_BACKUP_ENABLED` / `HOMELAB_BACKUP_PATH` | SQLite gzip backups (02:00 Asia/Bangkok) |
 
 Thresholds, forwarded IPs, and log paths are documented in the example files.
 
@@ -158,8 +160,8 @@ cd dashboard && npm run lint && npm run test && npm run build
 
 ## Version 1 scope
 
-In rc1: Ubuntu agents, Docker/Immich/QNAP **read-only** views, REST + WebSocket
-dashboard, SQLite, Telegram alerts, Compose.
+In rc2: Ubuntu agents, Docker/Immich/QNAP **read-only** views, REST + WebSocket
+dashboard, SQLite with gzip backups, Telegram alerts, Compose, Operations Center.
 
 Out of scope: UPS, agent auto-update, PostgreSQL, Prometheus/Grafana, Kubernetes,
 controlling NAS or backup jobs. Tailscale is **read-only status** plus optional

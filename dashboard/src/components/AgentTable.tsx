@@ -85,6 +85,9 @@ export const AgentTable = memo(function AgentTable({
             <th scope="col">Name</th>
             <th scope="col">Hostname</th>
             <th scope="col">Version</th>
+            <th scope="col">Groups</th>
+            <th scope="col">Labels</th>
+            <th scope="col">Tags</th>
             <th scope="col">Status</th>
             <th scope="col">Last Seen</th>
           </tr>
@@ -102,6 +105,9 @@ export const AgentTable = memo(function AgentTable({
               <td className={styles.agentName}>{agent.name}</td>
               <td>{agent.hostname}</td>
               <td>{agent.version}</td>
+              <td>{(agent.groups ?? []).join(', ') || '—'}</td>
+              <td>{(agent.labels ?? []).join(', ') || '—'}</td>
+              <td>{(agent.tags ?? []).join(', ') || '—'}</td>
               <td>
                 <StatusBadge alertCount={alertCounts[agent.id] ?? 0} status={agent.status} />
               </td>

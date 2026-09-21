@@ -669,3 +669,35 @@
   margin: 0;
   color: var(--text-primary);
 }
+
+.fleetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem;
+}
+
+.fleetCard {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--surface);
+}
+
+.fleetCard h2,
+.fleetValue,
+.fleetMeta {
+  margin: 0;
+}
+
+.fleetValue {
+  color: var(--text-primary);
+  font-size: 1.6rem;
+  font-weight: 750;
+}
+
+.fleetMeta {
+  color: var(--text-muted);
+}

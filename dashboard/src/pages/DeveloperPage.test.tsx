@@ -25,11 +25,11 @@ import { getDeveloperOverview, getRemoteAccess } from '../api/dashboard'
 
 const overview: DeveloperOverview = {
   project: {
-    application_version: '1.0.0-rc1',
+    application_version: '1.0.0-rc2',
     build_time: null,
     environment: 'development',
     current_phase: 9,
-    current_sprint: '9.3.5',
+    current_sprint: '11.5',
     git: {
       branch: 'main',
       commit: 'abcdef1',
@@ -60,7 +60,7 @@ const overview: DeveloperOverview = {
     backend: 'unknown',
     frontend: 'unknown',
     docker_compose: 'unknown',
-    application_version: '1.0.0-rc1',
+    application_version: '1.0.0-rc2',
     environment: 'development',
   },
   tests: {
@@ -77,7 +77,7 @@ const overview: DeveloperOverview = {
       { phase: 9, percent: 70 },
       { phase: 10, percent: 0 },
     ],
-    current_sprint: '9.3.5',
+    current_sprint: '11.5',
     roadmap: 'Phase 9: Analytics, Trends, Capacity, Mission Control',
     completed_percent: 87,
     current_milestone: 'Sprint 9.3.5 Developer Dashboard',
@@ -165,13 +165,13 @@ describe('Mission Control page', () => {
   it('renders cards, timeline, and gauge', async () => {
     renderPage()
     expect(await screen.findByRole('heading', { name: 'Mission Control' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Version v1.0.0-rc1')).toBeInTheDocument()
+    expect(screen.getByLabelText('Version v1.0.0-rc2')).toBeInTheDocument()
     expect(screen.getByLabelText('Environment development')).toBeInTheDocument()
     expect(screen.getByLabelText('Branch main')).toBeInTheDocument()
     expect(screen.getByLabelText('Commit abcdef1')).toBeInTheDocument()
     expect(screen.getByLabelText('Git Dirty YES')).toBeInTheDocument()
     expect(screen.getByLabelText('Working Tree Dirty')).toBeInTheDocument()
-    expect(screen.getByLabelText('Sprint 9.3.5')).toBeInTheDocument()
+    expect(screen.getByLabelText('Sprint 11.5')).toBeInTheDocument()
     expect(screen.getByLabelText('Recent timeline')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Agent Runtime' })).toBeInTheDocument()
     expect(screen.getByLabelText('Agent runtime')).toBeInTheDocument()
@@ -208,7 +208,7 @@ describe('Mission Control page', () => {
     vi.mocked(getDeveloperOverview).mockResolvedValue(overview)
     await userEvent.click(screen.getByRole('button', { name: 'Retry section' }))
     await waitFor(() => {
-      expect(screen.getByLabelText('Version v1.0.0-rc1')).toBeInTheDocument()
+      expect(screen.getByLabelText('Version v1.0.0-rc2')).toBeInTheDocument()
     })
   })
 

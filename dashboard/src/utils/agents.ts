@@ -29,7 +29,16 @@ export function matchesAgentSearch(
     return true
   }
 
-  return [agent.name, agent.hostname, agent.status, displayStatus, osName]
+  return [
+    agent.name,
+    agent.hostname,
+    agent.status,
+    displayStatus,
+    osName,
+    ...(agent.groups ?? []),
+    ...(agent.labels ?? []),
+    ...(agent.tags ?? []),
+  ]
     .join(' ')
     .toLowerCase()
     .includes(needle)
@@ -43,6 +52,24 @@ export function matchesAgentFilter(
     return true
   }
   return displayStatus === filter
+}
+
+export function deriveAgentTags(agent: AgentSummary, osName = ''): string[] {
+  const blob = `${agent.hostname} ${agent.name} ${osName}`.toLowerCase()
+  const tags: string[] = []
+  if (/\bwin|\bwindows/.test(blob)) {
+    tags.push('windows')
+  }
+  if (/\brpi\b|raspberry|raspi/.test(blob)) {
+    tags.push('raspberry-pi')
+  }
+  if (/\bnas\b|qnap|synology/.test(blob)) {
+    tags.push('nas')
+  }
+  if (/\bubuntu\b|\bdebian\b|\blinux\b/.test(blob) || tags.length === 0) {
+    tags.push('ubuntu')
+  }
+  return tags
 }
 
 export function isAgentFilter(value: string): value is AgentFilter {

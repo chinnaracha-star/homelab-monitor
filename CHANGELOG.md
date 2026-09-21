@@ -2,6 +2,34 @@
 
 All notable changes to HomeLab Monitor Toolkit are documented here.
 
+## [1.0.0-rc2] — 2026-09-21
+
+Release candidate 2 baseline after Phase 11.1–11.5. Agent protocol remains `0.1.0`.
+
+### Added
+
+- Sprint 11.1: scheduled gzip SQLite backups, retention, verification, Telegram backup notices, restore/DR docs
+- Sprint 11.2: Production Health last-event cards and extra dependency checks
+- Sprint 11.3: Agents fleet health, group labels, derived OS/NAS tags (no protocol change)
+- Sprint 11.4: performance and reliability scores with 24h/7d/30d sample windows
+- Sprint 11.5: Operations Center on Production Health with confirmation and history
+- `PROJECT_STATUS.md`, RC2 checklist, performance and operations docs
+
+### Changed
+
+- Package/API/dashboard version strings report `1.0.0-rc2`
+- Developer Mission Control phase/sprint metadata tracks Phase 11
+- Known limitations: SQLite backup runbook now exists
+
+### 10.3.x (included in rc1 lineage)
+
+- 10.3.3 production Compose/env alignment
+- 10.3.4 hardening (PWA cache headers, Telegram-safe dashboard URLs)
+- 10.3.5 RC1 certification documentation
+
+[1.0.0-rc2]: docs/release-notes-v1.0.0-rc2.md
+[1.0.0-rc1]: docs/release-notes-v1.0.0-rc1.md
+
 ## [1.0.0-rc1] — 2026-09-10
 
 First release candidate. Package, API, and dashboard version strings report
@@ -48,7 +76,7 @@ First release candidate. Package, API, and dashboard version strings report
 
 See [docs/known-limitations.md](docs/known-limitations.md). Summary: in-memory
 notification queue and delivery history; Discord/Slack/email not on the live
-alert path; SQLite without an official backup runbook; infrastructure mock
+alert path; SQLite gzip backups exist (same volume); infrastructure mock
 defaults to on.
 
 [1.0.0-rc1]: docs/release-notes-v1.0.0-rc1.md

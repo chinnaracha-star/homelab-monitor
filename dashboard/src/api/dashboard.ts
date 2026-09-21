@@ -63,6 +63,8 @@ import type {
   ProductionNetwork,
   ProductionRuntime,
   ProductionStorage,
+  OperationHistoryItem,
+  OperationItem,
 } from '../types/dashboard'
 
 export async function getDashboardOverview(): Promise<DashboardOverview> {
@@ -381,6 +383,24 @@ export async function getDeveloperOverview(): Promise<DeveloperOverview> {
 
 export async function getRemoteAccess(): Promise<RemoteAccess> {
   const response = await apiClient.get<RemoteAccess>('/system/remote-access')
+  return response.data
+}
+
+export async function getOperations(): Promise<OperationItem[]> {
+  const response = await apiClient.get<OperationItem[]>('/operations')
+  return response.data
+}
+
+export async function getOperationHistory(): Promise<OperationHistoryItem[]> {
+  const response = await apiClient.get<OperationHistoryItem[]>('/operations/history')
+  return response.data
+}
+
+export async function runOperation(operationId: string): Promise<OperationHistoryItem> {
+  const response = await apiClient.post<OperationHistoryItem>(
+    `/operations/${encodeURIComponent(operationId)}/run`,
+    { confirm: true },
+  )
   return response.data
 }
 

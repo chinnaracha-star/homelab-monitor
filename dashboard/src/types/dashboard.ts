@@ -27,6 +27,9 @@ export interface AgentSummary {
   version: string
   status: string
   last_seen_at: string | null
+  groups?: string[]
+  labels?: string[]
+  tags?: string[]
 }
 
 export interface AgentDetail extends AgentSummary {
@@ -391,6 +394,24 @@ export interface BackupHistoryPeriod {
   status: string
 }
 
+export interface SqliteBackupStatus {
+  enabled: boolean
+  status: string
+  latest_file: string
+  latest_at: string
+  size_bytes: number
+  uncompressed_bytes: number
+  next_scheduled: string
+  retention_daily: number
+  retention_weekly: number
+  retention_monthly: number
+  last_verification: string
+  integrity: string
+  stored_path: string
+  duration_seconds: number
+  error: string
+}
+
 export interface BackupStatus {
   read_only: boolean
   status: string
@@ -407,6 +428,7 @@ export interface BackupStatus {
   updated_at: string
   destination: BackupDestination
   history: BackupHistoryPeriod[]
+  sqlite?: SqliteBackupStatus | null
 }
 
 export interface AnalyticsSeriesPoint {
@@ -890,11 +912,71 @@ export interface ProductionHealthCheck {
   recommended_action: string | null
 }
 
+export interface ObservabilitySnapshot {
+  last_self_check: string | null
+  last_backup: string | null
+  last_telegram: string | null
+  last_photo_scan: string | null
+  last_agent_checkin: string | null
+  api_latency_ms: number | null
+  database_size_bytes: number | null
+  database_growth_bytes: number | null
+  telegram_success_rate: number | null
+  photo_monitor_latency_ms: number | null
+  backup_success_rate: number | null
+  cpu_history: number[]
+  memory_history: number[]
+  disk_history: number[]
+}
+
 export interface ProductionHealth {
   generated_at: string
   score: number
   status: 'excellent' | 'good' | 'warning' | 'critical'
   checks: ProductionHealthCheck[]
+  last_self_check?: string | null
+  last_backup?: string | null
+  last_telegram?: string | null
+  last_photo_scan?: string | null
+  last_agent_checkin?: string | null
+  observability?: ObservabilitySnapshot | null
+  performance?: PerformanceSnapshot | null
+}
+
+export interface PerformanceWindow {
+  samples: number
+  api_ms: number | null
+  query_ms: number | null
+  photo_scan_ms: number | null
+  backup_seconds: number | null
+}
+
+export interface PerformanceSnapshot {
+  generated_at: string
+  performance_score: number
+  reliability_score: number
+  current: Record<string, number | null | undefined>
+  windows: Record<string, PerformanceWindow>
+}
+
+export interface OperationItem {
+  id: string
+  label: string
+  admin_only: boolean
+}
+
+export interface OperationHistoryItem {
+  id: string
+  operation: string
+  label: string
+  status: string
+  progress: string
+  actor: string
+  started_at: string
+  finished_at: string | null
+  ok: boolean | null
+  detail: string
+  duration_ms?: number
 }
 
 export interface ProductionRuntime {

@@ -85,3 +85,51 @@ Set `HOMELAB_RESTORE_CONFIG_DIR` to unpack `config.tar.gz` automatically.
 
 After restore, start the API so Alembic can apply any newer revisions
 (`alembic upgrade head` runs in the API entrypoint).
+
+# Automated SQLite gzip backups
+
+The API process copies SQLite with the Python backup API, compresses it to
+`.sqlite3.gz`, verifies integrity, then applies retention. This is independent
+of the TS-253 Pro observer. PostgreSQL is not used.
+
+| Item | Default |
+| --- | --- |
+| Schedule | Every day 02:00 `Asia/Bangkok` |
+| Path | `/var/lib/homelab-monitor/backups` |
+| Filename | `homelab-monitor-YYYY-MM-DD-HHMMSS.sqlite3.gz` |
+| Retention | 7 daily, 4 weekly (Sundays), 6 monthly |
+| Telegram | Reuses `TelegramNotifier` (`Backup Complete` / `Backup Failed`) |
+
+Configuration (`.env` / Compose):
+
+```bash
+HOMELAB_BACKUP_ENABLED=true
+HOMELAB_BACKUP_PATH=/var/lib/homelab-monitor/backups
+HOMELAB_BACKUP_RETENTION_DAILY=7
+HOMELAB_BACKUP_RETENTION_WEEKLY=4
+HOMELAB_BACKUP_RETENTION_MONTHLY=6
+HOMELAB_BACKUP_TIME=02:00
+HOMELAB_BACKUP_TIMEZONE=Asia/Bangkok
+```
+
+`HOMELAB_BACKUP_URL` remains the QNAP observer URL and is not the SQLite path.
+
+Verification after each backup: SQLite `PRAGMA integrity_check`, gzip decode,
+non-zero file size, and timestamp in the filename. Failed archives are renamed
+`*.failed`. Retention never deletes previous good copies when verification
+fails.
+
+The Backup dashboard page adds Latest Backup, Backup Status, Backup Size, Next
+Scheduled Backup, Retention Summary, and Last Verification from `GET /api/v1/backup`
+field `sqlite` (additive; existing QNAP fields are unchanged). Restore is
+manual — see `docs/restore.md`.
+
+## Operator checklist
+
+- [ ] `HOMELAB_BACKUP_ENABLED=true` in production `.env`
+- [ ] `homelab-data` volume includes `/var/lib/homelab-monitor/backups`
+- [ ] Telegram bot token and chat ID are set if operators want backup messages
+- [ ] Confirm one gzip file appears after 02:00 Bangkok (or run a one-shot backup)
+- [ ] Confirm the Backup page shows integrity PASS
+- [ ] Confirm failed backups do not remove older `.sqlite3.gz` files
+- [ ] Keep `docs/restore.md` reachable for the on-call operator

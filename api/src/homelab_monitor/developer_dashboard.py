@@ -45,11 +45,11 @@ from homelab_monitor.schemas import (
 from homelab_monitor.settings import get_settings
 from homelab_monitor.trends import TrendService, _health_bucket
 
-CURRENT_PHASE = 9
-CURRENT_SPRINT = "9.3.5"
-PHASE_PERCENTS = (100, 100, 100, 100, 100, 100, 100, 100, 70, 0)
-ROADMAP = "Phase 9: Analytics, Trends, Capacity, Mission Control"
-MILESTONE = "Sprint 9.3.5 Developer Dashboard"
+CURRENT_PHASE = 11
+CURRENT_SPRINT = "11.5"
+PHASE_PERCENTS = (100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 90)
+ROADMAP = "Phase 11: Backup, Observability, Multi-agent, Performance, Operations, Mission Control"
+MILESTONE = "Sprint 11.5 Operations Center / RC2"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 METADATA_PATH = REPO_ROOT / "state" / "developer-metadata.json"
 ACTIVITY_LIMIT = 20

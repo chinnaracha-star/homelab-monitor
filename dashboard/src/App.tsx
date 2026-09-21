@@ -84,6 +84,8 @@ function App() {
               </Route>
               <Route element={<PermissionRoute permission="developer" />}>
                 <Route path="developer" element={<DeveloperPage />} />
+              </Route>
+              <Route element={<PermissionRoute permission="operations" />}>
                 <Route path="developer/production-health" element={<ProductionHealthPage />} />
               </Route>
               <Route path="*" element={<Navigate replace to="/dashboard" />} />

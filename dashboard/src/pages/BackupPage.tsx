@@ -6,9 +6,9 @@ import { OverviewSkeleton } from '../components/Skeleton'
 import { StatusBadge } from '../components/StatusBadge'
 import badgeStyles from '../components/Components.module.css'
 import { useLivePolling } from '../hooks/useDashboardSocket'
-import { formatDuration, formatPercent } from '../utils/bytes'
+import { formatBytes, formatDuration, formatPercent } from '../utils/bytes'
 import { formatThaiDateTime } from '../utils/thaiDate'
-import type { BackupStatus } from '../types/dashboard'
+import type { BackupStatus, SqliteBackupStatus } from '../types/dashboard'
 import userStyles from './UsersPage.module.css'
 import pageStyles from './Pages.module.css'
 import styles from './BackupPage.module.css'
@@ -28,7 +28,7 @@ const STATUS_MAP: Record<string, string> = {
 export function BackupPage() {
   const snapshot = useLivePolling(getBackupStatus, BACKUP_EVENTS)
   const backup = snapshot.data
-  const empty = backup !== null && !backup.job_name && backup.status === 'unknown'
+  const empty = backup !== null && !backup.job_name && backup.status === 'unknown' && !backup.sqlite
 
   return (
     <section className={pageStyles.page}>
@@ -37,8 +37,8 @@ export function BackupPage() {
           <p className={pageStyles.eyebrow}>Operations</p>
           <h1 className={pageStyles.title}>Backup</h1>
           <p className={pageStyles.description}>
-            Read-only status of replication to the TS-253 Pro backup NAS. This dashboard never
-            starts, stops, deletes, or moves backups.
+            SQLite database backups plus read-only status of replication to the TS-253 Pro backup
+            NAS. This dashboard never starts, stops, deletes, or moves backups.
           </p>
         </div>
         <div className={userStyles.actions}>
@@ -50,8 +50,49 @@ export function BackupPage() {
       </header>
       {snapshot.error ? <SectionError title="Backup API failed" onRetry={snapshot.retry} /> : null}
       {!snapshot.data && !snapshot.error ? <OverviewSkeleton /> : null}
-      {empty ? <EmptyState message="No backup job has reported a snapshot." /> : null}
+      {empty && !backup?.sqlite ? <EmptyState message="No backup job has reported a snapshot." /> : null}
+      {backup?.sqlite ? <SqliteBackupCards sqlite={backup.sqlite} /> : null}
       {backup && !empty ? <BackupCards backup={backup} /> : null}
+    </section>
+  )
+}
+
+function SqliteBackupCards({ sqlite }: { sqlite: SqliteBackupStatus }) {
+  return (
+    <section className={styles.cardGrid} aria-label="SQLite backup cards">
+      <article className={styles.card} aria-label="Latest Backup card">
+        <h2 className={styles.cardTitle}>Latest Backup</h2>
+        <p className={styles.cardValue}>{formatTimestamp(sqlite.latest_at)}</p>
+        <p className={styles.cardMeta}>{sqlite.latest_file || 'No file yet'}</p>
+      </article>
+      <article className={styles.card} aria-label="SQLite Backup Status card">
+        <h2 className={styles.cardTitle}>Backup Status</h2>
+        <p className={styles.cardValue}>{titleCase(sqlite.status)}</p>
+        <p className={styles.cardMeta}>{sqlite.enabled ? 'Scheduled' : 'Disabled'}</p>
+      </article>
+      <article className={styles.card} aria-label="SQLite Backup Size card">
+        <h2 className={styles.cardTitle}>Backup Size</h2>
+        <p className={styles.cardValue}>{formatBytes(sqlite.size_bytes)}</p>
+        <p className={styles.cardMeta}>Uncompressed {formatBytes(sqlite.uncompressed_bytes)}</p>
+      </article>
+      <article className={styles.card} aria-label="Next Scheduled Backup card">
+        <h2 className={styles.cardTitle}>Next Scheduled Backup</h2>
+        <p className={styles.cardValue}>{formatTimestamp(sqlite.next_scheduled)}</p>
+      </article>
+      <article className={styles.card} aria-label="Retention Summary card">
+        <h2 className={styles.cardTitle}>Retention Summary</h2>
+        <p className={styles.cardValue}>
+          {sqlite.retention_daily} Daily
+        </p>
+        <p className={styles.cardMeta}>
+          {sqlite.retention_weekly} Weekly · {sqlite.retention_monthly} Monthly
+        </p>
+      </article>
+      <article className={styles.card} aria-label="Last Verification card">
+        <h2 className={styles.cardTitle}>Last Verification</h2>
+        <p className={styles.cardValue}>{sqlite.integrity}</p>
+        <p className={styles.cardMeta}>{formatTimestamp(sqlite.last_verification)}</p>
+      </article>
     </section>
   )
 }

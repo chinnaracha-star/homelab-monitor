@@ -181,6 +181,12 @@ a dashboard JWT:
 - `GET /api/v1/history/agents/{agent_id}/export` returns the same series as CSV.
   See [history.md](history.md).
 
+- `GET /api/v1/system/health` returns production health, optional observability,
+  and optional performance scores. See [performance.md](performance.md).
+- `GET /api/v1/operations`, `GET /api/v1/operations/history`, and
+  `POST /api/v1/operations/{id}/run` (body `{ "confirm": true }`) are
+  admin/operator maintenance actions. See [operations-center.md](operations-center.md).
+
 Missing agents and missing reports use the API's standard structured `404`
 responses. Complete response schemas and examples are available in OpenAPI.
 

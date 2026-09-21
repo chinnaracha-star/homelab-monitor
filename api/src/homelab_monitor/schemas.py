@@ -94,11 +94,51 @@ class ProductionHealthCheck(BaseModel):
     recommended_action: str | None = None
 
 
+class ObservabilitySnapshot(BaseModel):
+    last_self_check: datetime | None = None
+    last_backup: datetime | None = None
+    last_telegram: datetime | None = None
+    last_photo_scan: datetime | None = None
+    last_agent_checkin: datetime | None = None
+    api_latency_ms: float | None = None
+    database_size_bytes: int | None = None
+    database_growth_bytes: int | None = None
+    telegram_success_rate: float | None = None
+    photo_monitor_latency_ms: float | None = None
+    backup_success_rate: float | None = None
+    cpu_history: list[float] = []
+    memory_history: list[float] = []
+    disk_history: list[float] = []
+
+
+class PerformanceWindow(BaseModel):
+    samples: int = 0
+    api_ms: float | None = None
+    query_ms: float | None = None
+    photo_scan_ms: float | None = None
+    backup_seconds: float | None = None
+
+
+class PerformanceSnapshot(BaseModel):
+    generated_at: datetime
+    performance_score: int = 0
+    reliability_score: int = 0
+    current: dict = Field(default_factory=dict)
+    windows: dict[str, PerformanceWindow] = Field(default_factory=dict)
+
+
 class ProductionHealthResponse(BaseModel):
     generated_at: datetime
     score: int
     status: Literal["excellent", "good", "warning", "critical"]
     checks: list[ProductionHealthCheck] = []
+    last_self_check: datetime | None = None
+    last_backup: datetime | None = None
+    last_telegram: datetime | None = None
+    last_photo_scan: datetime | None = None
+    last_agent_checkin: datetime | None = None
+    observability: ObservabilitySnapshot | None = None
+    performance: PerformanceSnapshot | None = None
 
 
 class AgentRuntimeResponse(BaseModel):
@@ -846,11 +886,11 @@ class DeveloperGitStatus(BaseModel):
 
 
 class DeveloperProjectStatus(BaseModel):
-    application_version: str = "1.0.0-rc1"
+    application_version: str = "1.0.0-rc2"
     build_time: str | None = None
     environment: str = "development"
     current_phase: int = 9
-    current_sprint: str = "9.3.5"
+    current_sprint: str = "11.5"
     git: DeveloperGitStatus = DeveloperGitStatus()
 
 
@@ -888,7 +928,7 @@ class DeveloperBuildStatus(BaseModel):
     backend: str = "unknown"
     frontend: str = "unknown"
     docker_compose: str = "unknown"
-    application_version: str = "1.0.0-rc1"
+    application_version: str = "1.0.0-rc2"
     environment: str = "development"
 
 
@@ -908,7 +948,7 @@ class DeveloperPhaseProgress(BaseModel):
 
 class DeveloperProgress(BaseModel):
     phases: list[DeveloperPhaseProgress] = []
-    current_sprint: str = "9.3.5"
+    current_sprint: str = "11.5"
     roadmap: str = ""
     completed_percent: float = 0
     current_milestone: str = ""
@@ -1185,6 +1225,24 @@ class PhotoMonitorSettingsUpdateRequest(BaseModel):
         return self
 
 
+class SqliteBackupStatusResponse(BaseModel):
+    enabled: bool = True
+    status: str = "unknown"
+    latest_file: str = ""
+    latest_at: str = ""
+    size_bytes: int = 0
+    uncompressed_bytes: int = 0
+    next_scheduled: str = ""
+    retention_daily: int = 7
+    retention_weekly: int = 4
+    retention_monthly: int = 6
+    last_verification: str = ""
+    integrity: str = "unknown"
+    stored_path: str = ""
+    duration_seconds: float = 0
+    error: str = ""
+
+
 class BackupStatusResponse(BaseModel):
     read_only: bool = True
     status: str
@@ -1201,3 +1259,4 @@ class BackupStatusResponse(BaseModel):
     updated_at: datetime
     destination: BackupDestinationResponse
     history: list[BackupHistoryPeriodResponse] = []
+    sqlite: SqliteBackupStatusResponse | None = None

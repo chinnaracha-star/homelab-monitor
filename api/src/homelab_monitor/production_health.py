@@ -15,13 +15,16 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from homelab_monitor.developer_dashboard import DeveloperDashboardService
-from homelab_monitor.models import Alert, Notification
+from homelab_monitor.models import Agent, Alert, MetricHistory, Notification
 from homelab_monitor.notifications.config import load_payload, telegram_credentials
+from homelab_monitor.performance import collect_and_store, time_query
+from homelab_monitor.photo_watcher import get_photo_watcher_service
 from homelab_monitor.realtime import hub
 from homelab_monitor.remote_access import RemoteAccessService
 from homelab_monitor.schemas import (
     AgentRuntimeResponse,
     DockerContainerResponse,
+    ObservabilitySnapshot,
     ProductionHealthCheck,
     ProductionHealthResponse,
     ProductionNetworkResponse,
@@ -31,6 +34,7 @@ from homelab_monitor.schemas import (
     TelegramRuntimeResponse,
 )
 from homelab_monitor.settings import Settings, get_settings
+from homelab_monitor.sqlite_backup import load_state, sqlite_status_payload
 
 HealthStatus = Literal["healthy", "warning", "critical", "unknown"]
 
@@ -298,21 +302,64 @@ class ProductionHealthService:
         cpu = round(float(psutil.cpu_percent(interval=None)), 2)
         checks.append(self._resource_check("Memory", memory, now))
         checks.append(self._resource_check("CPU", cpu, now))
+        sqlite = sqlite_status_payload(self.settings)
+        backup_status: HealthStatus
+        if sqlite["integrity"] == "PASS":
+            backup_status = "healthy"
+        elif sqlite["status"] == "failed":
+            backup_status = "critical"
+        elif sqlite["enabled"]:
+            backup_status = "unknown"
+        else:
+            backup_status = "warning"
+        checks.append(
+            self._check(
+                "SQLite Backup",
+                backup_status,
+                now,
+                f"Latest backup integrity is {sqlite['integrity']}."
+                if sqlite["latest_file"]
+                else "No SQLite backup has completed yet.",
+                cause="The scheduled gzip backup failed verification.",
+                action="Inspect /var/lib/homelab-monitor/backups and API logs.",
+            )
+        )
+        watcher = get_photo_watcher_service(self.settings)
+        photo_status: HealthStatus = "healthy" if watcher.last_successful_scan else "unknown"
+        checks.append(
+            self._check(
+                "Photo Monitor",
+                photo_status,
+                now,
+                "Photo Monitor has completed a scan."
+                if watcher.last_successful_scan
+                else "Photo Monitor has not completed a successful scan yet.",
+                latency=float(self.settings.photo_scan_interval_seconds * 1000),
+                cause="CIFS watch folders may be unmounted.",
+                action="Verify /mnt photo mounts and Photo Monitor settings.",
+            )
+        )
         active_alerts = int(
             db.scalar(select(func.count()).select_from(Alert).where(Alert.status == "active")) or 0
         )
         weighted = {
-            "API": 20,
-            "Database": 20,
-            "Agent": 15,
-            "CPU": 10,
-            "Memory": 10,
-            "Storage": 15,
+            "API": 18,
+            "Database": 18,
+            "Agent": 12,
+            "CPU": 8,
+            "Memory": 8,
+            "Storage": 12,
+            "SQLite Backup": 8,
+            "Telegram": 8,
+            "Photo Monitor": 8,
         }
         score = 100
         by_component = {item.component: item for item in checks}
         for component, weight in weighted.items():
-            status = by_component[component].status
+            item = by_component.get(component)
+            if item is None:
+                continue
+            status = item.status
             if status == "critical":
                 score -= weight
             elif status in {"warning", "unknown"}:
@@ -328,7 +375,93 @@ class ProductionHealthService:
             label = "warning"
         else:
             label = "critical"
-        return ProductionHealthResponse(generated_at=now, score=score, status=label, checks=checks)
+        observability = self._observability(db, runtime, storage, sqlite, now, by_component)
+        database = by_component.get("Database")
+        query_ms = database.latency_ms if database else time_query(db)
+        performance = collect_and_store(db, self.settings, query_ms=query_ms)
+        return ProductionHealthResponse(
+            generated_at=now,
+            score=score,
+            status=label,
+            checks=checks,
+            last_self_check=now,
+            last_backup=observability.last_backup,
+            last_telegram=observability.last_telegram,
+            last_photo_scan=observability.last_photo_scan,
+            last_agent_checkin=observability.last_agent_checkin,
+            observability=observability,
+            performance=performance,
+        )
+
+    def _observability(
+        self,
+        db: Session,
+        runtime: ProductionRuntimeResponse,
+        storage: ProductionStorageResponse,
+        sqlite: dict,
+        now: datetime,
+        by_component: dict[str, ProductionHealthCheck],
+    ) -> ObservabilitySnapshot:
+        history = list(
+            db.scalars(
+                select(MetricHistory).order_by(MetricHistory.timestamp.desc()).limit(24)
+            ).all()
+        )
+        cpu_history = [
+            float(row.cpu_percent) for row in reversed(history) if row.cpu_percent is not None
+        ]
+        memory_history = [
+            float(row.memory_percent) for row in reversed(history) if row.memory_percent is not None
+        ]
+        disk_history = [
+            float(row.disk_percent) for row in reversed(history) if row.disk_percent is not None
+        ]
+        telegram_rows = list(
+            db.scalars(select(Notification).where(Notification.channel == "telegram")).all()
+        )
+        sent = sum(1 for row in telegram_rows if row.status == "sent")
+        failed = sum(1 for row in telegram_rows if row.status == "failed")
+        telegram_rate = round((sent / (sent + failed)) * 100, 1) if sent + failed else None
+        backups = Path(self.settings.backup_path)
+        ok_files = list(backups.glob("homelab-monitor-*.sqlite3.gz")) if backups.exists() else []
+        failed_files = list(backups.glob("*.failed")) if backups.exists() else []
+        backup_rate = (
+            round((len(ok_files) / (len(ok_files) + len(failed_files))) * 100, 1)
+            if ok_files or failed_files
+            else None
+        )
+        last_backup = None
+        if sqlite.get("latest_at"):
+            try:
+                last_backup = datetime.fromisoformat(str(sqlite["latest_at"]))
+            except ValueError:
+                last_backup = None
+        last_agent = db.scalar(select(func.max(Agent.last_seen_at)))
+        watcher = get_photo_watcher_service(self.settings)
+        latest_state = load_state(self.settings).get("latest", {})
+        previous_size = int(latest_state.get("uncompressed_bytes") or 0)
+        current_size = storage.database_size_bytes or 0
+        growth = current_size - previous_size if previous_size else None
+        api_check = by_component.get("API")
+        photo_check = by_component.get("Photo Monitor")
+        api_latency = api_check.latency_ms if api_check else 0.0
+        photo_latency = photo_check.latency_ms if photo_check else None
+        return ObservabilitySnapshot(
+            last_self_check=now,
+            last_backup=last_backup,
+            last_telegram=runtime.telegram.last_successful_send,
+            last_photo_scan=watcher.last_successful_scan,
+            last_agent_checkin=last_agent,
+            api_latency_ms=api_latency,
+            database_size_bytes=storage.database_size_bytes,
+            database_growth_bytes=growth,
+            telegram_success_rate=telegram_rate,
+            photo_monitor_latency_ms=getattr(watcher, "last_scan_duration_ms", photo_latency),
+            backup_success_rate=backup_rate,
+            cpu_history=cpu_history[-12:],
+            memory_history=memory_history[-12:],
+            disk_history=disk_history[-12:],
+        )
 
     def _api_check(self, now: datetime) -> ProductionHealthCheck:
         return self._check("API", "healthy", now, "API process is responding.", latency=0.0)

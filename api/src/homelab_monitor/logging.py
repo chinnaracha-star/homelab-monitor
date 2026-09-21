@@ -78,6 +78,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+            from homelab_monitor.performance import record_api_duration
+
+            record_api_duration(duration_ms)
             response.headers["x-request-id"] = request_id
             logging.getLogger("homelab_monitor.http").info(
                 "request_completed",

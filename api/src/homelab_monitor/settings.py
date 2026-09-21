@@ -83,6 +83,13 @@ class Settings(BaseSettings):
     qumagie_url: str = ""
     qumagie_api_key: SecretStr | None = None
     backup_url: str = ""
+    backup_enabled: bool = True
+    backup_path: str = "/var/lib/homelab-monitor/backups"
+    backup_retention_daily: int = Field(default=7, ge=1, le=90)
+    backup_retention_weekly: int = Field(default=4, ge=1, le=52)
+    backup_retention_monthly: int = Field(default=6, ge=1, le=36)
+    backup_time: str = "02:00"
+    backup_timezone: str = "Asia/Bangkok"
     photo_watch_folder: str = "/mnt/picture-all"
     photo_watch_folders: list[str] = Field(
         default_factory=lambda: [

@@ -4,13 +4,17 @@ from homelab_monitor.schemas import (
     BackupDestinationResponse,
     BackupHistoryPeriodResponse,
     BackupStatusResponse,
+    SqliteBackupStatusResponse,
 )
+from homelab_monitor.settings import Settings
+from homelab_monitor.sqlite_backup import sqlite_status_payload
 
 
 def backup_status_from_snapshot(
     snapshot: ConnectorSnapshot,
     *,
     history: list[dict[str, str]] | None = None,
+    settings: Settings | None = None,
 ) -> BackupStatusResponse:
     summary = snapshot.summary
     job_status = as_str(summary.get("job_status")).lower()
@@ -36,6 +40,9 @@ def backup_status_from_snapshot(
             model=as_str(summary.get("destination_model"), "TS-253 Pro"),
         ),
         history=[BackupHistoryPeriodResponse.model_validate(item) for item in history or []],
+        sqlite=SqliteBackupStatusResponse.model_validate(sqlite_status_payload(settings))
+        if settings is not None
+        else None,
     )
 
 

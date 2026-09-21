@@ -108,6 +108,9 @@ describe('role-based access control', () => {
     expect(can('admin', 'developer')).toBe(true)
     expect(can('operator', 'developer')).toBe(false)
     expect(can('viewer', 'developer')).toBe(false)
+    expect(can('admin', 'operations')).toBe(true)
+    expect(can('operator', 'operations')).toBe(true)
+    expect(can('viewer', 'operations')).toBe(false)
   })
 
   it('shows every navigation item for an admin', () => {
@@ -158,6 +161,7 @@ describe('role-based access control', () => {
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Mission Control' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Production Health' })).toBeInTheDocument()
     expect(screen.getByLabelText('Role operator')).toBeInTheDocument()
   })
 
@@ -182,6 +186,7 @@ describe('role-based access control', () => {
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Mission Control' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Production Health' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Role viewer')).toBeInTheDocument()
   })
 

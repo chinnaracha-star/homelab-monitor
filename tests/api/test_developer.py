@@ -53,9 +53,9 @@ def test_developer_overview_is_admin_only(
     assert operator.status_code == 403
     assert viewer.status_code == 403
     body = admin.json()
-    assert body["project"]["application_version"] == "1.0.0-rc1"
-    assert body["project"]["current_sprint"] == "9.3.5"
-    assert body["project"]["current_phase"] == 9
+    assert body["project"]["application_version"] == "1.0.0-rc2"
+    assert body["project"]["current_sprint"] == "11.5"
+    assert body["project"]["current_phase"] == 11
     assert body["tests"]["backend_tests"] == "unknown"
     assert body["build"]["build_status"] == "unknown"
     assert 0 <= body["health"]["overall_health"] <= 100
@@ -63,7 +63,7 @@ def test_developer_overview_is_admin_only(
     assert body["statistics"]["database_tables"] > 0
     assert "state" in body["agent_service"]
     assert body["agent_service"]["state"] in {"running", "stopped", "restarting", "unknown"}
-    assert len(body["progress"]["phases"]) == 10
+    assert len(body["progress"]["phases"]) == 11
 
 
 def test_developer_git_unavailable(

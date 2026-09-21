@@ -1,5 +1,7 @@
-import { memo } from 'react'
-import { getProductionHealthOverview } from '../api/dashboard'
+import { memo, useContext, useEffect, useState } from 'react'
+import { getOperationHistory, getOperations, getProductionHealthOverview, runOperation } from '../api/dashboard'
+import { AuthContext } from '../auth/AuthContext'
+import { can } from '../auth/permissions'
 import { EmptyState } from '../components/EmptyState'
 import { LastUpdated } from '../components/LastUpdated'
 import { OverviewSkeleton } from '../components/Skeleton'
@@ -7,7 +9,7 @@ import { SectionError } from '../components/SectionError'
 import { StatusBadge } from '../components/StatusBadge'
 import { LIVE_PAGE_POLL } from '../constants'
 import { useLivePolling } from '../hooks/useDashboardSocket'
-import type { ProductionHealthCheck } from '../types/dashboard'
+import type { OperationHistoryItem, OperationItem, ProductionHealthCheck } from '../types/dashboard'
 import { formatBytes } from '../utils/bytes'
 import { formatThaiDateTime } from '../utils/thaiDate'
 import pageStyles from './Pages.module.css'
@@ -65,12 +67,72 @@ export const ProductionHealthPage = memo(function ProductionHealthPage() {
         <>
           <article className={styles.scoreCard} aria-label={`Production health score ${data.health.score}`}>
             <div>
-              <p className={pageStyles.eyebrow}>Production Health Score</p>
+              <p className={pageStyles.eyebrow}>Overall Health Score</p>
               <p className={styles.score}>{data.health.score}</p>
               <p className={styles.scoreLabel}>{data.health.status.toUpperCase()}</p>
             </div>
             <StatusBadge kind="service" status={data.health.status === 'excellent' ? 'healthy' : data.health.status} />
           </article>
+
+          <section className={styles.healthGrid} aria-label="Last operational events">
+            <DetailCard title="Last Self Check" rows={[['When', timestamp(data.health.last_self_check ?? data.health.generated_at)]]} />
+            <DetailCard title="Last Backup" rows={[['When', timestamp(data.health.last_backup ?? null)]]} />
+            <DetailCard title="Last Telegram" rows={[['When', timestamp(data.health.last_telegram ?? data.runtime.telegram.last_successful_send)]]} />
+            <DetailCard title="Last Photo Scan" rows={[['When', timestamp(data.health.last_photo_scan ?? null)]]} />
+            <DetailCard title="Last Agent Check-in" rows={[['When', timestamp(data.health.last_agent_checkin ?? data.runtime.agent.last_heartbeat)]]} />
+          </section>
+
+          {data.health.performance ? (
+            <section className={pageStyles.section} aria-labelledby="performance-title">
+              <h2 className={styles.sectionTitle} id="performance-title">Performance</h2>
+              <div className={styles.healthGrid}>
+                <article className={styles.detailCard} aria-label="Performance Score">
+                  <h3>Performance Score</h3>
+                  <p className={styles.score}>{data.health.performance.performance_score}</p>
+                </article>
+                <article className={styles.detailCard} aria-label="Reliability Score">
+                  <h3>Reliability Score</h3>
+                  <p className={styles.score}>{data.health.performance.reliability_score}</p>
+                </article>
+                <DetailCard title="Current" rows={[
+                  ['API', ms(data.health.performance.current.api_ms)],
+                  ['Database query', ms(data.health.performance.current.query_ms)],
+                  ['SQLite size', data.health.performance.current.sqlite_bytes == null ? 'Unavailable' : formatBytes(Number(data.health.performance.current.sqlite_bytes))],
+                  ['Photo scan', ms(data.health.performance.current.photo_scan_ms)],
+                  ['Backup', sec(data.health.performance.current.backup_seconds)],
+                  ['Docker CPU', data.health.performance.current.docker_cpu_percent == null ? 'Unavailable' : `${data.health.performance.current.docker_cpu_percent}%`],
+                ]} />
+                <DetailCard title="History windows" rows={[
+                  ['24h API', ms(data.health.performance.windows['24h']?.api_ms)],
+                  ['7d API', ms(data.health.performance.windows['7d']?.api_ms)],
+                  ['30d API', ms(data.health.performance.windows['30d']?.api_ms)],
+                ]} />
+              </div>
+            </section>
+          ) : null}
+
+          <OperationsPanel />
+
+          {data.health.observability ? (
+            <section className={pageStyles.section} aria-labelledby="observability-title">
+              <h2 className={styles.sectionTitle} id="observability-title">Observability</h2>
+              <div className={styles.detailsGrid}>
+                <DetailCard title="Platform" rows={[
+                  ['API latency', data.health.observability.api_latency_ms === null ? 'Unavailable' : `${data.health.observability.api_latency_ms} ms`],
+                  ['Database size', data.health.observability.database_size_bytes === null ? 'Unavailable' : formatBytes(data.health.observability.database_size_bytes)],
+                  ['Database growth', data.health.observability.database_growth_bytes === null ? 'Unavailable' : formatBytes(data.health.observability.database_growth_bytes)],
+                  ['Telegram success', data.health.observability.telegram_success_rate === null ? 'Unavailable' : `${data.health.observability.telegram_success_rate}%`],
+                  ['Photo Monitor latency', data.health.observability.photo_monitor_latency_ms === null ? 'Unavailable' : `${data.health.observability.photo_monitor_latency_ms} ms`],
+                  ['Backup success', data.health.observability.backup_success_rate === null ? 'Unavailable' : `${data.health.observability.backup_success_rate}%`],
+                ]} />
+                <DetailCard title="History" rows={[
+                  ['CPU history', data.health.observability.cpu_history.map((item) => `${item}%`).join(', ') || 'Unavailable'],
+                  ['Memory history', data.health.observability.memory_history.map((item) => `${item}%`).join(', ') || 'Unavailable'],
+                  ['Disk growth', data.health.observability.disk_history.map((item) => `${item}%`).join(', ') || 'Unavailable'],
+                ]} />
+              </div>
+            </section>
+          ) : null}
 
           <section className={styles.healthGrid} aria-label="Production component health">
             {data.health.checks.map((check) => <HealthCard check={check} key={check.component} />)}
@@ -178,5 +240,101 @@ function DetailCard({ title, rows }: { title: string; rows: (string | number)[][
         {rows.map(([label, rowValue]) => <div key={label}><dt>{label}</dt><dd>{rowValue}</dd></div>)}
       </dl>
     </article>
+  )
+}
+
+function ms(value: number | null | undefined): string {
+  return value === null || value === undefined ? 'Unavailable' : `${value} ms`
+}
+
+function sec(value: number | null | undefined): string {
+  return value === null || value === undefined ? 'Unavailable' : `${value} s`
+}
+
+function OperationsPanel() {
+  const auth = useContext(AuthContext)
+  const allowed = can(auth?.user?.role, 'operations')
+  const [items, setItems] = useState<OperationItem[]>([])
+  const [history, setHistory] = useState<OperationHistoryItem[]>([])
+  const [running, setRunning] = useState<string | null>(null)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (!allowed) {
+      return
+    }
+    void Promise.all([getOperations(), getOperationHistory()]).then(([ops, rows]) => {
+      setItems(ops)
+      setHistory(rows)
+    })
+  }, [allowed])
+
+  if (!allowed) {
+    return null
+  }
+
+  async function execute(item: OperationItem) {
+    const confirmed = window.confirm(`Run ${item.label}? This is an operator action.`)
+    if (!confirmed) {
+      return
+    }
+    setRunning(item.id)
+    setMessage(`${item.label}: in progress`)
+    try {
+      const result = await runOperation(item.id)
+      setMessage(`${result.label}: ${result.status} — ${result.detail}`)
+      setHistory(await getOperationHistory())
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Operation failed')
+    } finally {
+      setRunning(null)
+    }
+  }
+
+  return (
+    <section className={pageStyles.section} aria-labelledby="operations-title">
+      <h2 className={styles.sectionTitle} id="operations-title">Operations Center</h2>
+      {message ? <p className={styles.meta}>{message}</p> : null}
+      <div className={styles.opsGrid}>
+        {items.map((item) => (
+          <button
+            className={styles.opButton}
+            disabled={running !== null || (item.admin_only && auth?.user?.role !== 'admin')}
+            key={item.id}
+            type="button"
+            onClick={() => void execute(item)}
+          >
+            {running === item.id ? `${item.label}…` : item.label}
+          </button>
+        ))}
+      </div>
+      <h3 className={styles.sectionTitle}>Operation History</h3>
+      {history.length === 0 ? <EmptyState message="No operations have been run yet." /> : (
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Operation</th>
+                <th>Actor</th>
+                <th>Status</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((row) => (
+                <tr key={row.id}>
+                  <td>{formatThaiDateTime(row.started_at, false)}</td>
+                  <td>{row.label}</td>
+                  <td>{row.actor}</td>
+                  <td>{row.status}</td>
+                  <td>{row.detail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   )
 }

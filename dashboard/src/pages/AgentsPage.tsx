@@ -9,7 +9,12 @@ import { LIVE_PAGE_POLL } from '../constants'
 import { useLivePolling } from '../hooks/useDashboardSocket'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useNow } from '../hooks/useNow'
-import { AGENT_FILTER_STORAGE_KEY, isAgentFilter, type AgentFilter } from '../utils/agents'
+import {
+  AGENT_FILTER_STORAGE_KEY,
+  deriveAgentTags,
+  isAgentFilter,
+  type AgentFilter,
+} from '../utils/agents'
 import { isApiErrorCode } from '../utils/errors'
 import { getSystemMetrics } from '../utils/metrics'
 import styles from './Pages.module.css'
@@ -55,16 +60,42 @@ export const AgentsPage = memo(function AgentsPage() {
     return counts
   }, [alerts.data])
 
+  const labeledAgents = useMemo(() => {
+    const membership = new Map<string, string[]>()
+    for (const group of groups.data ?? []) {
+      for (const agentId of group.agent_ids) {
+        membership.set(agentId, [...(membership.get(agentId) ?? []), group.name])
+      }
+    }
+    return (agents.data ?? []).map((agent) => {
+      const groupNames = membership.get(agent.id) ?? []
+      return {
+        ...agent,
+        groups: groupNames,
+        labels: groupNames,
+        tags: deriveAgentTags(agent, osNames.data?.[agent.id] ?? ''),
+      }
+    })
+  }, [agents.data, groups.data, osNames.data])
+
   const visibleAgents = useMemo(() => {
     if (!agents.data) {
       return []
     }
     if (groupId === 'all') {
-      return agents.data
+      return labeledAgents
     }
     const memberIds = new Set(groups.data?.find((group) => group.id === groupId)?.agent_ids ?? [])
-    return agents.data.filter((agent) => memberIds.has(agent.id))
-  }, [agents.data, groupId, groups.data])
+    return labeledAgents.filter((agent) => memberIds.has(agent.id))
+  }, [agents.data, groupId, groups.data, labeledAgents])
+
+  const fleet = useMemo(() => {
+    const items = agents.data ?? []
+    const online = items.filter((agent) => agent.status === 'online').length
+    const offline = items.filter((agent) => agent.status === 'offline').length
+    const score = items.length === 0 ? 0 : Math.round((online / items.length) * 100)
+    return { total: items.length, online, offline, score }
+  }, [agents.data])
 
   const isRefreshing = agents.isRefreshing || alerts.isRefreshing || osNames.isRefreshing || groups.isRefreshing
   const lastUpdated =
@@ -78,10 +109,33 @@ export const AgentsPage = memo(function AgentsPage() {
         <div>
           <p className={styles.eyebrow}>Infrastructure</p>
           <h1 className={styles.title}>Agents</h1>
-          <p className={styles.description}>Hosts reporting to HomeLab Monitor.</p>
+          <p className={styles.description}>
+            Hosts reporting to HomeLab Monitor. Groups, labels, and tags are derived from existing
+            agent groups and hostnames without changing the agent protocol.
+          </p>
         </div>
         <LastUpdated refreshing={isRefreshing} value={lastUpdated} />
       </header>
+
+      {agents.data ? (
+        <section className={styles.fleetGrid} aria-label="Fleet health">
+          <article className={styles.fleetCard}>
+            <h2>Overall Fleet Health</h2>
+            <p className={styles.fleetValue}>{fleet.score}</p>
+            <p className={styles.fleetMeta}>0–100 from online agents</p>
+          </article>
+          <article className={styles.fleetCard}>
+            <h2>Online Summary</h2>
+            <p className={styles.fleetValue}>{fleet.online}</p>
+            <p className={styles.fleetMeta}>of {fleet.total} agents</p>
+          </article>
+          <article className={styles.fleetCard}>
+            <h2>Offline Summary</h2>
+            <p className={styles.fleetValue}>{fleet.offline}</p>
+            <p className={styles.fleetMeta}>hosts past the offline timeout</p>
+          </article>
+        </section>
+      ) : null}
 
       <AgentToolbar
         filter={filter}

@@ -142,3 +142,24 @@
     text-align: left;
   }
 }
+
+.opsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.opButton {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.opButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

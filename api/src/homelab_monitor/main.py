@@ -9,11 +9,8 @@ from homelab_monitor import __version__
 from homelab_monitor.auth.bootstrap import ensure_default_users
 from homelab_monitor.database import get_engine
 from homelab_monitor.errors import APIError, api_error_handler
-from homelab_monitor.infrastructure_monitor import run_infrastructure_monitor
 from homelab_monitor.logging import RequestLoggingMiddleware, configure_logging
-from homelab_monitor.notification_worker import run_notification_worker
-from homelab_monitor.offline_monitor import run_offline_monitor
-from homelab_monitor.photo_watcher import run_photo_watcher
+from homelab_monitor.operations import factories
 from homelab_monitor.realtime import hub
 from homelab_monitor.routers import (
     agents,
@@ -31,6 +28,7 @@ from homelab_monitor.routers import (
     infrastructure,
     insights,
     notifications,
+    operations,
     photos,
     predictions,
     realtime,
@@ -38,8 +36,8 @@ from homelab_monitor.routers import (
     trends,
     users,
 )
+from homelab_monitor.runtime_control import register_background
 from homelab_monitor.settings import get_settings
-from homelab_monitor.telegram_reports import run_telegram_reports
 
 
 @asynccontextmanager
@@ -47,13 +45,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     with Session(get_engine()) as db:
         ensure_default_users(db, get_settings())
     hub.bind_loop(asyncio.get_running_loop())
-    tasks = [
-        asyncio.create_task(run_offline_monitor(get_settings())),
-        asyncio.create_task(run_infrastructure_monitor(get_settings())),
-        asyncio.create_task(run_telegram_reports(get_settings())),
-        asyncio.create_task(run_notification_worker(get_settings())),
-        asyncio.create_task(run_photo_watcher(get_settings())),
-    ]
+    settings = get_settings()
+    tasks = [register_background(name, factory) for name, factory in factories(settings).items()]
     try:
         yield
     finally:
@@ -99,6 +92,7 @@ def create_app() -> FastAPI:
     application.include_router(realtime.router)
     application.include_router(system.router)
     application.include_router(photos.router)
+    application.include_router(operations.router)
     return application
 
 

@@ -19,6 +19,7 @@ export type Permission =
   | 'backup'
   | 'analytics'
   | 'developer'
+  | 'operations'
 
 export interface NavItem {
   to?: string
@@ -47,6 +48,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'backup',
     'analytics',
     'developer',
+    'operations',
   ],
   operator: [
     'dashboard',
@@ -63,6 +65,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'photo_services',
     'backup',
     'analytics',
+    'operations',
   ],
   viewer: [
     'dashboard',
@@ -114,10 +117,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/settings', label: 'Settings', permission: 'settings' },
   {
     label: 'Developer',
-    permission: 'developer',
+    permission: 'operations',
     children: [
       { to: '/developer', label: 'Mission Control', permission: 'developer' },
-      { to: '/developer/production-health', label: 'Production Health', permission: 'developer' },
+      { to: '/developer/production-health', label: 'Production Health', permission: 'operations' },
     ],
   },
 ]
