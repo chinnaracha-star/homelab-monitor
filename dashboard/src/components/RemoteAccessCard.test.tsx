@@ -22,7 +22,7 @@ describe('Remote Access card', () => {
     expect(screen.getByRole('heading', { name: 'Remote Access' })).toBeInTheDocument()
     expect(screen.getByLabelText('Connection Connected')).toBeInTheDocument()
     expect(screen.getByLabelText('Hostname homelab-monitor.tailnet.ts.net')).toBeInTheDocument()
-    expect(screen.getByLabelText('Tailnet URL https://homelab-monitor.tailnet.ts.net')).toBeInTheDocument()
+    expect(screen.getByLabelText('Dashboard Public URL https://homelab-monitor.tailnet.ts.net')).toBeInTheDocument()
     expect(screen.getByLabelText('HTTPS Enabled')).toBeInTheDocument()
     expect(screen.getByLabelText('Serve Enabled')).toBeInTheDocument()
     expect(screen.getByLabelText('Funnel Disabled')).toBeInTheDocument()

@@ -88,7 +88,8 @@ def test_hourly_daily_weekly_generation_and_history(monkeypatch) -> None:
         assert "Photos Today" in sent[-1]
         assert "Immich Indexed" in sent[-1]
         assert "💡 Recommendation" in sent[-1]
-        assert "Dashboard" in sent[-1]
+        assert "http://dashboard" not in sent[-1]
+        assert "http://127.0.0.1" not in sent[-1]
         assert "• Status:" not in sent[-1]
         again = process_due_reports(db, settings, now=hourly_at)
         assert again == []
@@ -222,7 +223,8 @@ def test_manual_test_report_jwt_rbac_disabled_success_retry_and_history(
     assert "🧪 Test Report" in body
     assert "8 September 2026" in body
     assert "16:42" in body
-    assert "Dashboard" in body
+    assert "http://dashboard" not in body
+    assert "http://127.0.0.1" not in body
     posted = client.post("/api/v1/notifications/test-report", headers=auth_header())
     assert posted.status_code == 200
     payload = posted.json()
@@ -418,18 +420,30 @@ def test_telegram_inline_keyboard_uses_configured_urls(monkeypatch) -> None:
         "homelab_monitor.telegram_links.RemoteAccessService.snapshot",
         lambda self: RemoteAccessResponse(),
     )
-    empty = telegram_reply_markup(get_settings().model_copy(update={"dashboard_health_url": ""}))
-    assert empty is not None
-    assert empty["inline_keyboard"][0][0]["text"] == "🏠 Dashboard"
+    empty = telegram_reply_markup(
+        get_settings().model_copy(
+            update={
+                "dashboard_health_url": "",
+                "dashboard_public_url": "",
+                "immich_public_url": "",
+                "qnap_public_url": "",
+                "immich_url": "",
+                "qnap_url": "",
+            }
+        )
+    )
+    assert empty is None
     markup = telegram_reply_markup(
         get_settings().model_copy(
             update={
-                "dashboard_health_url": "http://127.0.0.1:18081/",
-                "immich_url": "https://immich.example/",
+                "dashboard_health_url": "http://dashboard:8080/",
+                "dashboard_public_url": "",
+                "immich_public_url": "https://immich.example/",
+                "immich_url": "http://immich:2283",
                 "qnap_url": "",
             }
         )
     )
     assert markup is not None
     labels = [row[0]["text"] for row in markup["inline_keyboard"]]
-    assert labels == ["🏠 Dashboard", "📷 Immich"]
+    assert labels == ["📷 Immich"]

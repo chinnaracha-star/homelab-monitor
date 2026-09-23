@@ -1,4 +1,4 @@
-export const APP_VERSION = '1.0.0-rc1'
+export const APP_VERSION = '1.0.0-rc2.2'
 
 export const pwaManifest = {
   name: 'HomeLab Monitor',
@@ -11,6 +11,22 @@ export const pwaManifest = {
   scope: '/',
   start_url: '/',
   lang: 'en',
+  categories: ['utilities', 'productivity'],
+  shortcuts: [
+    { name: 'Overview', short_name: 'Overview', description: 'Open the dashboard overview', url: '/dashboard' },
+    { name: 'Alerts', short_name: 'Alerts', description: 'Open active alerts', url: '/alerts' },
+    { name: 'Photo Monitor', short_name: 'Photos', description: 'Open Photo Monitor', url: '/photo-monitor' },
+    { name: 'Backup', short_name: 'Backup', description: 'Open backup status', url: '/backup' },
+  ],
+  widgets: [
+    {
+      name: 'HomeLab Status',
+      description: 'Home screen widget metadata for platform health.',
+      tag: 'homelab-status',
+      template: 'homelab-status',
+      data: '/dashboard',
+    },
+  ],
   icons: [
     {
       src: '/icons/icon-192.png',

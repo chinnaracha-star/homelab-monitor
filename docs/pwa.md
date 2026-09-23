@@ -59,13 +59,11 @@ may be colder than on Chrome.
 Static assets (HTML, CSS, JS, icons, fonts, images) use **cache-first** after
 the first visit.
 
-`GET /api/*` uses **network-first** with a cache fallback so the last dashboard
-payload can render when the API is unreachable.
+`GET /api/*` uses **network-only** (Workbox default method is GET).
 
-The service worker does **not** cache:
+Mutating `/api/*` and `/ws/*` (`POST`, `PUT`, `PATCH`, `DELETE`) are registered explicitly and replayed with a buffered body. Android Chrome does not fall back to the network when a controlling service worker leaves those methods unmatched — Axios then shows **Network Error** and the API never sees `POST /api/v1/auth/login`.
 
-- `POST`, `PUT`, `DELETE`, `PATCH`
-- `/api/v1/auth/*` (login and session)
+The worker calls `skipWaiting()` and `clientsClaim()`. The catch handler must not synthesize `Response.error()` for `/api` or `/ws`.
 
 When offline, Overview shows **Offline**, **Last Updated**, and **Cached Data**.
 Mission Control shows **Offline Mode**. JWT tokens stay in `localStorage`; they
@@ -86,9 +84,8 @@ Settings → Application → **Check for Update** calls `registration.update()`.
 | --- | --- |
 | Precached build assets | Cache first (Workbox precache) |
 | Images, fonts, extra scripts | Cache first |
-| API GET | Network first |
-| Auth | Network only |
-| Mutations | Never cached |
+| API GET | Network only |
+| Auth and mutations | Network pass-through, never CacheFirst |
 
 **Clear Cache** in Settings deletes Cache Storage entries only. It does not
 log you out.

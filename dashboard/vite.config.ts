@@ -1,8 +1,13 @@
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { loadEnv } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { defineConfig } from 'vitest/config'
 import { pwaManifest } from './src/pwa/manifest.ts'
+
+const dashboardRoot = dirname(fileURLToPath(import.meta.url))
+const publicUrlRules = resolve(dashboardRoot, '../shared/public-url-rules.json')
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -46,6 +51,11 @@ export default defineConfig(({ mode }) => {
         },
       }),
     ],
+    resolve: {
+      alias: {
+        '@homelab/public-url-rules': publicUrlRules,
+      },
+    },
     server: {
       proxy,
     },

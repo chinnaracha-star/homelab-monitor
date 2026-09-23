@@ -14,7 +14,8 @@ describe('PWA manifest', () => {
     const sizes = pwaManifest.icons.map((icon) => icon.sizes)
     expect(sizes).toContain('192x192')
     expect(sizes).toContain('512x512')
-    expect(pwaManifest.icons.some((icon) => icon.purpose === 'maskable')).toBe(true)
+    expect(pwaManifest.shortcuts?.length).toBeGreaterThan(0)
+    expect(pwaManifest.widgets?.[0]?.tag).toBe('homelab-status')
   })
 
   it('detects standalone app mode and service worker labels', () => {

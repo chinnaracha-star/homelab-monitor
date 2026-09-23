@@ -83,5 +83,18 @@ export function usePolling<T>(
     }
   }, [enabled, intervalMs, load])
 
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    function handleRefresh() {
+      void load()
+    }
+    window.addEventListener('homelab-pull-refresh', handleRefresh)
+    return () => {
+      window.removeEventListener('homelab-pull-refresh', handleRefresh)
+    }
+  }, [enabled, load])
+
   return { data, error, isRefreshing, lastUpdated, retry: load }
 }

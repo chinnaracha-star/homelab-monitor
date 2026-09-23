@@ -107,6 +107,10 @@ class Settings(BaseSettings):
     tailscale_socket: str = "/var/run/tailscale/tailscaled.sock"
     tailscale_timeout_seconds: float = Field(default=2.0, gt=0, le=15)
     dashboard_health_url: str = ""
+    api_health_url: str = ""
+    dashboard_public_url: str = ""
+    immich_public_url: str = ""
+    qnap_public_url: str = ""
     dashboard_port: int = Field(default=18081, ge=1, le=65535)
 
 

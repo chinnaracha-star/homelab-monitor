@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from contextvars import ContextVar, Token
-from urllib.parse import urlparse
 
 from fastapi import Request
 
 from homelab_monitor.remote_access import RemoteAccessService
 from homelab_monitor.settings import Settings, get_settings
+from homelab_monitor.telegram_url_validator import validate_public_url
 
 _request_origin: ContextVar[str | None] = ContextVar("telegram_request_origin", default=None)
 
@@ -30,14 +30,8 @@ def _origin_from_request(request: Request) -> str | None:
     return f"{proto.strip()}://{host}".rstrip("/")
 
 
-def _clean_url(value: str | None) -> str | None:
-    text = (value or "").strip().rstrip("/")
-    if not text:
-        return None
-    parsed = urlparse(text if "://" in text else f"https://{text}")
-    if not parsed.netloc:
-        return None
-    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/") or None
+def is_telegram_button_url(value: str | None) -> bool:
+    return validate_public_url(value) is not None
 
 
 def _tailnet_url(settings: Settings) -> str | None:
@@ -48,29 +42,32 @@ def _tailnet_url(settings: Settings) -> str | None:
     return f"https://{hostname}"
 
 
-def _localhost_url(settings: Settings) -> str:
-    return f"http://127.0.0.1:{settings.dashboard_port}"
-
-
 def resolve_dashboard_url(settings: Settings | None = None) -> str | None:
+    """Public dashboard URL only. Never uses Docker/health/localhost URLs."""
     config = settings or get_settings()
-    configured = _clean_url(config.dashboard_health_url)
+    configured = validate_public_url(config.dashboard_public_url, kind="dashboard")
     if configured:
         return configured
-    current = _clean_url(_request_origin.get())
-    if current:
-        return current
-    tailnet = _clean_url(_tailnet_url(config))
+    tailnet = validate_public_url(_tailnet_url(config), kind="dashboard")
     if tailnet:
         return tailnet
-    return _clean_url(_localhost_url(config))
+    origin = validate_public_url(_request_origin.get(), kind="dashboard")
+    if origin:
+        return origin
+    return None
 
 
 def resolve_immich_url(settings: Settings | None = None) -> str | None:
     config = settings or get_settings()
-    return _clean_url(config.immich_url)
+    public = validate_public_url(config.immich_public_url, kind="immich")
+    if public:
+        return public
+    return validate_public_url(config.immich_url, kind="immich")
 
 
 def resolve_qnap_url(settings: Settings | None = None) -> str | None:
     config = settings or get_settings()
-    return _clean_url(config.qnap_url)
+    public = validate_public_url(config.qnap_public_url, kind="qnap")
+    if public:
+        return public
+    return validate_public_url(config.qnap_url, kind="qnap")

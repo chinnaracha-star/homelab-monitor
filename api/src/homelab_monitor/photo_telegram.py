@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from homelab_monitor.photo_folders import display_folder_name
 from homelab_monitor.telegram import BANGKOK
 from homelab_monitor.telegram_links import (
+    is_telegram_button_url,
     resolve_dashboard_url,
     resolve_immich_url,
     resolve_qnap_url,
@@ -45,7 +46,7 @@ def _link_lines() -> list[str]:
         ("QNAP", resolve_qnap_url()),
     )
     for label, url in mapping:
-        if not url:
+        if not url or not is_telegram_button_url(url):
             continue
         if lines:
             lines.append("")
@@ -89,19 +90,15 @@ def format_new_photos_batch_message(
     source: str = "QNAP",
 ) -> str:
     del source
-    extra = max(0, len(filenames) - 1)
-    newest = filenames[0] if filenames else "—"
     lines = [
         f"📷 {len(filenames)} New Photos",
         "",
         "Folder",
         display_folder_name(folder),
         "",
-        "Newest",
-        newest,
+        "Files",
+        *[filename or "—" for filename in filenames],
     ]
-    if extra:
-        lines.append(f"+{extra} more")
     links = _link_lines()
     if links:
         lines.extend(["", *links])

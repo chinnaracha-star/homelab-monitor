@@ -39,6 +39,9 @@ packages = [
   "api/src/homelab_monitor",
 ]
 
+[tool.hatch.build.targets.wheel.force-include]
+"shared/public-url-rules.json" = "homelab_monitor/public-url-rules.json"
+
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]

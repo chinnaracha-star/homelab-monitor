@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { getErrorMessage } from '../utils/errors'
@@ -13,6 +13,15 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) {
+      return
+    }
+    void navigator.serviceWorker.getRegistrations().then((registrations) => {
+      void Promise.all(registrations.map((registration) => registration.unregister()))
+    })
+  }, [])
 
   if (user) {
     return <Navigate replace to={from && from !== '/login' ? from : '/dashboard'} />

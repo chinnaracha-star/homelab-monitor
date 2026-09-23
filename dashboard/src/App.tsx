@@ -32,8 +32,8 @@ import { UsersPage } from './pages/UsersPage'
 
 function App() {
   return (
-    <PwaProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <PwaProvider>
         <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -93,8 +93,8 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
-      </AuthProvider>
-    </PwaProvider>
+      </PwaProvider>
+    </AuthProvider>
   )
 }
 

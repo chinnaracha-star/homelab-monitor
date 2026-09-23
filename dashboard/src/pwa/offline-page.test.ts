@@ -11,5 +11,6 @@ describe('offline page', () => {
     expect(html).toContain('<h1>HomeLab Monitor</h1>')
     expect(html).toContain('Server Offline')
     expect(html).toContain('/offline.css')
+    expect(html).not.toContain('/api/')
   })
 })

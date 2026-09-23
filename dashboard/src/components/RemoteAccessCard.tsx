@@ -48,7 +48,7 @@ export const RemoteAccessCard = memo(function RemoteAccessCard({
         <StatCard label="Connection" value={connection} />
         <StatCard label="Provider" value={access.provider || 'tailscale'} />
         <StatCard label="Hostname" value={access.hostname ?? '—'} />
-        <StatCard label="Tailnet URL" value={url ?? '—'} />
+        <StatCard label="Dashboard Public URL" value={url ?? '—'} />
         <StatCard label="HTTPS" value={onOff(access.https)} />
         <StatCard label="Serve" value={onOff(access.serve_enabled)} />
         <StatCard label="Funnel" value={onOff(access.funnel_enabled)} />

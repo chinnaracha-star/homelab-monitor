@@ -15,7 +15,7 @@ from homelab_monitor.notifications.retry import retry_transient
 from homelab_monitor.photo_baseline import baseline_file_path, load_baseline, save_baseline
 from homelab_monitor.photo_events import PhotoEventRepository, resolved_watch_folders
 from homelab_monitor.photo_folders import inspect_watch_folder
-from homelab_monitor.photo_telegram import format_new_photo_message, format_new_photos_batch_message
+from homelab_monitor.photo_telegram import format_new_photo_message
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram import TelegramNotificationError, TelegramNotifier
@@ -559,23 +559,35 @@ class PhotoWatcherService:
         messages = 0
         for folder, items in grouped.items():
             send_started = time.perf_counter()
+            logger.info("telegram_send_begin folder=%s count=%s", folder, len(items))
             try:
-                logger.info("telegram_send_begin folder=%s count=%s", folder, len(items))
-                self._deliver_photo_group(items, folder, sender=sender, notifier=notifier)
+                delivered = self._deliver_photo_group(
+                    items, folder, sender=sender, notifier=notifier
+                )
             except TelegramNotificationError:
                 self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
                 logger.exception("photo_telegram_failed")
                 self.telegram_failed_total += 1
-                return messages
+                continue
             except Exception:
                 self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
                 logger.exception("photo_telegram_failed")
                 self.telegram_failed_total += 1
-                return messages
+                continue
             self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
-            logger.info("telegram_send_complete folder=%s count=%s", folder, len(items))
-            logger.info("telegram_sent folder=%s file=%s", folder, items[0].filename)
-            sent_ids.extend(item.event_id for item in items)
+            missed = len(items) - len(delivered)
+            if missed:
+                self.telegram_failed_total += 1
+            if not delivered:
+                logger.warning("telegram_send_none folder=%s count=%s", folder, len(items))
+                continue
+            logger.info(
+                "telegram_send_complete folder=%s count=%s delivered=%s",
+                folder,
+                len(items),
+                len(delivered),
+            )
+            sent_ids.extend(delivered)
             messages += 1
             self.telegram_ok_total += 1
             self.last_successful_telegram = datetime.now(UTC)
@@ -615,9 +627,9 @@ class PhotoWatcherService:
         *,
         sender: Callable[[str], dict],
         notifier: TelegramNotifier | None,
-    ) -> None:
-        if len(items) == 1:
-            item = items[0]
+    ) -> list[int]:
+        delivered: list[int] = []
+        for item in items:
             message = format_new_photo_message(
                 filename=item.filename,
                 folder=folder,
@@ -625,18 +637,25 @@ class PhotoWatcherService:
                 created_at=item.created_at,
             )
             image = Path(item.image_path) if item.image_path else Path(item.folder) / item.filename
+            sent = False
             if notifier is not None:
                 try:
-                    retry_transient(lambda: notifier.send_photo(image, caption=message))
-                    return
+                    retry_transient(
+                        lambda img=image, cap=message: notifier.send_photo(img, caption=cap)
+                    )
+                    sent = True
                 except Exception:
                     logger.warning("photo_send_photo_fallback file=%s", item.filename)
-        else:
-            message = format_new_photos_batch_message(
-                folder=folder,
-                filenames=[item.filename for item in items],
-            )
-        retry_transient(lambda send=sender, text=message: send(text))
+            if not sent:
+                try:
+                    retry_transient(lambda send=sender, text=message: send(text))
+                    sent = True
+                except Exception:
+                    logger.exception("photo_telegram_item_failed file=%s", item.filename)
+            if sent:
+                delivered.append(item.event_id)
+                logger.info("telegram_sent folder=%s file=%s", folder, item.filename)
+        return delivered
 
     def _resolve_notifier(self) -> TelegramNotifier | None:
         try:

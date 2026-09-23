@@ -606,7 +606,7 @@ def test_persisted_baseline_survives_restart_and_notifies_offline_photos(
         assert restarted.scan_once(db, send_text=sent.append) == 0
 
 
-def test_photo_batch_window_sends_one_message(tmp_path: Path) -> None:
+def test_photo_batch_window_sends_each_photo(tmp_path: Path) -> None:
     from homelab_monitor.photo_telegram import format_new_photos_batch_message
 
     message = format_new_photos_batch_message(
@@ -616,7 +616,8 @@ def test_photo_batch_window_sends_one_message(tmp_path: Path) -> None:
     assert "📷 4 New Photos" in message
     assert "Pictures-SS22" in message
     assert "IMG001.jpg" in message
-    assert "+3 more" in message
+    assert "IMG004.jpg" in message
+    assert "+3 more" not in message
 
     watch = tmp_path / "pictures-ss22"
     watch.mkdir()
@@ -647,8 +648,44 @@ def test_photo_batch_window_sends_one_message(tmp_path: Path) -> None:
         )
         db.commit()
         assert flushed == 1
-        assert len(sent) == 1
-        assert "2 New Photos" in sent[0]
+        assert len(sent) == 2
+        assert all("📷 New Photo Detected" in body for body in sent)
+        assert any("a.jpg" in body for body in sent)
+        assert any("b.jpg" in body for body in sent)
+        assert PhotoEventRepository(db).latest().telegram_sent is True
+
+
+def test_batch_sends_photo_file_for_each_image(tmp_path: Path, monkeypatch) -> None:
+    watch = tmp_path / "pictures-ss22"
+    watch.mkdir()
+    (watch / "seed.jpg").write_bytes(b"old")
+    settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(watch))
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
+    captured: list[tuple[str, str]] = []
+
+    class CapturingNotifier:
+        def send_photo(self, image_path, *, caption: str):
+            captured.append((image_path.name, caption))
+            return {}
+
+        def send_text(self, text: str) -> dict:
+            raise AssertionError(text)
+
+    monkeypatch.setattr(
+        PhotoWatcherService, "_resolve_notifier", lambda self: CapturingNotifier()
+    )
+    with Session(get_engine()) as db:
+        row = PhotoEventRepository(db).ensure_settings(settings)
+        row.recursive = False
+        db.commit()
+        assert service.scan_once(db) == 0
+    (watch / "one.jpg").write_bytes(b"one")
+    (watch / "two.jpg").write_bytes(b"two")
+    with Session(get_engine()) as db:
+        created = service.scan_once(db)
+        assert created == 2
+        assert {name for name, _caption in captured} == {"one.jpg", "two.jpg"}
+        assert all("📷 New Photo Detected" in caption for _name, caption in captured)
         assert PhotoEventRepository(db).latest().telegram_sent is True
 
 

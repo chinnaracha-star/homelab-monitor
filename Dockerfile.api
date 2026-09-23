@@ -22,6 +22,8 @@ WORKDIR /app
 COPY --chown=homelab:homelab pyproject.toml README.md LICENSE alembic.ini ./
 COPY --chown=homelab:homelab api ./api
 COPY --chown=homelab:homelab agent ./agent
+COPY --chown=homelab:homelab plugins ./plugins
+COPY --chown=homelab:homelab shared ./shared
 COPY --chown=homelab:homelab deploy/docker/api-entrypoint.sh /usr/local/bin/api-entrypoint.sh
 
 RUN pip install --no-cache-dir . \

@@ -9,7 +9,9 @@ See [known-limitations.md](known-limitations.md).
 
 Environment Telegram settings (`TELEGRAM_*` / `HOMELAB_TELEGRAM_*`) control
 the worker. Dashboard Settings may still show other channel fields; those
-do not send live alerts in this RC.
+do not send live alerts in this RC. Telegram buttons use public URLs only
+(`HOMELAB_DASHBOARD_PUBLIC_URL`, Tailnet HTTPS, Immich/QNAP public URLs).
+Docker health URLs are never attached; see [telegram.md](telegram.md).
 
 ## Delivery
 
@@ -38,5 +40,6 @@ Error codes: `notification_not_found`, `notification_channel_unconfigured`,
 
 - Notification Center (`/monitoring/notifications`): delivery metric cards,
   search/filter history (max 100 rows), and the existing timeline.
-- Settings (admin): Telegram test controls. The bot token is never displayed.
+- Settings (admin): Telegram test controls, Public URL validation, and button
+  preview. The bot token is never displayed. Health URLs are not edited here.
 - Notifications page: persisted `notifications` rows for tests/retries.

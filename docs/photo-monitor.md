@@ -1,8 +1,10 @@
 # Photo Monitor
 
 Photo Monitor polls one or more configured NAS folders for **new image files**,
-stores an event in SQLite, and sends a Telegram message. It does not analyze
-images, talk to CCTV, or use OpenCV.
+stores an event in SQLite, and sends a Telegram **photo** for **each** new file
+(caption includes folder, filename, and time). If `sendPhoto` fails, that file
+falls back to a text caption only. It does not analyze images, talk to CCTV, or
+use OpenCV.
 
 ## Watch rules
 

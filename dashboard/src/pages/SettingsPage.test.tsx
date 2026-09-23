@@ -46,24 +46,24 @@ const remote = {
 
 function renderSettings(role: 'admin' | 'operator' | 'viewer' = 'admin') {
   return render(
-    <PwaProvider>
-      <AuthContext.Provider
-        value={{
-          user: {
-            id: `user-${role}`,
-            username: role,
-            full_name: role,
-            role,
-            is_active: true,
-          },
-          loading: false,
-          login: async () => undefined,
-          logout: () => undefined,
-        }}
-      >
+    <AuthContext.Provider
+      value={{
+        user: {
+          id: `user-${role}`,
+          username: role,
+          full_name: role,
+          role,
+          is_active: true,
+        },
+        loading: false,
+        login: async () => undefined,
+        logout: () => undefined,
+      }}
+    >
+      <PwaProvider>
         <SettingsPage />
-      </AuthContext.Provider>
-    </PwaProvider>,
+      </PwaProvider>
+    </AuthContext.Provider>,
   )
 }
 
@@ -106,6 +106,7 @@ const settings: NotificationSettings = {
 
 describe('Settings page', () => {
   beforeEach(() => {
+    window.localStorage.clear()
     mockedGet.mockReset()
     mockedUpdate.mockReset()
     mockedTest.mockReset()
@@ -189,24 +190,24 @@ describe('Settings page', () => {
   it('shows an error state when settings fail to load', async () => {
     mockedGet.mockRejectedValue(new Error('offline'))
     render(
-      <PwaProvider>
-        <AuthContext.Provider
-          value={{
-            user: {
-              id: 'user-admin',
-              username: 'admin',
-              full_name: 'Administrator',
-              role: 'admin',
-              is_active: true,
-            },
-            loading: false,
-            login: async () => undefined,
-            logout: () => undefined,
-          }}
-        >
+      <AuthContext.Provider
+        value={{
+          user: {
+            id: 'user-admin',
+            username: 'admin',
+            full_name: 'Administrator',
+            role: 'admin',
+            is_active: true,
+          },
+          loading: false,
+          login: async () => undefined,
+          logout: () => undefined,
+        }}
+      >
+        <PwaProvider>
           <SettingsPage />
-        </AuthContext.Provider>
-      </PwaProvider>,
+        </PwaProvider>
+      </AuthContext.Provider>,
     )
     expect(await screen.findByText('offline')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Retry section' })).toBeInTheDocument()
@@ -295,5 +296,68 @@ describe('Settings page', () => {
       '/mnt/pictures-ss22',
       '/mnt/pictures-ae',
     ])
+  })
+
+  it('validates public URLs live, previews buttons, and warns on save without changing delivery payload', async () => {
+    const user = userEvent.setup()
+    renderSettings()
+    const dashboard = await screen.findByLabelText('Dashboard Public URL')
+    const immich = screen.getByLabelText('Immich Public URL')
+    const qnap = screen.getByLabelText('QNAP Public URL')
+    expect(screen.getByRole('heading', { name: 'Telegram Buttons Preview' })).toBeInTheDocument()
+    expect(screen.getAllByText((_, node) => node?.getAttribute('data-status') === 'empty').length).toBeGreaterThan(0)
+
+    await user.type(dashboard, 'https://home-srv-01.tail1ea57f.ts.net')
+    expect(await screen.findByText((_, node) => node?.getAttribute('data-status') === 'valid')).toBeInTheDocument()
+    expect(document.querySelector('[data-preview="dashboard"]')?.getAttribute('data-enabled')).toBe('yes')
+
+    await user.clear(dashboard)
+    await user.type(dashboard, 'http://localhost')
+    expect(await screen.findByText('This URL cannot be opened by Telegram.')).toBeInTheDocument()
+    expect(document.querySelector('[data-preview="dashboard"]')?.getAttribute('data-enabled')).toBe('no')
+
+    await user.clear(dashboard)
+    await user.type(dashboard, 'http://dashboard:8080')
+    expect(await screen.findByText('This address is only reachable inside Docker.')).toBeInTheDocument()
+
+    await user.clear(immich)
+    await user.type(immich, 'ftp://photos.example')
+    expect(await screen.findAllByText('This URL cannot be opened by Telegram.')).toHaveLength(1)
+
+    await user.type(qnap, 'https://nas.example.com')
+    expect(document.querySelector('[data-preview="qnap"]')?.getAttribute('data-enabled')).toBe('yes')
+
+    await user.click(screen.getByRole('button', { name: 'Save notification settings' }))
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalled())
+    const saved = mockedUpdate.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(saved).not.toHaveProperty('dashboard_public_url')
+    expect(JSON.stringify(saved)).not.toContain('dashboard:8080')
+    expect(
+      await screen.findByText(
+        'Dashboard URL is invalid. Telegram messages will be sent without the Dashboard button.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('includes public URL button availability in the Telegram Test Report summary', async () => {
+    const user = userEvent.setup()
+    mockedReport.mockResolvedValue({
+      status: 'sent',
+      notification_id: 'n-test',
+      sent_at: '2026-09-08T09:42:18Z',
+      provider: 'telegram',
+    })
+    renderSettings()
+    await user.type(await screen.findByLabelText('Dashboard Public URL'), 'http://api:8000')
+    await user.type(screen.getByLabelText('Immich Public URL'), 'https://immich.example')
+    await user.click(screen.getByRole('button', { name: 'Send Test Report' }))
+    await waitFor(() => expect(mockedReport).toHaveBeenCalledTimes(1))
+    expect(mockedReport.mock.calls[0]?.length ?? 0).toBeLessThanOrEqual(1)
+    expect(await screen.findByText('Telegram Test Report Sent')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Telegram Test', level: 4 })).toBeInTheDocument()
+    expect(screen.getByText(/Dashboard button ❌ Disabled/)).toBeInTheDocument()
+    expect(screen.getByText(/Immich button ✅ Enabled/)).toBeInTheDocument()
+    expect(screen.getByText(/QNAP button ❌ Disabled/)).toBeInTheDocument()
+    expect(screen.getByText(/Message delivery ✅ Successful/)).toBeInTheDocument()
   })
 })

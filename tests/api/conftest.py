@@ -25,6 +25,11 @@ os.environ["HOMELAB_PHOTO_WATCHER_ENABLED"] = "false"
 os.environ["HOMELAB_BOOTSTRAP_ADMIN_PASSWORD"] = ""
 os.environ["HOMELAB_BOOTSTRAP_OPERATOR_PASSWORD"] = ""
 os.environ["HOMELAB_BOOTSTRAP_VIEWER_PASSWORD"] = ""
+os.environ["HOMELAB_DASHBOARD_PUBLIC_URL"] = ""
+os.environ["HOMELAB_IMMICH_PUBLIC_URL"] = ""
+os.environ["HOMELAB_QNAP_PUBLIC_URL"] = ""
+os.environ["HOMELAB_API_HEALTH_URL"] = ""
+os.environ["HOMELAB_DASHBOARD_HEALTH_URL"] = ""
 
 from homelab_monitor.alert_stability import reset_stability_windows  # noqa: E402
 from homelab_monitor.auth.passwords import hash_password  # noqa: E402

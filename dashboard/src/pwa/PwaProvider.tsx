@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { registerSW } from 'virtual:pwa-register'
+import { AuthContext } from '../auth/AuthContext'
 import { APP_VERSION } from './manifest'
 
 export interface BeforeInstallPromptEvent extends Event {
@@ -41,7 +42,17 @@ async function readCacheReady(): Promise<boolean> {
   return keys.length > 0
 }
 
+async function unregisterServiceWorkers(): Promise<void> {
+  if (!('serviceWorker' in navigator)) {
+    return
+  }
+  const registrations = await navigator.serviceWorker.getRegistrations()
+  await Promise.all(registrations.map((registration) => registration.unregister()))
+}
+
 export function PwaProvider({ children }: { children: ReactNode }) {
+  const auth = useContext(AuthContext)
+  const sessionReady = Boolean(auth?.user)
   const [installed, setInstalled] = useState(readStandalone)
   const [canInstall, setCanInstall] = useState(false)
   const [serviceWorker, setServiceWorker] = useState<'registered' | 'missing'>('missing')
@@ -99,6 +110,20 @@ export function PwaProvider({ children }: { children: ReactNode }) {
     media?.addEventListener?.('change', handleDisplayChange)
     void refreshRegistration()
 
+    if (!sessionReady) {
+      void unregisterServiceWorkers().then(() => {
+        setServiceWorker('missing')
+      })
+      applyUpdateRef.current = async () => undefined
+      return () => {
+        window.removeEventListener('online', handleOnline)
+        window.removeEventListener('offline', handleOffline)
+        window.removeEventListener('beforeinstallprompt', handlePrompt)
+        window.removeEventListener('appinstalled', handleInstalled)
+        media?.removeEventListener?.('change', handleDisplayChange)
+      }
+    }
+
     const updateSW = registerSW({
       immediate: true,
       onNeedRefresh() {
@@ -106,6 +131,15 @@ export function PwaProvider({ children }: { children: ReactNode }) {
       },
       onRegisteredSW(_url, registration) {
         setServiceWorker(registration ? 'registered' : 'missing')
+        const syncManager = (registration as ServiceWorkerRegistration & { sync?: { register: (tag: string) => Promise<void> } })
+          ?.sync
+        void syncManager?.register('homelab-refresh')
+        const periodic = (
+          registration as ServiceWorkerRegistration & {
+            periodicSync?: { register: (tag: string, options: { minInterval: number }) => Promise<void> }
+          }
+        )?.periodicSync
+        void periodic?.register('homelab-health', { minInterval: 60 * 60 * 1000 })
       },
       onRegisterError() {
         setServiceWorker('missing')
@@ -120,7 +154,7 @@ export function PwaProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('appinstalled', handleInstalled)
       media?.removeEventListener?.('change', handleDisplayChange)
     }
-  }, [refreshRegistration])
+  }, [refreshRegistration, sessionReady])
 
   const install = useCallback(async () => {
     const prompt = promptRef.current

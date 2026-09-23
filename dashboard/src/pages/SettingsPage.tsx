@@ -12,6 +12,14 @@ import { OverviewSkeleton } from '../components/Skeleton'
 import { RemoteAccessCard } from '../components/RemoteAccessCard'
 import { PwaSettingsCard } from '../components/PwaSettingsCard'
 import { PhotoMonitorSettingsCard } from '../components/PhotoMonitorSettingsCard'
+import { TelegramPublicUrlPanel, type TelegramTestSummary } from '../settings/TelegramPublicUrlPanel'
+import {
+  inspectPublicUrl,
+  loadStoredPublicUrls,
+  persistPublicUrls,
+  publicUrlSaveWarnings,
+  type TelegramPublicUrls,
+} from '../settings/publicUrl'
 import { getErrorMessage } from '../utils/errors'
 import { formatThaiDateTime } from '../utils/thaiDate'
 import userStyles from './UsersPage.module.css'
@@ -76,6 +84,14 @@ export function SettingsPage() {
   const [sendingReport, setSendingReport] = useState(false)
   const [remote, setRemote] = useState<RemoteAccess | null>(null)
   const [remoteError, setRemoteError] = useState<string | null>(null)
+  const [publicUrls, setPublicUrls] = useState<TelegramPublicUrls>(loadStoredPublicUrls)
+  const [urlLog, setUrlLog] = useState<string[]>([])
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([])
+  const [testSummary, setTestSummary] = useState<TelegramTestSummary | null>(null)
+
+  const appendUrlLog = useCallback((entry: string) => {
+    setUrlLog((current) => [...current.slice(-7), entry])
+  }, [])
 
   const loadSettings = useCallback(() => {
     setError(null)
@@ -145,6 +161,12 @@ export function SettingsPage() {
       setSlackUrl('')
       setEmailPassword('')
       setToast('Notification settings saved.')
+      const warnings = publicUrlSaveWarnings(publicUrls)
+      setSaveWarnings(warnings)
+      persistPublicUrls(publicUrls)
+      if (warnings.length > 0) {
+        setToast(`Notification settings saved. ${warnings[0]}`)
+      }
     } catch (requestError) {
       setError(getErrorMessage(requestError))
     }
@@ -168,15 +190,19 @@ export function SettingsPage() {
     setError(null)
     setSendingReport(true)
     setToast('Sending...')
+    const buttons = {
+      dashboard: inspectPublicUrl(publicUrls.dashboard),
+      immich: inspectPublicUrl(publicUrls.immich),
+      qnap: inspectPublicUrl(publicUrls.qnap),
+    }
     try {
       const result = await sendTelegramTestReport()
-      if (result.status === 'sent') {
-        setToast('Telegram Test Report Sent')
-      } else {
-        setToast('Unable to deliver Telegram report.')
-      }
+      const ok = result.status === 'sent'
+      setToast(ok ? 'Telegram Test Report Sent' : 'Unable to deliver Telegram report.')
+      setTestSummary({ delivery: ok ? 'successful' : 'failed', buttons })
     } catch {
       setToast('Unable to deliver Telegram report.')
+      setTestSummary({ delivery: 'failed', buttons })
     } finally {
       setSendingReport(false)
     }
@@ -221,6 +247,10 @@ export function SettingsPage() {
             </h2>
             <p className={styles.channelHint}>
               {current.telegram.configured ? 'Configured' : 'Not configured'}
+            </p>
+            <p className={styles.channelHint}>
+              Telegram buttons use Dashboard Public URL, Immich Public URL, and QNAP Public URL
+              only. Docker health URLs are never sent to Telegram.
             </p>
             <p className={styles.channelHint}>
               Last test:{' '}
@@ -287,6 +317,14 @@ export function SettingsPage() {
                 Test Message
               </button>
             ) : null}
+            <TelegramPublicUrlPanel
+              urls={publicUrls}
+              onChange={(key, value) => setPublicUrls((current) => ({ ...current, [key]: value }))}
+              saveWarnings={saveWarnings}
+              testSummary={testSummary}
+              log={urlLog}
+              onLog={appendUrlLog}
+            />
           </article>
 
           <article className={styles.channelCard} aria-labelledby="discord-settings">

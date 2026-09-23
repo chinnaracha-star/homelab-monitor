@@ -79,3 +79,44 @@
   gap: 0.5rem;
   align-items: end;
 }
+
+.statusValid {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.statusEmpty {
+  color: var(--text-muted);
+}
+
+.statusInvalid {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.previewCard {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.75rem;
+}
+
+.previewList {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+.saveWarning {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: #b91c1c;
+}
+
+.validationLog {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
