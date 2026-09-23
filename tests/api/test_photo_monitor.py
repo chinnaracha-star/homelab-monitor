@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -687,6 +688,39 @@ def test_batch_sends_photo_file_for_each_image(tmp_path: Path, monkeypatch) -> N
         assert {name for name, _caption in captured} == {"one.jpg", "two.jpg"}
         assert all("📷 New Photo Detected" in caption for _name, caption in captured)
         assert PhotoEventRepository(db).latest().telegram_sent is True
+
+
+def test_file_created_after_process_start_survives_baseline(tmp_path: Path, caplog) -> None:
+    import time
+
+    watch = tmp_path / "pictures-ae"
+    watch.mkdir()
+    (watch / "already-there.jpg").write_bytes(b"old")
+    time.sleep(0.05)
+    settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(watch))
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
+    fresh = watch / "arrived-during-start.jpg"
+    fresh.write_bytes(b"new")
+    future = time.time() + 30
+    os.utime(fresh, (future, future))
+    sent: list[str] = []
+    with (
+        caplog.at_level("INFO", logger="homelab_monitor.photo_watcher"),
+        Session(get_engine()) as db,
+    ):
+        row = PhotoEventRepository(db).ensure_settings(settings)
+        row.recursive = False
+        db.commit()
+        created = service.scan_once(db, send_text=sent.append)
+        latest = PhotoEventRepository(db).latest()
+    assert created == 1
+    assert latest is not None
+    assert latest.filename == "arrived-during-start.jpg"
+    assert latest.telegram_sent is True
+    assert any("arrived-during-start.jpg" in body for body in sent)
+    assert "already-there.jpg" not in "\n".join(sent)
+    assert service.startup_self_check([str(watch)]) in {"pass", "fail"}
+    assert "photo_monitor_self_check" in caplog.text
 
 
 def test_single_photo_falls_back_to_text_when_send_photo_fails(tmp_path: Path, monkeypatch) -> None:

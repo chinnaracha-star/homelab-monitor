@@ -62,12 +62,22 @@ class MetricReportResponse(BaseModel):
     control: AgentControlResponse
 
 
+class PhotoMonitorHealth(BaseModel):
+    status: Literal["pass", "fail", "unknown"] = "unknown"
+    running: bool = False
+    telegram_configured: bool = False
+    pending: int = 0
+    last_telegram_at: datetime | None = None
+    reasons: list[str] = []
+
+
 class HealthResponse(BaseModel):
     status: Literal["healthy", "degraded"]
     service: str
     version: str
     database: Literal["up", "down"]
     timestamp: datetime
+    photo_monitor: PhotoMonitorHealth = PhotoMonitorHealth()
 
 
 class RemoteAccessResponse(BaseModel):

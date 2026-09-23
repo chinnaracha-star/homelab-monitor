@@ -4,7 +4,7 @@ import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy.exc import IntegrityError
@@ -178,6 +178,43 @@ class _PendingPhoto:
     image_path: str = ""
 
 
+def iter_recent_month_images(watch_folder: Path) -> list[Path]:
+    """Phone gallery uploads land in YYYY/MM. Check that directory before the full share walk."""
+    now = datetime.now()
+    year = f"{now.year:04d}"
+    month = f"{now.month:02d}"
+    candidates = [watch_folder / year / month]
+    try:
+        children = [
+            child
+            for child in watch_folder.iterdir()
+            if child.is_dir() and not child.name.startswith(".")
+        ]
+    except OSError:
+        children = []
+    candidates.extend(child / year / month for child in children)
+    files: list[Path] = []
+    for folder in candidates:
+        try:
+            if folder.is_dir():
+                files.extend(iter_image_files(folder, recursive=False))
+        except OSError:
+            continue
+    return files
+
+
+def _priority_watch_folders(folders: list[str]) -> list[str]:
+    """Scan phone shares before the large aggregate folder so Telegram is not stuck behind it."""
+
+    def rank(folder: str) -> tuple[int, str]:
+        name = folder.rstrip("/").lower()
+        if name.endswith("picture-all"):
+            return (1, name)
+        return (0, name)
+
+    return sorted(folders, key=rank)
+
+
 def _file_key(path: Path) -> tuple[str, str]:
     return (os.path.normpath(str(path.parent)), path.name)
 
@@ -209,6 +246,10 @@ class PhotoWatcherService:
         self.last_successful_scan: datetime | None = None
         self.last_scan_duration_ms: float | None = None
         self.last_successful_telegram: datetime | None = None
+        self.last_telegram_error: str | None = None
+        self.self_check_status = "unknown"
+        self.self_check_reasons: list[str] = []
+        self._started_at = datetime.now(UTC)
         self._cycle_scan_ms = 0.0
         self._cycle_db_ms = 0.0
         self._cycle_telegram_ms = 0.0
@@ -256,7 +297,9 @@ class PhotoWatcherService:
         self._cycle_telegram_ms = 0.0
         repo = PhotoEventRepository(db)
         config = repo.ensure_settings(self._settings)
-        folders = [os.path.normpath(item) for item in resolved_watch_folders(config)]
+        folders = _priority_watch_folders(
+            [os.path.normpath(item) for item in resolved_watch_folders(config)]
+        )
         self.last_folders = folders
         self.sync_watch_roots(folders)
         if not config.enabled:
@@ -300,6 +343,27 @@ class PhotoWatcherService:
                     logger.info("scan_ended reason=folder_unavailable folder=%s", watch_root)
                     continue
                 folders_scanned += 1
+                if watch_root in self._primed:
+                    recent = iter_recent_month_images(Path(watch_root))
+                    if recent:
+                        added, folder_skipped, folder_telegram = self._scan_folder(
+                            db,
+                            repo,
+                            watch_root=watch_root,
+                            discovered=recent,
+                            send_text=send_text,
+                        )
+                        created += added
+                        skipped += folder_skipped
+                        telegram_ok += folder_telegram
+                        if added:
+                            telegram_ok += self.flush_photo_notifications(
+                                db,
+                                repo,
+                                send_text=send_text,
+                                now=datetime.now(UTC)
+                                + timedelta(seconds=self.batch_window_seconds),
+                            )
                 logger.info("scanning_files folder=%s recursive=%s", watch_root, config.recursive)
                 walk_started = time.perf_counter()
                 discovered = iter_image_files(Path(watch_root), config.recursive)
@@ -316,6 +380,13 @@ class PhotoWatcherService:
                 skipped += folder_skipped
                 telegram_ok += folder_telegram
                 logger.info("scan_complete folder=%s files=%s", watch_root, len(discovered))
+                if self._pending:
+                    telegram_ok += self.flush_photo_notifications(
+                        db,
+                        repo,
+                        send_text=send_text,
+                        now=datetime.now(UTC),
+                    )
             except Exception:
                 logger.exception("scan_ended reason=folder_exception folder=%s", watch_root)
         self.indexed_files = scanned
@@ -331,7 +402,7 @@ class PhotoWatcherService:
             hub.notify_ingest(reason="photo_monitor", agent_id=None, alerts_changed=False)
         else:
             db.commit()
-        telegram_ok = self.flush_photo_notifications(
+        telegram_ok += self.flush_photo_notifications(
             db, repo, send_text=send_text, now=datetime.now(UTC)
         )
         db.commit()
@@ -368,6 +439,39 @@ class PhotoWatcherService:
             logger.warning("%s", folder)
             logger.warning("Reason")
             logger.warning("%s", reason)
+        self.startup_self_check(folders)
+
+    def startup_self_check(self, folders: list[str]) -> str:
+        reasons: list[str] = []
+        if not self._settings.photo_watcher_enabled:
+            reasons.append("watcher_disabled")
+        token = ""
+        chat = ""
+        try:
+            token = self._settings.telegram_bot_token.get_secret_value().strip()
+        except Exception:
+            token = ""
+        try:
+            chat = str(self._settings.telegram_chat_id or "").strip()
+        except Exception:
+            chat = ""
+        if not token or not chat:
+            reasons.append("telegram_not_configured")
+        if not folders:
+            reasons.append("no_watch_folders")
+        for folder in folders:
+            problem = inspect_watch_folder(folder)
+            if problem is not None:
+                reasons.append(f"folder_unavailable:{folder}")
+        status = "fail" if reasons else "pass"
+        self.self_check_status = status
+        self.self_check_reasons = reasons
+        logger.info(
+            "photo_monitor_self_check status=%s reasons=%s",
+            status,
+            ",".join(reasons) if reasons else "none",
+        )
+        return status
 
     def log_health(self) -> None:
         last_scan = self.last_successful_scan.isoformat() if self.last_successful_scan else "never"
@@ -401,16 +505,37 @@ class PhotoWatcherService:
         seen = self._seen.setdefault(watch_root, set())
         logger.info("seen_cache folder=%s size=%s", watch_root, len(seen))
         if watch_root not in self._primed:
-            self._seen[watch_root] = {_file_key(path) for path in discovered}
+            cutoff = self._started_at
+            baseline_keys: set[tuple[str, str]] = set()
+            fresh: list[Path] = []
+            for path in discovered:
+                try:
+                    stamp = file_created_at(path)
+                except OSError:
+                    baseline_keys.add(_file_key(path))
+                    continue
+                if stamp >= cutoff:
+                    fresh.append(path)
+                else:
+                    baseline_keys.add(_file_key(path))
+            self._seen[watch_root] = baseline_keys
             self._primed.add(watch_root)
             self._dirty = True
-            logger.info("baseline_created folder=%s files=%s", watch_root, len(discovered))
             logger.info(
-                "scan_ended reason=baseline folder=%s files=%s",
+                "baseline_created folder=%s files=%s fresh=%s",
                 watch_root,
-                len(discovered),
+                len(baseline_keys),
+                len(fresh),
             )
-            return 0, len(discovered), 0
+            discovered = fresh
+            seen = self._seen[watch_root]
+            if not discovered:
+                logger.info(
+                    "scan_ended reason=baseline folder=%s files=%s",
+                    watch_root,
+                    len(baseline_keys),
+                )
+                return 0, len(baseline_keys), 0
         created = 0
         skipped = 0
         telegram_ok = 0
@@ -644,14 +769,24 @@ class PhotoWatcherService:
                         lambda img=image, cap=message: notifier.send_photo(img, caption=cap)
                     )
                     sent = True
-                except Exception:
-                    logger.warning("photo_send_photo_fallback file=%s", item.filename)
+                except Exception as exc:
+                    self.last_telegram_error = str(exc)
+                    logger.error(
+                        "photo_send_photo_fallback file=%s reason=%s",
+                        item.filename,
+                        exc,
+                    )
             if not sent:
                 try:
                     retry_transient(lambda send=sender, text=message: send(text))
                     sent = True
-                except Exception:
-                    logger.exception("photo_telegram_item_failed file=%s", item.filename)
+                except Exception as exc:
+                    self.last_telegram_error = str(exc)
+                    logger.error(
+                        "photo_telegram_delivery_failed file=%s reason=%s",
+                        item.filename,
+                        exc,
+                    )
             if sent:
                 delivered.append(item.event_id)
                 logger.info("telegram_sent folder=%s file=%s", folder, item.filename)
