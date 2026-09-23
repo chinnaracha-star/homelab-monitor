@@ -101,8 +101,15 @@ def _sample(settings: Settings, *, query_ms: float | None) -> dict:
     }
 
 
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 def _window(rows: list[OpsSnapshot], start: datetime) -> PerformanceWindow:
-    payloads = [row.payload for row in rows if row.observed_at >= start]
+    start_utc = _as_utc(start)
+    payloads = [row.payload for row in rows if _as_utc(row.observed_at) >= start_utc]
 
     def avg(key: str) -> float | None:
         values = [float(item[key]) for item in payloads if isinstance(item.get(key), (int, float))]

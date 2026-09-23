@@ -23,6 +23,7 @@ from homelab_monitor.telegram import TelegramNotificationError, TelegramNotifier
 logger = logging.getLogger("homelab_monitor.photo_watcher")
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".gif", ".bmp", ".webp"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
 IGNORE_SUFFIXES = {".tmp", ".part"}
 ALLOWED_INTERVALS = {5, 10, 30, 60}
 PHOTO_BATCH_WINDOW_SECONDS = 10
@@ -194,12 +195,26 @@ def iter_recent_month_images(watch_folder: Path) -> list[Path]:
         children = []
     candidates.extend(child / year / month for child in children)
     files: list[Path] = []
+    ignored_videos = 0
     for folder in candidates:
         try:
-            if folder.is_dir():
-                files.extend(iter_image_files(folder, recursive=False))
+            if not folder.is_dir():
+                continue
+            files.extend(iter_image_files(folder, recursive=False))
+            ignored_videos += sum(
+                1
+                for path in folder.iterdir()
+                if path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS
+            )
         except OSError:
             continue
+    if ignored_videos:
+        logger.info(
+            "ignored_video month=%s-%s count=%s",
+            year,
+            month,
+            ignored_videos,
+        )
     return files
 
 
@@ -248,6 +263,7 @@ class PhotoWatcherService:
         self.last_successful_telegram: datetime | None = None
         self.last_telegram_error: str | None = None
         self.self_check_status = "unknown"
+        self.self_check_label = "UNKNOWN"
         self.self_check_reasons: list[str] = []
         self._started_at = datetime.now(UTC)
         self._cycle_scan_ms = 0.0
@@ -380,13 +396,6 @@ class PhotoWatcherService:
                 skipped += folder_skipped
                 telegram_ok += folder_telegram
                 logger.info("scan_complete folder=%s files=%s", watch_root, len(discovered))
-                if self._pending:
-                    telegram_ok += self.flush_photo_notifications(
-                        db,
-                        repo,
-                        send_text=send_text,
-                        now=datetime.now(UTC),
-                    )
             except Exception:
                 logger.exception("scan_ended reason=folder_exception folder=%s", watch_root)
         self.indexed_files = scanned
@@ -439,7 +448,24 @@ class PhotoWatcherService:
             logger.warning("%s", folder)
             logger.warning("Reason")
             logger.warning("%s", reason)
+        logger.info("current_month_selected month=%s", datetime.now().strftime("%Y-%m"))
+        logger.info(
+            "baseline_loaded folders=%s",
+            len(self._primed),
+        )
         self.startup_self_check(folders)
+
+    def _database_writable(self) -> bool:
+        url = str(self._settings.database_url)
+        if url.startswith("sqlite:///"):
+            raw = url.removeprefix("sqlite:///")
+            if raw in {":memory:", ""}:
+                return True
+            path = Path(raw)
+            parent = path.parent if str(path.parent) else Path(".")
+            target = path if path.exists() else parent
+            return os.access(target, os.W_OK)
+        return True
 
     def startup_self_check(self, folders: list[str]) -> str:
         reasons: list[str] = []
@@ -463,13 +489,27 @@ class PhotoWatcherService:
             problem = inspect_watch_folder(folder)
             if problem is not None:
                 reasons.append(f"folder_unavailable:{folder}")
-        status = "fail" if reasons else "pass"
+        if not self._database_writable():
+            reasons.append("database_not_writable")
+        warnings: list[str] = []
+        if not self._primed:
+            warnings.append("baseline_not_loaded")
+        if reasons:
+            status = "fail"
+            label = "FAIL"
+        elif warnings:
+            status = "pass"
+            label = "WARN"
+        else:
+            status = "pass"
+            label = "PASS"
         self.self_check_status = status
-        self.self_check_reasons = reasons
+        self.self_check_label = label
+        self.self_check_reasons = [*reasons, *warnings]
         logger.info(
             "photo_monitor_self_check status=%s reasons=%s",
-            status,
-            ",".join(reasons) if reasons else "none",
+            label,
+            ",".join(self.self_check_reasons) if self.self_check_reasons else "none",
         )
         return status
 

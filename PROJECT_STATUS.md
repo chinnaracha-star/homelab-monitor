@@ -1,6 +1,6 @@
 # Project status
 
-**Current version:** `1.0.0-rc2`  
+**Current version:** `1.0.0-rc3`  
 **Current phase:** 11  
 **Current sprint:** 11.5 (Operations Center) after 11.3.1 RC2 baseline  
 **Git branch:** `main` (working tree dirty; not committed)

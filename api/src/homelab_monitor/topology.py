@@ -58,5 +58,5 @@ def _mermaid(nodes: list[dict], edges: list[dict]) -> str:
     for item in nodes:
         lines.append(f'  {item["id"]}["{item["label"]} ({item["status"]})"]')
     for edge in edges:
-        lines.append(f'  {edge["from"]} --> {edge["to"]}')
+        lines.append(f"  {edge['from']} --> {edge['to']}")
     return "\n".join(lines)

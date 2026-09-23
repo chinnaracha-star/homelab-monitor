@@ -513,3 +513,31 @@ export async function getPredictionsBackup(): Promise<PredictionMetric> {
   const response = await apiClient.get<PredictionMetric>('/predictions/backup')
   return response.data
 }
+
+export interface KnowledgeItem {
+  kind: string
+  title: string
+  timestamp: string
+  details: Record<string, unknown>
+}
+
+export interface KnowledgeList {
+  generated_at: string
+  count: number
+  items: KnowledgeItem[]
+}
+
+export async function getKnowledge(query = '', kind = 'all'): Promise<KnowledgeList> {
+  const response = await apiClient.get<KnowledgeList>('/knowledge', {
+    params: { q: query, kind },
+  })
+  return response.data
+}
+
+export async function exportKnowledge(query = '', kind = 'all'): Promise<Blob> {
+  const response = await apiClient.get<Blob>('/knowledge/export', {
+    params: { q: query, kind },
+    responseType: 'blob',
+  })
+  return response.data
+}

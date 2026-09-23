@@ -59,7 +59,11 @@ export const KnowledgeCenterPage = memo(function KnowledgeCenterPage() {
         </label>
         <label>
           Filter
-          <select aria-label="Filter knowledge kind" onChange={(event) => setKind(event.target.value as (typeof KINDS)[number])} value={kind}>
+          <select
+            aria-label="Filter knowledge kind"
+            onChange={(event) => setKind(event.target.value as (typeof KINDS)[number])}
+            value={kind}
+          >
             {KINDS.map((item) => (
               <option key={item} value={item}>
                 {item}

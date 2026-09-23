@@ -28,6 +28,10 @@ def test_is_image_file_accepts_supported_extensions(tmp_path: Path) -> None:
     assert is_image_file(tmp_path / "shot.HEIC")
     assert is_image_file(tmp_path / "shot.webp")
     assert not is_image_file(tmp_path / "shot.txt")
+    assert not is_image_file(tmp_path / "clip.mp4")
+    assert not is_image_file(tmp_path / "clip.mov")
+    assert not is_image_file(tmp_path / "clip.avi")
+    assert not is_image_file(tmp_path / "clip.mkv")
     assert not is_image_file(tmp_path / ".hidden.jpg")
     assert not is_image_file(tmp_path / "shot.jpg.tmp")
     assert not is_image_file(tmp_path / "shot.jpg.part")
@@ -47,6 +51,8 @@ def test_format_new_photo_message_uses_english_layout() -> None:
     assert "IMG_20260910_140012.jpg" in message
     assert "10 September 2026" in message
     assert "14:00:12" in message
+    assert "Source" in message
+    assert "QNAP" in message
 
 
 def test_first_initialization_creates_enabled_watcher(caplog) -> None:
@@ -672,9 +678,7 @@ def test_batch_sends_photo_file_for_each_image(tmp_path: Path, monkeypatch) -> N
         def send_text(self, text: str) -> dict:
             raise AssertionError(text)
 
-    monkeypatch.setattr(
-        PhotoWatcherService, "_resolve_notifier", lambda self: CapturingNotifier()
-    )
+    monkeypatch.setattr(PhotoWatcherService, "_resolve_notifier", lambda self: CapturingNotifier())
     with Session(get_engine()) as db:
         row = PhotoEventRepository(db).ensure_settings(settings)
         row.recursive = False

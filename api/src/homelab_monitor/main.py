@@ -17,6 +17,7 @@ from homelab_monitor.routers import (
     alert_history,
     alert_rules,
     analytics,
+    assistant,
     auth,
     capacity,
     dashboard,
@@ -27,9 +28,11 @@ from homelab_monitor.routers import (
     incidents,
     infrastructure,
     insights,
+    knowledge,
     notifications,
     operations,
     photos,
+    plugins,
     predictions,
     realtime,
     system,
@@ -93,6 +96,9 @@ def create_app() -> FastAPI:
     application.include_router(system.router)
     application.include_router(photos.router)
     application.include_router(operations.router)
+    application.include_router(plugins.router)
+    application.include_router(assistant.router)
+    application.include_router(knowledge.router)
     return application
 
 

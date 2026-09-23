@@ -1,4 +1,4 @@
-export const APP_VERSION = '1.0.0-rc2.2'
+export const APP_VERSION = '1.0.0-rc3'
 
 export const pwaManifest = {
   name: 'HomeLab Monitor',

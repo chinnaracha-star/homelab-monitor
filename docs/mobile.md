@@ -5,7 +5,7 @@ The dashboard remains a Vite PWA (`injectManifest`, `src/sw.ts`). No API or back
 ## Install UX
 
 - `beforeinstallprompt` still drives **Install HomeLab Monitor**.
-- Manifest version is `1.0.0-rc2`.
+- Manifest version is `1.0.0-rc3`.
 - Shortcuts: Overview, Alerts, Photo Monitor, Backup (Chrome / Edge / Android long-press).
 - Widget metadata: `widgets[]` with tag `homelab-status` (home-screen widget hint; not a native Android widget APK).
 

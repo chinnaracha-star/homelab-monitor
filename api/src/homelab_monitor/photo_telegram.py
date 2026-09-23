@@ -62,7 +62,7 @@ def format_new_photo_message(
     created_at: datetime,
     source: str = "QNAP",
 ) -> str:
-    del size_bytes, source
+    del size_bytes
     date_line, time_line = format_photo_stamp(created_at)
     lines = [
         "📷 New Photo Detected",
@@ -76,6 +76,9 @@ def format_new_photo_message(
         "Time",
         date_line,
         time_line,
+        "",
+        "Source",
+        source,
     ]
     links = _link_lines()
     if links:

@@ -1,7 +1,7 @@
 # Architecture freeze
 
 **Product:** HomeLab Monitor  
-**Version:** 1.0.0-rc2  
+**Version:** 1.0.0-rc3  
 **Sprint:** 12.7  
 **Status:** Architecture frozen for Phase 12. Phase 13 (Enterprise) is not started.
 

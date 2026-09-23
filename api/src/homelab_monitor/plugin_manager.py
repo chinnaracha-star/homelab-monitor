@@ -216,7 +216,7 @@ def _builtin_fallback() -> dict[str, PluginRecord]:
         plugin_id: PluginRecord(
             plugin_id=plugin_id,
             name=name,
-            version="1.0.0-rc2",
+            version="1.0.0-rc3",
             author="HomeLab Monitor",
             description=f"Built-in adapter for {name}",
             capabilities=caps,

@@ -2,6 +2,22 @@
 
 All notable changes to HomeLab Monitor Toolkit are documented here.
 
+## [1.0.0-rc3] — 2026-09-23
+
+Release candidate after Phase 12. Agent protocol remains `0.1.0`. SQLite schema is unchanged.
+
+### Added
+
+- Phase 12 read routes for plugins, assistant briefing, knowledge, and system topology
+- Photo Monitor startup self-check and additive `photo_monitor` fields on `GET /health`
+
+### Changed
+
+- Package, API, and dashboard version strings report `1.0.0-rc3`
+- New photos created after process start are not swallowed by an unprimed baseline
+- Current month folders are scanned before the full share walk
+- Photo Telegram text includes the source, and a failed photo send falls back to a text message
+
 ## [1.0.0-rc2] — 2026-09-21
 
 Release candidate 2 baseline after Phase 11.1–11.5. Agent protocol remains `0.1.0`.
@@ -27,6 +43,7 @@ Release candidate 2 baseline after Phase 11.1–11.5. Agent protocol remains `0.
 - 10.3.4 hardening (PWA cache headers, Telegram-safe dashboard URLs)
 - 10.3.5 RC1 certification documentation
 
+[1.0.0-rc3]: docs/release-notes-v1.0.0-rc3.md
 [1.0.0-rc2]: docs/release-notes-v1.0.0-rc2.md
 [1.0.0-rc1]: docs/release-notes-v1.0.0-rc1.md
 

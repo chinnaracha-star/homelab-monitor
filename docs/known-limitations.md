@@ -1,4 +1,4 @@
-# Known limitations (v1.0.0-rc2)
+# Known limitations (v1.0.0-rc3)
 
 Accepted gaps for this release candidate. Planned for **v1.1** unless noted.
 

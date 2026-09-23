@@ -69,6 +69,13 @@ class PhotoMonitorHealth(BaseModel):
     pending: int = 0
     last_telegram_at: datetime | None = None
     reasons: list[str] = []
+    enabled: bool = False
+    baseline_loaded: bool = False
+    watching: bool = False
+    current_month: str = ""
+    last_scan: datetime | None = None
+    last_event: datetime | None = None
+    self_check: Literal["PASS", "WARN", "FAIL", "UNKNOWN"] = "UNKNOWN"
 
 
 class HealthResponse(BaseModel):
@@ -896,7 +903,7 @@ class DeveloperGitStatus(BaseModel):
 
 
 class DeveloperProjectStatus(BaseModel):
-    application_version: str = "1.0.0-rc2"
+    application_version: str = "1.0.0-rc3"
     build_time: str | None = None
     environment: str = "development"
     current_phase: int = 9
@@ -938,7 +945,7 @@ class DeveloperBuildStatus(BaseModel):
     backend: str = "unknown"
     frontend: str = "unknown"
     docker_compose: str = "unknown"
-    application_version: str = "1.0.0-rc2"
+    application_version: str = "1.0.0-rc3"
     environment: str = "development"
 
 

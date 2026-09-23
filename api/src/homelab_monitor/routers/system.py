@@ -14,6 +14,7 @@ from homelab_monitor.schemas import (
     ProductionStorageResponse,
     RemoteAccessResponse,
 )
+from homelab_monitor.topology import topology as build_topology
 
 router = APIRouter(prefix="/api/v1/system", tags=["system"])
 READ = Depends(require_roles("admin", "operator", "viewer"))
@@ -73,3 +74,16 @@ def get_production_storage() -> ProductionStorageResponse:
 )
 def get_production_network() -> ProductionNetworkResponse:
     return health_service.network()
+
+
+@router.get(
+    "/topology",
+    dependencies=[READ],
+    summary="Read the homelab topology snapshot",
+)
+def get_topology(db: Annotated[Session, Depends(get_db)]) -> dict:
+    return build_topology(
+        health_service.health(db),
+        health_service.runtime(db),
+        health_service.network(),
+    )

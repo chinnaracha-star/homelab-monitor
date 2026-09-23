@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from homelab_monitor import __version__
 from homelab_monitor.database import get_db
+from homelab_monitor.models import PhotoEvent
 from homelab_monitor.schemas import HealthResponse, PhotoMonitorHealth
 from homelab_monitor.settings import get_settings
 
@@ -43,11 +44,11 @@ def health(db: Annotated[Session, Depends(get_db)]) -> HealthResponse | JSONResp
         version=__version__,
         database="up",
         timestamp=now,
-        photo_monitor=_photo_monitor_health(),
+        photo_monitor=_photo_monitor_health(db),
     )
 
 
-def _photo_monitor_health() -> PhotoMonitorHealth:
+def _photo_monitor_health(db: Session) -> PhotoMonitorHealth:
     from homelab_monitor.photo_watcher import get_photo_watcher_service
 
     try:
@@ -61,13 +62,25 @@ def _photo_monitor_health() -> PhotoMonitorHealth:
         chat = str(service._settings.telegram_chat_id or "").strip()
     except Exception:
         token = ""
+    label = getattr(service, "self_check_label", "UNKNOWN")
+    if label not in {"PASS", "WARN", "FAIL"}:
+        label = "UNKNOWN"
+    last_event = db.query(PhotoEvent.created_at).order_by(PhotoEvent.id.desc()).limit(1).scalar()
+    watching = service.last_successful_scan is not None or bool(service._primed)
     return PhotoMonitorHealth(
         status=service.self_check_status
         if service.self_check_status in {"pass", "fail"}
         else "unknown",
-        running=service.last_successful_scan is not None or bool(service._primed),
+        running=watching,
         telegram_configured=bool(token and chat),
         pending=len(service._pending),
         last_telegram_at=service.last_successful_telegram,
         reasons=list(service.self_check_reasons),
+        enabled=bool(service._settings.photo_watcher_enabled),
+        baseline_loaded=bool(service._primed),
+        watching=watching,
+        current_month=datetime.now().strftime("%Y-%m"),
+        last_scan=service.last_successful_scan,
+        last_event=last_event,
+        self_check=label,
     )

@@ -179,7 +179,9 @@ def test_photo_alert_and_report_bodies_omit_invalid_public_urls(monkeypatch) -> 
     )
     monkeypatch.setattr("homelab_monitor.telegram_links.get_settings", lambda: settings)
     monkeypatch.setattr("homelab_monitor.photo_telegram.resolve_dashboard_url", lambda: None)
-    monkeypatch.setattr("homelab_monitor.photo_telegram.resolve_immich_url", lambda: "http://immich")
+    monkeypatch.setattr(
+        "homelab_monitor.photo_telegram.resolve_immich_url", lambda: "http://immich"
+    )
     monkeypatch.setattr("homelab_monitor.photo_telegram.resolve_qnap_url", lambda: None)
 
     photo = format_new_photo_message(

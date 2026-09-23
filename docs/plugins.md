@@ -1,6 +1,6 @@
 # Plugin Manager
 
-HomeLab Monitor v1.0.0-rc2 wraps existing modules as **adapters**. Plugins do not spawn a second runtime and do not change existing REST contracts.
+HomeLab Monitor v1.0.0-rc3 wraps existing modules as **adapters**. Plugins do not spawn a second runtime and do not change existing REST contracts.
 
 ## Layout
 

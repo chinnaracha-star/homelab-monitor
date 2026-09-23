@@ -6,8 +6,8 @@ Python agents send authenticated health reports to a FastAPI server. The server
 stores history, evaluates alerts, can notify Telegram, and serves a React
 dashboard.
 
-> **v1.0.0-rc2** — second release candidate. Set bootstrap passwords before
-> exposing the dashboard. See [release notes](docs/release-notes-v1.0.0-rc2.md),
+> **v1.0.0-rc3** — release candidate after Phase 12. Set bootstrap passwords before
+> exposing the dashboard. See [release notes](docs/release-notes-v1.0.0-rc3.md),
 > [project status](PROJECT_STATUS.md), [changelog](CHANGELOG.md),
 > [RC2 checklist](docs/rc2-checklist.md), and
 > [known limitations](docs/known-limitations.md).
