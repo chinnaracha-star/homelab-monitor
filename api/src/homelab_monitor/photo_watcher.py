@@ -334,6 +334,7 @@ class PhotoWatcherService:
             self._log_startup(folders)
             self._logged_enabled = True
         logger.info("recursive=%s folders=%s", config.recursive, len(folders))
+        db.commit()
         self._restore_unsent(repo)
         created = 0
         scanned = 0
@@ -373,6 +374,7 @@ class PhotoWatcherService:
                         skipped += folder_skipped
                         telegram_ok += folder_telegram
                         if added:
+                            db.commit()
                             telegram_ok += self.flush_photo_notifications(
                                 db,
                                 repo,
@@ -648,6 +650,7 @@ class PhotoWatcherService:
                     telegram_sent=False,
                 )
             self._cycle_db_ms += (time.perf_counter() - insert_started) * 1000
+            db.commit()
         except IntegrityError:
             _skip("repo.exists=True", path, reason="integrity_error")
             seen.add(key)

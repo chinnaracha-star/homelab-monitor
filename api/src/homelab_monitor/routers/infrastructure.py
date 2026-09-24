@@ -1,6 +1,8 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.exc import SQLAlchemyError
 
 from homelab_monitor.auth.dependencies import require_roles
 from homelab_monitor.backup_status import backup_status_from_snapshot
@@ -26,6 +28,7 @@ from homelab_monitor.settings import Settings, get_settings
 
 router = APIRouter(prefix="/api/v1", tags=["infrastructure"])
 READ = Depends(require_roles("admin", "operator", "viewer"))
+logger = logging.getLogger(__name__)
 
 
 def _to_response(snapshot: ConnectorSnapshot) -> InfrastructureSnapshotResponse:
@@ -94,8 +97,15 @@ def get_backup_status(
             "backup_not_found",
             "The backup connector is not configured",
         )
-    record_backup_snapshot(snapshot)
-    history = backup_history_periods(snapshot, use_mock=settings.infrastructure_mock)
+    try:
+        record_backup_snapshot(snapshot)
+    except SQLAlchemyError:
+        logger.warning("backup_history_record_failed")
+    try:
+        history = backup_history_periods(snapshot, use_mock=settings.infrastructure_mock)
+    except SQLAlchemyError:
+        logger.warning("backup_history_read_failed")
+        history = []
     return backup_status_from_snapshot(snapshot, history=history, settings=settings)
 
 

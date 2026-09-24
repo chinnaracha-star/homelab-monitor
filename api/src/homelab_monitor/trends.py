@@ -80,13 +80,13 @@ class TrendService:
         self, db: Session, field: str, *, now: datetime | None = None
     ) -> TrendCpuResponse:
         end = now or _now()
-        latest_cpu = self.analytics.cpu(db, now=end)
-        latest_mem = self.analytics.memory(db, now=end)
         if field == "cpu_percent":
+            latest_cpu = self.analytics.cpu(db, now=end)
             latest = latest_cpu.current
             average_1d = latest_cpu.average_24h
             hourly = latest_cpu.series
         else:
+            latest_mem = self.analytics.memory(db, now=end)
             latest = latest_mem.current
             average_1d = latest_mem.average
             hourly = latest_mem.series

@@ -489,28 +489,40 @@ export async function getNotificationDeliveryHistory(): Promise<NotificationDeli
   return response.data
 }
 
+const predictionTimeout = 20_000
+
 export async function getPredictionsOverview(): Promise<PredictionOverview> {
-  const response = await apiClient.get<PredictionOverview>('/predictions/overview')
+  const response = await apiClient.get<PredictionOverview>('/predictions/overview', {
+    timeout: predictionTimeout,
+  })
   return response.data
 }
 
 export async function getPredictionsStorage(): Promise<PredictionMetric> {
-  const response = await apiClient.get<PredictionMetric>('/predictions/storage')
+  const response = await apiClient.get<PredictionMetric>('/predictions/storage', {
+    timeout: predictionTimeout,
+  })
   return response.data
 }
 
 export async function getPredictionsSystem(): Promise<PredictionMetric> {
-  const response = await apiClient.get<PredictionMetric>('/predictions/system')
+  const response = await apiClient.get<PredictionMetric>('/predictions/system', {
+    timeout: predictionTimeout,
+  })
   return response.data
 }
 
 export async function getPredictionsPhotos(): Promise<PredictionMetric> {
-  const response = await apiClient.get<PredictionMetric>('/predictions/photos')
+  const response = await apiClient.get<PredictionMetric>('/predictions/photos', {
+    timeout: predictionTimeout,
+  })
   return response.data
 }
 
 export async function getPredictionsBackup(): Promise<PredictionMetric> {
-  const response = await apiClient.get<PredictionMetric>('/predictions/backup')
+  const response = await apiClient.get<PredictionMetric>('/predictions/backup', {
+    timeout: predictionTimeout,
+  })
   return response.data
 }
 

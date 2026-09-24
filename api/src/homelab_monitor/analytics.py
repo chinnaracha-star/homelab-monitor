@@ -1,3 +1,5 @@
+import threading
+import time
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
@@ -59,14 +61,35 @@ def _average(values: list[float]) -> float | None:
     return _round(sum(values) / len(values))
 
 
+_HISTORY_TTL_SECONDS = 20.0
+_history_cache: dict[tuple[str, str], tuple[float, list[MetricHistory]]] = {}
+_history_lock = threading.Lock()
+
+
+def _history_key(value: datetime) -> str:
+    return as_utc(value).replace(second=0, microsecond=0).isoformat()
+
+
 def _history_window(db: Session, *, start: datetime, end: datetime) -> list[MetricHistory]:
-    return list(
+    key = (_history_key(start), _history_key(end))
+    now = time.monotonic()
+    with _history_lock:
+        cached = _history_cache.get(key)
+        if cached is not None and now - cached[0] < _HISTORY_TTL_SECONDS:
+            return cached[1]
+    rows = list(
         db.scalars(
             select(MetricHistory)
             .where(MetricHistory.timestamp >= start, MetricHistory.timestamp <= end)
             .order_by(MetricHistory.timestamp.asc())
         ).all()
     )
+    with _history_lock:
+        _history_cache[key] = (time.monotonic(), rows)
+        if len(_history_cache) > 32:
+            oldest = min(_history_cache, key=lambda item: _history_cache[item][0])
+            _history_cache.pop(oldest, None)
+    return rows
 
 
 def _series(rows: list[MetricHistory], field: str) -> list[AnalyticsSeriesPoint]:

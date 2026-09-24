@@ -35,6 +35,7 @@ def get_engine() -> Engine:
                 cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
                 cursor.execute("PRAGMA foreign_keys=ON")
                 cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA busy_timeout=8000")
                 cursor.close()
 
         _session_factory = sessionmaker(bind=_engine, expire_on_commit=False)
