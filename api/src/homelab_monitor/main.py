@@ -9,6 +9,7 @@ from homelab_monitor import __version__
 from homelab_monitor.auth.bootstrap import ensure_default_users
 from homelab_monitor.database import get_engine
 from homelab_monitor.errors import APIError, api_error_handler
+from homelab_monitor.jobs.startup import log_job_registry_validation
 from homelab_monitor.logging import RequestLoggingMiddleware, configure_logging
 from homelab_monitor.operations import factories
 from homelab_monitor.realtime import hub
@@ -49,6 +50,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         ensure_default_users(db, get_settings())
     hub.bind_loop(asyncio.get_running_loop())
     settings = get_settings()
+    log_job_registry_validation(settings)
     tasks = [register_background(name, factory) for name, factory in factories(settings).items()]
     try:
         yield

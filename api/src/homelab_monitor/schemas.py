@@ -78,6 +78,14 @@ class PhotoMonitorHealth(BaseModel):
     self_check: Literal["PASS", "WARN", "FAIL", "UNKNOWN"] = "UNKNOWN"
 
 
+class JobRegistryHealth(BaseModel):
+    status: Literal["pass", "warning", "unknown"] = "unknown"
+    validated: bool = False
+    registered_jobs: int = 0
+    factory_jobs: int = 0
+    warnings: list[str] = []
+
+
 class HealthResponse(BaseModel):
     status: Literal["healthy", "degraded"]
     service: str
@@ -85,6 +93,7 @@ class HealthResponse(BaseModel):
     database: Literal["up", "down"]
     timestamp: datetime
     photo_monitor: PhotoMonitorHealth = PhotoMonitorHealth()
+    job_registry: JobRegistryHealth = JobRegistryHealth()
 
 
 class RemoteAccessResponse(BaseModel):

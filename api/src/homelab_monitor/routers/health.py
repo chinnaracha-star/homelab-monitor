@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from homelab_monitor import __version__
 from homelab_monitor.database import get_db
 from homelab_monitor.models import PhotoEvent
-from homelab_monitor.schemas import HealthResponse, PhotoMonitorHealth
+from homelab_monitor.schemas import HealthResponse, JobRegistryHealth, PhotoMonitorHealth
 from homelab_monitor.settings import get_settings
 
 router = APIRouter(tags=["health"])
@@ -23,6 +23,7 @@ router = APIRouter(tags=["health"])
 )
 def health(db: Annotated[Session, Depends(get_db)]) -> HealthResponse | JSONResponse:
     now = datetime.now(UTC)
+    registry = _job_registry_health()
     try:
         db.execute(text("SELECT COUNT(*) FROM agents"))
         db.execute(text("SELECT COUNT(*) FROM alerts"))
@@ -35,6 +36,7 @@ def health(db: Annotated[Session, Depends(get_db)]) -> HealthResponse | JSONResp
                 version=__version__,
                 database="down",
                 timestamp=now,
+                job_registry=registry,
             ).model_dump(mode="json"),
         )
 
@@ -45,6 +47,24 @@ def health(db: Annotated[Session, Depends(get_db)]) -> HealthResponse | JSONResp
         database="up",
         timestamp=now,
         photo_monitor=_photo_monitor_health(db),
+        job_registry=registry,
+    )
+
+
+def _job_registry_health() -> JobRegistryHealth:
+    from homelab_monitor.jobs.engine import default_engine
+    from homelab_monitor.jobs.validation import validate_runtime
+
+    try:
+        result = validate_runtime(get_settings(), list(default_engine().jobs()))
+    except Exception:
+        return JobRegistryHealth(status="warning", validated=False, warnings=["validation_failed"])
+    return JobRegistryHealth(
+        status="pass" if result.status == "pass" else "warning",
+        validated=result.validated,
+        registered_jobs=result.registered_jobs,
+        factory_jobs=result.factory_jobs,
+        warnings=list(result.warnings),
     )
 
 
