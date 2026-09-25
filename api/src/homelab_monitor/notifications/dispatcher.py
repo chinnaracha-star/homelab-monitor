@@ -2,6 +2,7 @@ import logging
 import time
 from datetime import UTC, datetime
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,11 +17,14 @@ from homelab_monitor.notifications import (
 )
 from homelab_monitor.notifications.config import build_telegram_notifier, load_payload
 from homelab_monitor.notifications.email import EmailProvider
+from homelab_monitor.notifications.provider import DeliveryError
+from homelab_monitor.notifications.service import NotificationService
 from homelab_monitor.notifications.telegram import TelegramProvider
 from homelab_monitor.notifications.webhooks import discord_provider, slack_provider
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram import (
+    TelegramNotificationError,
     TelegramNotifier,
     format_alert_message,
     format_telegram_test_message,
@@ -82,6 +86,21 @@ def _providers(
         except ValueError as error:
             logger.error("email_configuration_invalid", extra={"reason": str(error)})
     return providers
+
+
+class _ReportDelivery:
+    """One report send through NotificationService. Retry stays in _deliver."""
+
+    channel = "telegram"
+
+    def __init__(self, notifier: TelegramNotifier) -> None:
+        self._service = NotificationService(notifier)
+
+    def send(self, message: str) -> None:
+        try:
+            self._service.send_text(message)
+        except (TelegramNotificationError, httpx.HTTPError) as error:
+            raise DeliveryError(str(error)) from error
 
 
 def _deliver(provider, message: str) -> str:
@@ -151,7 +170,7 @@ def dispatch_telegram_report(
         return row
     provider = providers[0]
     try:
-        error = _deliver(provider, message)
+        error = _deliver(_ReportDelivery(provider._notifier), message)
     finally:
         provider.close()
     status = "sent" if not error else "failed"
@@ -265,7 +284,8 @@ def retry_notification(db: Session, settings: Settings, notification: Notificati
         return notification
     provider = providers[0]
     message = "HomeLab Monitor: Retry notification"
-    if notification.recipient in REPORT_RECIPIENTS:
+    report_retry = notification.recipient in REPORT_RECIPIENTS
+    if report_retry:
         from homelab_monitor.telegram_reports import TelegramReportService
 
         message = TelegramReportService().build(db, notification.recipient)
@@ -274,7 +294,8 @@ def retry_notification(db: Session, settings: Settings, notification: Notificati
         if alert is not None:
             message = alert.message
     try:
-        error = _deliver(provider, message)
+        sender = _ReportDelivery(provider._notifier) if report_retry else provider
+        error = _deliver(sender, message)
     finally:
         provider.close()
     notification.status = "sent" if not error else "failed"

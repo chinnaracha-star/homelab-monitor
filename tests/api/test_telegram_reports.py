@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from homelab_monitor.database import get_engine
 from homelab_monitor.models import Agent, Alert, Notification
 from homelab_monitor.notifications.config import load_payload, save_payload
-from homelab_monitor.notifications.telegram import TelegramProvider
+from homelab_monitor.notifications.service import NotificationService
 from homelab_monitor.security import hash_agent_token
 from homelab_monitor.settings import get_settings
 from homelab_monitor.telegram_reports import (
@@ -72,10 +72,10 @@ def test_hourly_daily_weekly_generation_and_history(monkeypatch) -> None:
     _reset()
     sent: list[str] = []
 
-    def fake_send(self: TelegramProvider, message: str) -> None:
+    def fake_send(self: NotificationService, message: str) -> None:
         sent.append(message)
 
-    monkeypatch.setattr(TelegramProvider, "send", fake_send)
+    monkeypatch.setattr(NotificationService, "send_text", fake_send)
     settings = get_settings()
     hourly_at = datetime(2026, 9, 8, 9, 0, tzinfo=UTC)
     with Session(get_engine()) as db:
@@ -125,7 +125,9 @@ def test_hourly_daily_weekly_generation_and_history(monkeypatch) -> None:
 def test_disabled_reports_do_not_send(monkeypatch) -> None:
     _reset()
     sent: list[str] = []
-    monkeypatch.setattr(TelegramProvider, "send", lambda self, message: sent.append(message))
+    monkeypatch.setattr(
+        NotificationService, "send_text", lambda self, message: sent.append(message)
+    )
     with Session(get_engine()) as db:
         _configure(db, hourly_enabled=False, daily_enabled=False, weekly_enabled=False)
         rows = process_due_reports(db, get_settings(), now=datetime(2026, 9, 6, 1, 5, tzinfo=UTC))
@@ -151,17 +153,19 @@ def test_skipped_failed_retry_and_timezone(
         assert rows[0].status == "skipped"
     sent: list[str] = []
 
-    def fail_send(self: TelegramProvider, message: str) -> None:
+    def fail_send(self: NotificationService, message: str) -> None:
         raise RuntimeError("telegram down")
 
-    monkeypatch.setattr(TelegramProvider, "send", fail_send)
+    monkeypatch.setattr(NotificationService, "send_text", fail_send)
     fail_at = datetime(2026, 9, 8, 10, 0, tzinfo=UTC)
     with Session(get_engine()) as db:
         _configure(db, hourly_enabled=True)
         rows = process_due_reports(db, settings, now=fail_at)
         assert rows[0].status == "failed"
         failed_id = rows[0].id
-    monkeypatch.setattr(TelegramProvider, "send", lambda self, message: sent.append(message))
+    monkeypatch.setattr(
+        NotificationService, "send_text", lambda self, message: sent.append(message)
+    )
     retried = client.post(
         f"/api/v1/notifications/{failed_id}/retry",
         headers=auth_header("operator", "operator123"),
@@ -215,7 +219,9 @@ def test_manual_test_report_jwt_rbac_disabled_success_retry_and_history(
     assert missing.status_code == 409
     assert missing.json() == {"status": "telegram_not_configured"}
     sent: list[str] = []
-    monkeypatch.setattr(TelegramProvider, "send", lambda self, message: sent.append(message))
+    monkeypatch.setattr(
+        NotificationService, "send_text", lambda self, message: sent.append(message)
+    )
     with Session(get_engine()) as db:
         _configure(db)
         now = datetime(2026, 9, 8, 9, 42, 18, tzinfo=UTC)
@@ -239,16 +245,18 @@ def test_manual_test_report_jwt_rbac_disabled_success_retry_and_history(
     titles = [item["title"] for item in history.json()["items"]]
     assert "Test Report" in titles
 
-    def fail_send(self: TelegramProvider, message: str) -> None:
+    def fail_send(self: NotificationService, message: str) -> None:
         raise RuntimeError("telegram down")
 
-    monkeypatch.setattr(TelegramProvider, "send", fail_send)
+    monkeypatch.setattr(NotificationService, "send_text", fail_send)
     failed = client.post("/api/v1/notifications/test-report", headers=auth_header())
     assert failed.status_code == 200
     assert failed.json()["status"] == "failed"
     failed_id = failed.json()["notification_id"]
     sent.clear()
-    monkeypatch.setattr(TelegramProvider, "send", lambda self, message: sent.append(message))
+    monkeypatch.setattr(
+        NotificationService, "send_text", lambda self, message: sent.append(message)
+    )
     retried = client.post(
         f"/api/v1/notifications/{failed_id}/retry",
         headers=auth_header("operator", "operator123"),
@@ -262,7 +270,9 @@ def test_manual_test_report_jwt_rbac_disabled_success_retry_and_history(
 def test_hourly_report_groups_warning_and_critical_and_skips_info(monkeypatch) -> None:
     _reset()
     sent: list[str] = []
-    monkeypatch.setattr(TelegramProvider, "send", lambda self, message: sent.append(message))
+    monkeypatch.setattr(
+        NotificationService, "send_text", lambda self, message: sent.append(message)
+    )
     hourly_at = datetime(2026, 9, 10, 1, 0, tzinfo=UTC)
     with Session(get_engine()) as db:
         agent = Agent(
