@@ -1,7 +1,8 @@
 """Facade over the existing Telegram notifier.
 
-Callers keep using TelegramNotifier, TelegramProvider, and the photo and
-report modules. This type is not wired into those paths in Sprint 13.3.
+SQLite backup text and scheduled report delivery use this facade. The
+notification worker and Photo Monitor still call TelegramNotifier directly.
+Report retry and history stay in the dispatcher.
 """
 
 from homelab_monitor.settings import Settings

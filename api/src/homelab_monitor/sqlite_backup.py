@@ -11,8 +11,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from homelab_monitor.notifications.service import NotificationService
 from homelab_monitor.settings import Settings
-from homelab_monitor.telegram import TelegramNotificationError, TelegramNotifier
+from homelab_monitor.telegram import TelegramNotificationError
 
 logger = logging.getLogger("homelab_monitor.sqlite_backup")
 
@@ -241,18 +242,18 @@ def _notify(settings: Settings, result: BackupResult) -> None:
     if not settings.telegram_enabled:
         return
     try:
-        notifier = TelegramNotifier.from_settings(settings)
+        service = NotificationService.from_settings(settings)
     except Exception:
         logger.warning("backup_telegram_unavailable")
         return
-    if notifier is None:
+    if service is None:
         return
     try:
-        notifier.send_text(format_backup_telegram(result, settings))
+        service.send_text(format_backup_telegram(result, settings))
     except TelegramNotificationError:
         logger.exception("backup_telegram_failed")
     finally:
-        notifier.close()
+        service.close()
 
 
 def run_backup_once(settings: Settings, *, notify: bool = True) -> BackupResult:
