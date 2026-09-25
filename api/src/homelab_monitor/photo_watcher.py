@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from homelab_monitor.database import get_engine
 from homelab_monitor.notifications.retry import retry_transient
+from homelab_monitor.notifications.service import NotificationService
 from homelab_monitor.photo_baseline import baseline_file_path, load_baseline, save_baseline
 from homelab_monitor.photo_events import PhotoEventRepository, resolved_watch_folders
 from homelab_monitor.photo_folders import inspect_watch_folder
@@ -716,7 +717,8 @@ class PhotoWatcherService:
         if elapsed < self.batch_window_seconds:
             return 0
         notifier = self._resolve_notifier()
-        sender = send_text or (notifier.send_text if notifier is not None else None)
+        service = NotificationService(notifier) if notifier is not None else None
+        sender = send_text or (service.send_text if service is not None else None)
         if sender is None:
             self.telegram_failed_total += 1
             return 0
@@ -729,9 +731,7 @@ class PhotoWatcherService:
             send_started = time.perf_counter()
             logger.info("telegram_send_begin folder=%s count=%s", folder, len(items))
             try:
-                delivered = self._deliver_photo_group(
-                    items, folder, sender=sender, notifier=notifier
-                )
+                delivered = self._deliver_photo_group(items, folder, sender=sender, service=service)
             except TelegramNotificationError:
                 self._cycle_telegram_ms += (time.perf_counter() - send_started) * 1000
                 logger.exception("photo_telegram_failed")
@@ -794,7 +794,7 @@ class PhotoWatcherService:
         folder: str,
         *,
         sender: Callable[[str], dict],
-        notifier: TelegramNotifier | None,
+        service: NotificationService | None,
     ) -> list[int]:
         delivered: list[int] = []
         for item in items:
@@ -806,10 +806,10 @@ class PhotoWatcherService:
             )
             image = Path(item.image_path) if item.image_path else Path(item.folder) / item.filename
             sent = False
-            if notifier is not None:
+            if service is not None:
                 try:
                     retry_transient(
-                        lambda img=image, cap=message: notifier.send_photo(img, caption=cap)
+                        lambda img=image, cap=message: service.send_photo(img, caption=cap)
                     )
                     sent = True
                 except Exception as exc:

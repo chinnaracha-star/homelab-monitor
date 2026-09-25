@@ -763,3 +763,82 @@ def test_single_photo_falls_back_to_text_when_send_photo_fails(tmp_path: Path, m
         assert len(sent) == 1
         assert "📷 New Photo Detected" in sent[0]
         assert "IMG_1234.jpg" in sent[0]
+
+
+def test_photo_caption_matches_formatter(tmp_path: Path, monkeypatch) -> None:
+    watch = tmp_path / "pictures-ss22"
+    watch.mkdir()
+    (watch / "seed.jpg").write_bytes(b"old")
+    settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(watch))
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
+    captured: list[tuple[str, str]] = []
+    texts: list[str] = []
+
+    class CapturingNotifier:
+        def send_photo(self, image_path, *, caption: str):
+            captured.append((Path(image_path).name, caption))
+            return {}
+
+        def send_text(self, text: str) -> dict:
+            texts.append(text)
+            return {}
+
+    monkeypatch.setattr(PhotoWatcherService, "_resolve_notifier", lambda self: CapturingNotifier())
+    with Session(get_engine()) as db:
+        row = PhotoEventRepository(db).ensure_settings(settings)
+        row.recursive = False
+        db.commit()
+        assert service.scan_once(db) == 0
+    image = watch / "one.jpg"
+    image.write_bytes(b"one-byte")
+    before = image.read_bytes()
+    future = datetime.now(UTC).timestamp() + 30
+    os.utime(image, (future, future))
+    with Session(get_engine()) as db:
+        assert service.scan_once(db) == 1
+        event = PhotoEventRepository(db).latest()
+        assert event is not None
+        expected = format_new_photo_message(
+            filename=event.filename,
+            folder=event.folder,
+            size_bytes=event.size_bytes,
+            created_at=event.created_at,
+        )
+    assert captured == [("one.jpg", expected)]
+    assert texts == []
+    assert image.read_bytes() == before
+
+
+def test_photo_timeout_retries_then_one_text_fallback(tmp_path: Path, monkeypatch) -> None:
+    from homelab_monitor.notifications import RETRY_ATTEMPTS
+    from homelab_monitor.telegram import TelegramNotificationError
+
+    watch = tmp_path / "pictures-ae"
+    watch.mkdir()
+    settings = _monitor_settings(photo_watcher_enabled=True, photo_watch_folder=str(watch))
+    service = PhotoWatcherService(settings, batch_window_seconds=0, settle_seconds=0)
+    calls = {"photo": 0, "text": 0}
+
+    class Flaky:
+        def send_photo(self, *_args, **_kwargs):
+            calls["photo"] += 1
+            raise TelegramNotificationError("timed out")
+
+        def send_text(self, text: str) -> dict:
+            calls["text"] += 1
+            return {}
+
+    monkeypatch.setattr(PhotoWatcherService, "_resolve_notifier", lambda self: Flaky())
+    with Session(get_engine()) as db:
+        row = PhotoEventRepository(db).ensure_settings(settings)
+        row.recursive = False
+        db.commit()
+        assert service.scan_once(db) == 0
+    image = watch / "late.jpg"
+    image.write_bytes(b"late")
+    future = datetime.now(UTC).timestamp() + 30
+    os.utime(image, (future, future))
+    with Session(get_engine()) as db:
+        assert service.scan_once(db) == 1
+    assert calls["photo"] == RETRY_ATTEMPTS
+    assert calls["text"] == 1

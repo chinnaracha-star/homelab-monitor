@@ -1,9 +1,11 @@
 """Facade over the existing Telegram notifier.
 
-SQLite backup text, scheduled report delivery, and the notification worker
-use this facade. Photo Monitor still calls TelegramNotifier directly.
-Retry and history stay with the dispatcher and the worker.
+SQLite backup, scheduled reports, the notification worker, and Photo Monitor
+use this facade for delivery. Retry, history, and photo fallback stay with
+their current owners.
 """
+
+from pathlib import Path
 
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram import TelegramNotifier
@@ -28,6 +30,9 @@ class NotificationService:
 
     def send_text(self, text: str) -> dict:
         return self._notifier.send_text(text)
+
+    def send_photo(self, image_path: Path, *, caption: str) -> dict:
+        return self._notifier.send_photo(image_path, caption=caption)
 
     def close(self) -> None:
         self._notifier.close()
