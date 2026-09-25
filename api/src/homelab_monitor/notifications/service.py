@@ -1,8 +1,8 @@
 """Facade over the existing Telegram notifier.
 
-SQLite backup text and scheduled report delivery use this facade. The
-notification worker and Photo Monitor still call TelegramNotifier directly.
-Report retry and history stay in the dispatcher.
+SQLite backup text, scheduled report delivery, and the notification worker
+use this facade. Photo Monitor still calls TelegramNotifier directly.
+Retry and history stay with the dispatcher and the worker.
 """
 
 from homelab_monitor.settings import Settings
@@ -21,6 +21,10 @@ class NotificationService:
         if notifier is None:
             return None
         return cls(notifier)
+
+    @property
+    def recipient(self) -> str:
+        return self._notifier.recipient
 
     def send_text(self, text: str) -> dict:
         return self._notifier.send_text(text)

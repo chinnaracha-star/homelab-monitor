@@ -21,9 +21,9 @@ from homelab_monitor.notification_queue import (
     NotificationQueue,
     get_notification_queue,
 )
+from homelab_monitor.notifications.service import NotificationService
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
-from homelab_monitor.telegram import TelegramNotifier
 
 logger = logging.getLogger("homelab_monitor.notification_worker")
 
@@ -43,21 +43,21 @@ class TelegramSender:
             )
             return
         try:
-            notifier = TelegramNotifier.from_settings(self._settings)
+            service = NotificationService.from_settings(self._settings)
         except ValueError as error:
             logger.warning(
                 "telegram_configuration_invalid",
                 extra={"job_id": job.id, "reason": str(error)},
             )
             return
-        if notifier is None:
+        if service is None:
             logger.info("telegram_notification_skipped", extra={"job_id": job.id})
             return
         try:
-            notifier.send_text(job.message)
-            _record_delivery(job, recipient=notifier.recipient, error="")
+            service.send_text(job.message)
+            _record_delivery(job, recipient=service.recipient, error="")
         finally:
-            notifier.close()
+            service.close()
 
 
 class NotificationWorker:

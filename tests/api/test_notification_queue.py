@@ -185,7 +185,7 @@ def test_telegram_sender_uses_notifier(monkeypatch) -> None:
             return cls()
 
     monkeypatch.setattr(
-        "homelab_monitor.notification_worker.TelegramNotifier",
+        "homelab_monitor.notification_worker.NotificationService",
         StubNotifier,
     )
     settings = Settings(

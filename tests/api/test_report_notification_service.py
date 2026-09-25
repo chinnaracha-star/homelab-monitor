@@ -104,7 +104,7 @@ def test_failed_report_retries_without_a_second_history_row(monkeypatch) -> None
 
 def test_report_neighbors_do_not_use_notification_service() -> None:
     root = Path("api/src/homelab_monitor")
-    for name in ("notification_worker.py", "photo_watcher.py", "photo_telegram.py"):
+    for name in ("photo_watcher.py", "photo_telegram.py"):
         assert "NotificationService" not in (root / name).read_text(encoding="utf-8")
     backup = (root / "sqlite_backup.py").read_text(encoding="utf-8")
     assert "NotificationService" in backup
