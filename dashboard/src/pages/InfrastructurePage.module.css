@@ -88,6 +88,67 @@
   justify-content: start;
 }
 
+.diskHealth {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.diskHeading {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.diskList {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diskItem {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.diskName {
+  margin: 0;
+  font-weight: 700;
+}
+
+.diskTemp {
+  margin: 0;
+  font-weight: 650;
+}
+
+.diskTemp[data-temperature='normal'] {
+  color: var(--color-online, #1b7f4e);
+}
+
+.diskTemp[data-temperature='warning'] {
+  color: var(--color-warning, #b86e00);
+}
+
+.diskTemp[data-temperature='critical'] {
+  color: var(--color-critical, #b42318);
+}
+
+@media (min-width: 721px) {
+  .diskItem {
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: 0.75rem;
+  }
+
+  .diskItem .meta,
+  .diskItem .diskTemp {
+    grid-column: auto;
+  }
+}
+
 @media (max-width: 1050px) {
   .connectorGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

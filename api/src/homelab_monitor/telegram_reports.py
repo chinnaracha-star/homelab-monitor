@@ -25,6 +25,7 @@ from homelab_monitor.notifications.config import load_payload, save_payload
 from homelab_monitor.notifications.dispatcher import dispatch_telegram_report
 from homelab_monitor.ops_history import _start_of_local_day, _status_from_payload
 from homelab_monitor.photo_events import PhotoEventRepository
+from homelab_monitor.qnap_disks import format_qnap_report_section
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram_links import resolve_dashboard_url
 from homelab_monitor.trends import TrendService
@@ -349,6 +350,7 @@ def format_hourly_report(
     recommendation: str,
     dashboard_url: str,
     title: str = "🏠 HomeLab Hourly Report",
+    qnap_section: str | None = None,
 ) -> str:
     tz = local.tzinfo or timezone(timedelta(hours=7))
     backup_time = _format_last_backup_time(last_backup, tz)
@@ -373,6 +375,8 @@ def format_hourly_report(
             *_compact_metric("🕒 Last Backup", backup_time),
             *_compact_metric("⚠ Alerts", str(active_alerts)),
             *_compact_metric("Recovered Today", str(recovered_today)),
+            "",
+            qnap_section if qnap_section is not None else format_qnap_report_section(None),
             HOURLY_RULE,
             "",
             "💡 Recommendation",
@@ -453,6 +457,21 @@ def format_weekly_report(
             *_report_footer(local, dashboard_url),
         ]
     )
+
+
+def _qnap_hourly_section() -> str:
+    try:
+        from homelab_monitor.infrastructure import get_infrastructure_service
+
+        snapshot = get_infrastructure_service().cached("qnap")
+    except Exception:
+        logger.exception("qnap_hourly_section_failed")
+        return format_qnap_report_section(None)
+    if snapshot is None:
+        return format_qnap_report_section(None)
+    if snapshot.status == "unknown" and not snapshot.summary:
+        return format_qnap_report_section(None)
+    return format_qnap_report_section(snapshot.summary)
 
 
 def next_hourly(local: datetime, interval: int) -> datetime:
@@ -590,6 +609,7 @@ class TelegramReportService:
                 insight=insight,
             ),
             dashboard_url=_dashboard_url(),
+            qnap_section=_qnap_hourly_section(),
         )
 
     def build_test_report(self, db: Session, *, now: datetime | None = None) -> str:
@@ -619,6 +639,7 @@ class TelegramReportService:
                 insight=insight,
             ),
             dashboard_url=_dashboard_url(),
+            qnap_section=_qnap_hourly_section(),
         )
 
     def _daily(self, db: Session, now: datetime) -> str:

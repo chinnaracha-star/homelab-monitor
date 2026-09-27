@@ -297,6 +297,8 @@ def format_metric_value(kind: str, value: float | None) -> str:
 
 
 def format_alert_message(event: AlertEvent) -> str:
+    if event.kind == "qnap_disk_temperature_high" and event.message:
+        return event.message
     recovered = event.transition == "recovered"
     if recovered:
         title = ALERT_RECOVERED_TITLES.get(event.kind, "Alert Recovered")

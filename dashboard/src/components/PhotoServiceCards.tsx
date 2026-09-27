@@ -71,7 +71,9 @@ export function StorageCard({ snapshot, onRetry }: StorageCardProps) {
       <p className={infraStyles.meta}>
         Last update {snapshot?.updated_at ? formatThaiDateTime(snapshot.updated_at, false) : 'never'}
       </p>
-      <p className={infraStyles.meta}>Health {snapshot?.summary.health ?? snapshot?.status ?? 'unknown'}</p>
+      <p className={infraStyles.meta}>
+        Health {typeof snapshot?.summary.health === 'string' ? snapshot.summary.health : snapshot?.status ?? 'unknown'}
+      </p>
       <dl className={infraStyles.summaryList}>
         <div>
           <dt>Capacity</dt>

@@ -28,5 +28,13 @@ def refresh_infrastructure() -> None:
     backup = by_name.get("backup")
     if backup is not None:
         record_backup_snapshot(backup)
+    qnap = by_name.get("qnap")
+    if qnap is not None:
+        try:
+            from homelab_monitor.qnap_disks import sync_qnap_disk_alerts
+
+            sync_qnap_disk_alerts(qnap.summary)
+        except Exception:
+            logger.exception("qnap_disk_alerts_failed")
     hub.publish("overview_updated", reason="photo_services_updated")
     hub.publish("overview_updated", reason="backup_updated")

@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     qnap_username: str = ""
     qnap_password: SecretStr | None = None
     qnap_sid: str = ""
+    qnap_tls_verify: bool = True
+    qnap_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     docker_url: str = ""
     immich_url: str = ""
     immich_api_key: SecretStr | None = None

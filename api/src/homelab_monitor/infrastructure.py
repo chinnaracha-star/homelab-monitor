@@ -48,6 +48,9 @@ class InfrastructureService:
         services = sorted(services, key=lambda item: order.get(item.service, 99))
         return collected_at, services
 
+    def cached(self, service: str) -> ConnectorSnapshot | None:
+        return self._cache.get(service)
+
     def get(self, service: str) -> ConnectorSnapshot | None:
         if service not in self._connectors:
             return None
@@ -85,10 +88,11 @@ def build_infrastructure_service(settings: Settings) -> InfrastructureService:
             QnapConnector(
                 mock=mock,
                 base_url=settings.qnap_url,
-                timeout=timeout,
+                timeout=settings.qnap_timeout_seconds,
                 api_key=settings.qnap_sid,
                 username=settings.qnap_username,
                 password=_secret(settings.qnap_password),
+                tls_verify=settings.qnap_tls_verify,
             ),
             DockerConnector(mock=mock, base_url=settings.docker_url, timeout=timeout),
             ImmichConnector(

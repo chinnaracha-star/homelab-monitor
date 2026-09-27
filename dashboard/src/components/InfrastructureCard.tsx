@@ -1,3 +1,4 @@
+import { QnapDiskHealth } from './QnapDiskHealth'
 import { StatusBadge } from './StatusBadge'
 import { Icon, type IconName } from './Icon'
 import type { InfrastructureSnapshot } from '../types/dashboard'
@@ -34,7 +35,20 @@ interface InfrastructureCardProps {
 }
 
 export function InfrastructureCard({ snapshot, onRetry }: InfrastructureCardProps) {
-  const entries = Object.entries(snapshot.summary).filter(([key]) => key !== 'error')
+  const hidden =
+    snapshot.service === 'qnap'
+      ? new Set([
+          'disks',
+          'cpu_tempc',
+          'sys_tempc',
+          'temperature_celsius',
+          'disk_temp_warning_c',
+          'disk_temp_critical_c',
+        ])
+      : new Set(['disks'])
+  const entries = Object.entries(snapshot.summary).filter(
+    ([key, value]) => key !== 'error' && !hidden.has(key) && !Array.isArray(value),
+  )
 
   return (
     <article
@@ -53,6 +67,7 @@ export function InfrastructureCard({ snapshot, onRetry }: InfrastructureCardProp
       <p className={styles.meta}>
         Last update {snapshot.updated_at ? formatThaiDateTime(snapshot.updated_at, false) : 'never'}
       </p>
+      {snapshot.service === 'qnap' ? <QnapDiskHealth summary={snapshot.summary} /> : null}
       {entries.length > 0 ? (
         <dl className={styles.summaryList}>
           {entries.map(([key, value]) => (
@@ -78,7 +93,7 @@ export function InfrastructureCard({ snapshot, onRetry }: InfrastructureCardProp
   )
 }
 
-function formatValue(value: string | number | boolean | null): string {
+function formatValue(value: string | number | boolean | null | unknown): string {
   if (typeof value === 'boolean') {
     return value ? 'yes' : 'no'
   }

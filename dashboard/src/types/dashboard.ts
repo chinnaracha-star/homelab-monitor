@@ -291,12 +291,27 @@ export interface AlertRulePayload {
 
 export type InfrastructureStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
 
+export interface QnapDiskRecord {
+  bay: number | null
+  alias: string | null
+  installed: boolean
+  is_ssd: boolean | null
+  temperature_celsius: number | null
+  temp_alert: number | null
+  temperature_status: string
+  manufacturer: null
+  model: null
+  capacity_bytes: null
+  smart_status: null
+  abnormal_sector_count: null
+}
+
 export interface InfrastructureSnapshot {
   service: string
   status: InfrastructureStatus
   version: string
   updated_at: string
-  summary: Record<string, string | number | boolean | null>
+  summary: Record<string, string | number | boolean | null | QnapDiskRecord[]>
 }
 
 export interface InfrastructureSummary {
