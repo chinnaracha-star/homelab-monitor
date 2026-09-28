@@ -6,6 +6,7 @@ import json
 import logging
 import sqlite3
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -380,17 +381,36 @@ def _record_failure(
     save_state(settings, {"latest": latest})
 
 
+async def run_backup_clock(
+    settings: Settings,
+    *,
+    sleep: Callable[[float], Awaitable[None]] | None = None,
+    run_once: Callable[[Settings], None] | None = None,
+    now: datetime | None = None,
+) -> None:
+    """One wait of the backup clock inside the sqlite_backup task.
+
+    Disabled mode sleeps 3600 seconds and returns. Otherwise this waits until
+    the next occurrence, then calls run_backup_once. It does not loop and it
+    does not create another task. A cancel during the wait skips the backup.
+    A cancel after run_backup_once has started is still the existing race.
+    """
+    sleeper = asyncio.sleep if sleep is None else sleep
+    operation = run_backup_once if run_once is None else run_once
+    if not settings.backup_enabled:
+        await sleeper(3600)
+        return
+    delay = seconds_until_next(settings, now=now)
+    logger.info("sqlite_backup_sleep seconds=%s", round(delay))
+    await sleeper(delay)
+    await asyncio.to_thread(operation, settings)
+
+
 async def run_sqlite_backup(settings: Settings) -> None:
     logger.info("sqlite_backup_scheduler_started")
     try:
         while True:
-            if not settings.backup_enabled:
-                await asyncio.sleep(3600)
-                continue
-            delay = seconds_until_next(settings)
-            logger.info("sqlite_backup_sleep seconds=%s", round(delay))
-            await asyncio.sleep(delay)
-            await asyncio.to_thread(run_backup_once, settings)
+            await run_backup_clock(settings)
     except asyncio.CancelledError:
         logger.info("sqlite_backup_scheduler_cancelled")
         raise
