@@ -1,8 +1,10 @@
 # RFC-0002 — Job Engine execution wrapper
 
-**Status:** Accepted
+**Status:** Implemented
 **Sprint:** 13.12
 **Date:** 2026-09-28
+
+Implemented in commit `f9e1375`. Production API image `sha256:a53e9a0b0c0b7453370eb9a33b2eef2874217c84b17a4a4ca8caccc6f8b47b36`, deployed `2026-09-28T04:36:32Z`. Final soak passed at `2026-09-28T05:13:17Z`. The accepted design below is unchanged.
 
 ## Problem
 

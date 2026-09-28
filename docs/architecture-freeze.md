@@ -5,7 +5,7 @@
 **Sprint:** 12.7  
 **Status:** Architecture frozen for Phase 12. Phase 13 (Enterprise) is not started.
 
-This freeze documents the platform as implemented after Sprints 12.1–12.6. It is not a redesign.
+This freeze documents the platform as implemented after Sprints 12.1–12.6. It is not a redesign. The status line above is the Sprint 12.7 snapshot. Later work follows [RFC-0001](rfc/RFC-0001-architecture-governance.md). [RFC-0002](rfc/RFC-0002-job-engine-execution-wrapper.md) is implemented: Phase 13.12 owns background-task start and stop through `JobExecutionWrapper` and does not change the frozen contracts.
 
 ## Frozen contracts
 

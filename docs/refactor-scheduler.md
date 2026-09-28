@@ -1,11 +1,11 @@
 # Scheduler consolidation plan
 
-**Sprint:** 13.2  
-**Status:** Plan only. No scheduler is replaced.
+**Sprint:** 13.2 plan; Phase 13.12 wrapper complete
+**Status:** Execution ownership is wrapped. Schedules are not consolidated.
 
 ## Current loops
 
-`operations.factories` starts six asyncio tasks in the API process:
+`operations.factories` still returns the six coroutines. `JobExecutionWrapper` registers them at startup:
 
 | Task | Loop |
 | --- | --- |
@@ -20,7 +20,7 @@
 
 ## Future Job Engine
 
-One in-process engine that owns sleep, overlap, and shutdown.
+This section is the later scheduler, not Phase 13.12. The wrapper does not own sleep or overlap. One in-process engine would own sleep, overlap, and shutdown.
 
 ```text
 API lifespan
@@ -34,14 +34,14 @@ The engine calls the current `run_*` functions. It does not move their business 
 
 ## Migration phases
 
-1. **Inventory.** This document is that list. No code.
-2. **Wrapper.** A `JobEngine` starts the same six coroutines and logs start and stop. `factories` returns that one task. Behavior of each loop stays.
-3. **Backup clock.** Register the backup sleep loop as a job. `restart_scheduler` restarts that job only, as it does now.
-4. **Report clock.** Register report due checks as a job. Due rules stay in `telegram_reports.py`.
-5. **Photo interval.** Register the watcher. Scan interval still comes from photo settings.
-6. **Retire private loops** only after each wrapper has run in production for a release without missed jobs.
+1. **Inventory.** This document is that list. Done.
+2. **Wrapper.** Done in Phase 13.12 under [RFC-0002](rfc/RFC-0002-job-engine-execution-wrapper.md), commit `f9e1375`. `JobExecutionWrapper` starts and stops the same six factories. `factories` still returns six callables, not one task. Each loop still owns its interval. Production soak passed `2026-09-28T05:13:17Z`.
+3. **Backup clock.** Not started. `restart_scheduler` still restarts the backup loop only.
+4. **Report clock.** Not started. Due rules stay in `telegram_reports.py`.
+5. **Photo interval.** Not started. Scan interval still comes from photo settings.
+6. **Retire private loops** only after each later phase has run in production for a release without missed jobs.
 
-Phases 2–6 need an accepted RFC each. Phase 1 is this sprint.
+Phases 3–6 each need their own accepted RFC. Phase 2 does not make the scheduler refactor complete.
 
 ## Compatibility strategy
 
