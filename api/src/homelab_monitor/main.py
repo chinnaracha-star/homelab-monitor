@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
@@ -9,9 +9,9 @@ from homelab_monitor import __version__
 from homelab_monitor.auth.bootstrap import ensure_default_users
 from homelab_monitor.database import get_engine
 from homelab_monitor.errors import APIError, api_error_handler
+from homelab_monitor.jobs.execution import JobExecutionWrapper
 from homelab_monitor.jobs.startup import log_job_registry_validation
 from homelab_monitor.logging import RequestLoggingMiddleware, configure_logging
-from homelab_monitor.operations import factories
 from homelab_monitor.realtime import hub
 from homelab_monitor.routers import (
     agents,
@@ -40,7 +40,6 @@ from homelab_monitor.routers import (
     trends,
     users,
 )
-from homelab_monitor.runtime_control import register_background
 from homelab_monitor.settings import get_settings
 
 
@@ -51,15 +50,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     hub.bind_loop(asyncio.get_running_loop())
     settings = get_settings()
     log_job_registry_validation(settings)
-    tasks = [register_background(name, factory) for name, factory in factories(settings).items()]
+    jobs = JobExecutionWrapper()
+    jobs.start(settings)
     try:
         yield
     finally:
         hub.stop()
-        for task in tasks:
-            task.cancel()
-            with suppress(asyncio.CancelledError):
-                await task
+        await jobs.stop()
 
 
 def create_app() -> FastAPI:
