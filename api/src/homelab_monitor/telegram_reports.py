@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -813,10 +814,21 @@ def tick_telegram_reports(settings: Settings, *, now: datetime | None = None) ->
         process_due_reports(db, settings, now=now)
 
 
+async def run_report_clock(
+    settings: Settings,
+    *,
+    sleep: Callable[[float], Awaitable[None]] | None = None,
+    tick: Callable[[Settings], None] | None = None,
+) -> None:
+    sleeper = asyncio.sleep if sleep is None else sleep
+    operation = tick_telegram_reports if tick is None else tick
+    await sleeper(TICK_SECONDS)
+    await asyncio.to_thread(operation, settings)
+
+
 async def run_telegram_reports(settings: Settings) -> None:
     while True:
-        await asyncio.sleep(TICK_SECONDS)
         try:
-            await asyncio.to_thread(tick_telegram_reports, settings)
+            await run_report_clock(settings)
         except SQLAlchemyError:
             logger.exception("telegram_report_tick_failed")
