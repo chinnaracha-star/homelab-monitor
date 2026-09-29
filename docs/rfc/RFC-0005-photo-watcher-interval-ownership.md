@@ -1,10 +1,36 @@
 # RFC-0005 — Photo Watcher interval ownership
 
-**Status:** Accepted
+**Status:** Implemented
 **Sprint:** 13.15
 **Date:** 2026-09-29
 
-Scheduler refactor phase 5 from [refactor-scheduler.md](../refactor-scheduler.md). This RFC separates one Photo Watcher interval iteration from lifecycle ownership. It does not implement the change.
+Scheduler refactor phase 5 from [refactor-scheduler.md](../refactor-scheduler.md). Implemented in commit `5940ad9`. Controlled production validation passed. The accepted design below is unchanged.
+
+## Implementation
+
+`JobExecutionWrapper` still starts one `photo_watcher` factory. `run_photo_watcher` remains the lifecycle owner and repeatedly calls the internal `run_photo_watcher_interval` helper. One helper invocation runs the supplied scan/flush operation, normalizes its dynamically calculated delay, sleeps that delay, and returns. It has no lifecycle loop or task creation.
+
+```text
+JobExecutionWrapper
+    ↓
+photo_watcher
+    ↓
+run_photo_watcher                 (lifecycle loop)
+    ↓
+run_photo_watcher_interval        (one normal interval)
+    ↓
+scan/flush → dynamic delay → sleep → return
+```
+
+The first scan remains immediate. Configured values remain 5, 10, 30, and 60 seconds, with 5 seconds as the fallback. Pending batch state can still shorten the effective delay. Baseline priming and persistence, `photo_baseline.json`, notification delivery through `NotificationService`, per-folder errors, lifecycle recovery, and cancellation propagation are unchanged. Registry and factories remain six. `photo_watcher` remains the only photo job; the helper is not a registered job.
+
+Implementation validation: 67 focused tests and 400 full backend tests passed, with 0 failures and 0 skips. Ruff check, Ruff format check, `git diff --check`, and architecture review passed.
+
+The API-only production deploy was `2026-09-29T08:32:25Z` (`2026-09-29T15:32:25+07:00`), image `sha256:02ea247ed246d1c0865b39817b9a7608e177f04dc856d59c90f9ad637f8b1290`, container `1839a7c2b71d`. Configured interval was 10 seconds. Startup, baseline restore, and `photo_watcher_tick` were observed at about `08:32:30Z`; the first normal `photo_watcher_sleep` followed at `08:33:23Z`. Natural cycles then slept 10 seconds at `08:33:23Z`, `08:34:23Z`, and `08:35:22Z`. The API stayed healthy with restart count 0.
+
+Dynamic shortened delay was not manufactured in production; automated tests cover it. `photo_baseline.json` remained present, six folders restored, and persistence continued. No artificial notification was triggered. One natural photo event occurred and Telegram delivery succeeded. Registry/factory health remained 6/6 with no interval or clock job. Dashboard container `5a8dee57e811` stayed healthy, restart count 0, and was not recreated. Rollback tag `homelab-monitor-api:rollback-phase13.15-predeploy` remains retained.
+
+One HTTP agent check-in encountered `database is locked`, represented by two traceback headers/text occurrences. The same pattern existed before this deployment. It was not logged as `photo_watcher_failed`, and available evidence does not attribute it to Photo Watcher interval ownership. Root cause and remediation remain outside this RFC.
 
 ## Problem
 

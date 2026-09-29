@@ -76,7 +76,8 @@ Today every factory job is started with the process. Pause, stop, and disable ar
 1. Metadata registry. Done in Phase 13.5.
 2. Startup checks registry names and still calls the same factories. Done in Phase 13.12 as `JobExecutionWrapper`.
 3. Backup clock only. Done in Phase 13.13 under [RFC-0003](rfc/RFC-0003-backup-clock-ownership.md).
-4. Report clock only. Done in Phase 13.14 under [RFC-0004](rfc/RFC-0004-report-clock-ownership.md). Photo interval stays in its own loop.
+4. Report clock only. Done in Phase 13.14 under [RFC-0004](rfc/RFC-0004-report-clock-ownership.md).
+5. Photo Watcher interval only. Done in Phase 13.15 under [RFC-0005](rfc/RFC-0005-photo-watcher-interval-ownership.md). `photo_watcher` remains the registered job and `run_photo_watcher` remains its lifecycle. `run_photo_watcher_interval` is an internal helper, not a job. Registry and factories remain six.
 
 ## Phase 13.12 production checkpoint
 
@@ -91,6 +92,12 @@ Backup clock is implemented in commit `477a355`. Natural backup production valid
 ## Phase 13.14 production checkpoint
 
 Report clock is implemented in commit `ab23831`. Natural hourly production validation passed. API image `sha256:afd8282c119ae07f490c72c2587be860d0453889365ff06401bdeaf9c25414ed`, deployed `2026-09-29T05:07:37Z`. The 13:00 Asia/Bangkok slot produced one `sent` hourly row, `cbb105d3-c470-4f59-91f0-feb3722f5a24`, at `2026-09-29 06:01:06` UTC. The 14:00 slot produced one `sent` row at `2026-09-29 07:00:30` UTC. Hourly `last_sent` advanced from `2026-09-29T05:00:39.335089+00:00` to `2026-09-29T07:00:07.045860+00:00`. Container `f135f0e4812d`, started `2026-09-29T07:10:27Z` for an unrelated dashboard URL change, stayed healthy with restart count 0 and did not resend the 14:00 slot. No `report_clock` job was added. Photo interval is not migrated. Details are in [RFC-0004](rfc/RFC-0004-report-clock-ownership.md).
+
+## Phase 13.15 production checkpoint
+
+Photo Watcher interval ownership is implemented in commit `5940ad9`. API image `sha256:02ea247ed246d1c0865b39817b9a7608e177f04dc856d59c90f9ad637f8b1290`, deployed `2026-09-29T08:32:25Z`. Container `1839a7c2b71d` stayed healthy with restart count 0. With a configured 10-second interval, production logged startup/baseline restore/tick before the first sleep, then three natural `photo_watcher_sleep seconds=10` cycles. The first scan remained immediate. Dynamic shortened delay was covered by tests and was not artificially induced in production.
+
+Baseline state remained present and restored six folders. No artificial photo notification was triggered; one natural photo event delivered successfully. Registry and factories remained 6/6. `photo_watcher` remains the registered job, and no photo interval or clock job exists. Dashboard container `5a8dee57e811` was not recreated. The rollback tag `homelab-monitor-api:rollback-phase13.15-predeploy` remains retained. One pre-existing HTTP agent check-in database-lock pattern recurred and was not attributed to Photo Watcher interval ownership. Details are in [RFC-0005](rfc/RFC-0005-photo-watcher-interval-ownership.md).
 
 ## Future scheduler replacement
 
