@@ -36,6 +36,12 @@ the **entire** message (`Wrong HTTP URL`).
 | `HOMELAB_IMMICH_PUBLIC_URL` | Telegram / operator Immich button |
 | `HOMELAB_QNAP_PUBLIC_URL` | Telegram / operator QNAP button |
 
+Current production sets
+`HOMELAB_DASHBOARD_PUBLIC_URL=http://100.84.30.100:18082` so Android can open
+the Dashboard without MagicDNS. See
+[Remote access](remote-access.md#android-access-without-magicdns). The
+MagicDNS HTTPS route remains available for other clients.
+
 If `HOMELAB_DASHBOARD_PUBLIC_URL` is empty, Telegram uses the Tailnet hostname
 when it is a public HTTPS name (`https://home-srv-01.tail1ea57f.ts.net`). If that
 is also unavailable, the message is sent **without buttons**. Internal URLs are
@@ -70,7 +76,8 @@ internal. Public URLs are the only values Telegram buttons may use.
 
 **GOOD**
 
-- `https://home-srv-01.tail1ea57f.ts.net`
+- `http://100.84.30.100:18082` (current Android Dashboard button)
+- `https://home-srv-01.tail1ea57f.ts.net` (retained MagicDNS HTTPS route)
 - `https://example.com`
 
 **BAD**

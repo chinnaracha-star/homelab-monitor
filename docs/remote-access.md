@@ -2,7 +2,9 @@
 
 HomeLab Monitor is reachable from outside the home through a Tailscale tailnet
 only. Do not publish dashboard or API ports on the LAN router. Do not add
-Cloudflare Tunnel, Nginx, Traefik, or Caddy in front of this path.
+Cloudflare Tunnel, Traefik, or Caddy in front of this path. The MagicDNS HTTPS
+route is Tailscale Serve alone. Android clients that do not use MagicDNS use a
+separate host Nginx listener bound only to the Tailscale IPv4 address.
 
 Local access on the server continues to work:
 
@@ -138,17 +140,111 @@ can report status at `GET /api/v1/system/remote-access`. If the socket is not
 mounted, the dashboard still works over Serve; Mission Control shows
 `not_installed` for detection only.
 
-## Android access
+## Android access without MagicDNS
 
-1. Install Tailscale from Play Store / F-Droid.
-2. Sign in to the same tailnet.
-3. Open Chrome or the Tailscale app browser to
-   `https://<machine>.<tailnet>.ts.net`.
-4. Log in with the dashboard JWT form.
+Phones that keep Private DNS on `one.one.one.one` and leave Tailscale DNS off
+cannot resolve `*.ts.net`. They can still open the dashboard over the tailnet
+by using the server Tailscale IPv4 directly.
 
-Leave Funnel disabled. The phone must be connected to Tailscale (not only
-cellular) unless you intentionally use exit-node features; the dashboard itself
-is tailnet-only.
+Current production path:
+
+```text
+Android (Tailscale ON)
+    |
+    v
+http://100.84.30.100:18082
+    |
+    v
+Host Nginx, bound only to 100.84.30.100:18082
+    |
+    v
+http://127.0.0.1:18081
+    |
+    v
+HomeLab Dashboard
+```
+
+The existing MagicDNS route stays in place for clients that can resolve it:
+
+```text
+https://home-srv-01.tail1ea57f.ts.net
+    -> Tailscale Serve
+    -> http://127.0.0.1:18081
+```
+
+Telegram uses `HOMELAB_DASHBOARD_PUBLIC_URL=http://100.84.30.100:18082` for the
+Dashboard button. That value is the only production setting recorded here.
+
+Security boundaries:
+
+- Port `18082` listens only on `100.84.30.100`. Do not bind it to `0.0.0.0`
+  or a LAN address.
+- The dashboard container stays on `127.0.0.1:18081`.
+- Tailscale off makes `http://100.84.30.100:18082` unreachable.
+- UFW was not changed for this path. Do not add `18082/tcp` for Anywhere.
+- `http://100.84.30.100:18082` is HTTP at the application layer. Tailscale
+  carries it inside the WireGuard tunnel between tailnet peers. That is not
+  the same as the HTTPS MagicDNS route.
+
+Realtime uses the WebSocket at `/api/v1/ws/dashboard`. The host Nginx site
+`/etc/nginx/sites-available/homelab-dashboard-tailscale` must forward
+`Upgrade` and `Connection`, with `proxy_read_timeout 75s` and
+`proxy_buffering off`. The shared map lives in
+`/etc/nginx/conf.d/connection-upgrade.conf`:
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+```
+
+If those headers are missing, normal HTTP pages still load and polling can
+show the last data, while the dashboard reports realtime disconnected.
+
+Android setup:
+
+1. Install Tailscale and sign in to the same tailnet.
+2. Set Private DNS to `one.one.one.one`.
+3. Turn Tailscale on.
+4. Open `http://100.84.30.100:18082`, or use the Telegram Dashboard button.
+
+Validation completed on 2026-09-29 from Android on 5G with Private DNS
+`one.one.one.one`:
+
+- Tailscale on: dashboard, Telegram button, and realtime passed.
+- Tailscale off: `http://100.84.30.100:18082` was unreachable.
+
+Checks:
+
+```bash
+tailscale ip -4
+tailscale serve status
+ss -lnt
+sudo nginx -t
+sudo systemctl status nginx
+curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18081/
+curl -fsS -o /dev/null -w '%{http_code}\n' http://100.84.30.100:18082/
+curl -fsS -o /dev/null -w '%{http_code}\n' https://home-srv-01.tail1ea57f.ts.net/
+```
+
+`ss` must show `100.84.30.100:18082` and `127.0.0.1:18081`. It must not show
+`0.0.0.0:18082`, `[::]:18082`, or a LAN address on `18082`.
+
+Rollback, if needed:
+
+1. Set `HOMELAB_DASHBOARD_PUBLIC_URL` back to
+   `https://home-srv-01.tail1ea57f.ts.net`.
+2. Recreate only the API service so it reloads that variable.
+3. Disable the dedicated `18082` Nginx site.
+4. Remove `/etc/nginx/conf.d/connection-upgrade.conf` only when no other site
+   uses `$connection_upgrade`.
+5. Run `sudo nginx -t`, then reload Nginx.
+6. Confirm `18082` is no longer listening and the MagicDNS HTTPS route still
+   returns HTTP 200.
+
+Do not run this rollback as part of normal operation. Leave Funnel disabled.
+The phone must be connected to Tailscale. Cellular alone is not enough.
 
 ## Windows access
 
