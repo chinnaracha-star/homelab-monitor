@@ -334,8 +334,7 @@ def test_hourly_report_groups_warning_and_critical_and_skips_info(monkeypatch) -
         rows = process_due_reports(db, get_settings(), now=hourly_at)
         assert rows[0].status == "sent"
     body = sent[-1]
-    assert "⚠ Alerts" in body
-    assert "\n3\n" in body or "Active\n3" in body
+    assert "⚠ Alerts 3" in body
     assert "Check cooling" in body or "Check storage capacity" in body
     assert "CPU High" not in body
 
@@ -438,7 +437,7 @@ def test_hourly_compact_metrics_put_percent_on_the_label_line() -> None:
     assert _line_after(body, "🖥 CPU 57%") == "██████░░░░"
     assert _line_after(body, "🧠 Memory 32%") == "███░░░░░░░"
     assert _line_after(body, "💾 Storage 1%") == "░░░░░░░░░░"
-    assert "📷 Photos Today\n\n9" in body
+    assert "📷 Photos Today 9" in body
 
 
 def test_daily_and_weekly_compact_bars_keep_analytics_backup_wording() -> None:
@@ -472,8 +471,8 @@ def test_daily_and_weekly_compact_bars_keep_analytics_backup_wording() -> None:
     assert _line_after(daily, "🧠 Memory 20%") == "██░░░░░░░░"
     assert _line_after(weekly, "🖥 CPU 40%") == "████░░░░░░"
     assert _line_after(weekly, "🧠 Memory 20%") == "██░░░░░░░░"
-    assert "💾 Backup\n\n12%" in daily
-    assert "💾 Backup\n\n12%" in weekly
+    assert "💾 Backup 12%" in daily
+    assert "💾 Backup 12%" in weekly
     assert "✅ Success" not in daily
     assert "✅ Success" not in weekly
 
@@ -508,8 +507,8 @@ def test_hourly_backup_status_uses_sqlite_payload_not_snapshot(
     )
     with Session(get_engine()) as db:
         body = TelegramReportService().build(db, "hourly_report")
-    assert f"💾 Backup\n\n{label}" in body
-    assert "🕒 Last Backup\n\n02:00" in body
+    assert f"💾 Backup {label}" in body
+    assert "🕒 Last Backup 02:00" in body
     assert "07:00" not in body
 
 
@@ -530,7 +529,7 @@ def test_test_report_last_backup_uses_sqlite_latest_at(monkeypatch: pytest.Monke
         body = TelegramReportService().build(db, "test_report")
     assert "🧪 Test Report" in body
     assert "✅ Success" in body
-    assert "🕒 Last Backup\n\n02:00" in body
+    assert "🕒 Last Backup 02:00" in body
     assert "07:00" not in body
 
 
@@ -551,7 +550,7 @@ def test_daily_report_keeps_analytics_success_rate_when_sqlite_disagrees(
     )
     with Session(get_engine()) as db:
         body = TelegramReportService().build(db, "daily_report")
-    assert "💾 Backup\n\n12%" in body
+    assert "💾 Backup 12%" in body
     assert "❌ Failed" not in body
 
 

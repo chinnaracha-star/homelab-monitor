@@ -293,9 +293,10 @@ def _executive_header(subtitle: str) -> list[str]:
 
 
 def _compact_metric(emoji_label: str, value: str, bar: str | None = None) -> list[str]:
+    line = f"{emoji_label} {value}"
     if bar:
-        return [f"{emoji_label} {value}", bar, ""]
-    return [emoji_label, "", value, ""]
+        return [line, bar, ""]
+    return [line, ""]
 
 
 def _recommendation_block(recommendation: str) -> list[str]:
