@@ -1,7 +1,7 @@
 # Scheduler consolidation plan
 
-**Sprint:** 13.2 plan; Phase 13.12 wrapper complete
-**Status:** Execution ownership is wrapped. Schedules are not consolidated.
+**Sprint:** 13.2 plan; Phase 13.12 wrapper complete; Phase 13.13 backup clock complete
+**Status:** Execution ownership is wrapped. Backup wait is split from the backup operation. Report and photo clocks are not consolidated.
 
 ## Current loops
 
@@ -14,7 +14,7 @@
 | `telegram_reports` | Wakes and sends hourly, daily, and weekly reports when due |
 | `notification_worker` | Drains the notification queue |
 | `photo_watcher` | Scans NAS folders on the photo scan interval |
-| `sqlite_backup` | Own sleep loop. Logs `sqlite_backup_scheduler_started` |
+| `sqlite_backup` | `run_sqlite_backup` loop calls `run_backup_clock`, then `run_backup_once`. Logs `sqlite_backup_scheduler_started` |
 
 `restart_scheduler` in Operations Center restarts the backup loop only. Photo scan interval, report due times, and the backup clock do not share a timetable. There is no second OS scheduler for these jobs.
 
@@ -36,10 +36,10 @@ The engine calls the current `run_*` functions. It does not move their business 
 
 1. **Inventory.** This document is that list. Done.
 2. **Wrapper.** Done in Phase 13.12 under [RFC-0002](rfc/RFC-0002-job-engine-execution-wrapper.md), commit `f9e1375`. `JobExecutionWrapper` starts and stops the same six factories. `factories` still returns six callables, not one task. Each loop still owns its interval. Production soak passed `2026-09-28T05:13:17Z`.
-3. **Backup clock.** Not started. `restart_scheduler` still restarts the backup loop only.
+3. **Backup clock.** Done in Phase 13.13 under [RFC-0003](rfc/RFC-0003-backup-clock-ownership.md), commit `477a355`. `run_sqlite_backup` remains the loop. `run_backup_clock` is one wait, then `run_backup_once`. No seventh job. Natural backup passed at `2026-09-28T19:00:04Z` (`2026-09-29 02:00` Asia/Bangkok), one execution, then `sqlite_backup_sleep seconds=86396` toward `2026-09-30 02:00` Asia/Bangkok, still in the same process. One lifecycle is inferred, not taken from an asyncio dump. `restart_scheduler` still restarts `sqlite_backup` only.
 4. **Report clock.** Not started. Due rules stay in `telegram_reports.py`.
 5. **Photo interval.** Not started. Scan interval still comes from photo settings.
-6. **Retire private loops** only after each later phase has run in production for a release without missed jobs.
+6. **Retire private loops** only after each later phase has run in production for a release without missed jobs. Not started.
 
 Phases 3–6 each need their own accepted RFC. Phase 2 does not make the scheduler refactor complete.
 

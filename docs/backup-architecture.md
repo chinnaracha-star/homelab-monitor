@@ -26,7 +26,7 @@ Infrastructure backup lives in `connectors/backup.py`. It reads a mock or an HTT
 | Directory | `backup_path` |
 | Retention | `apply_retention` on that directory |
 | Manual run | Operations `backup_now` |
-| Schedule | `run_sqlite_backup` |
+| Schedule | `run_sqlite_backup` calls `run_backup_clock`, then `run_backup_once` |
 | Enable flag | `backup_enabled` |
 | Last run | JSON state beside the backup directory |
 | Notification | `_notify` → `NotificationService.send_text` |
@@ -53,6 +53,8 @@ lifespan
 operations.factories sqlite_backup
     ↓
 run_sqlite_backup
+    ↓
+run_backup_clock
     ↓
 run_backup_once
     ↓
@@ -129,7 +131,7 @@ Analytics, trends, capacity, insights, and predictions under `/backup` read infr
 
 ## Scheduler boundary
 
-Startup calls `operations.factories`, which starts `run_sqlite_backup`. When `backup_enabled` is false the loop sleeps 3600 seconds. Otherwise it sleeps until `backup_time` in `backup_timezone`, then calls `run_backup_once`. Cancellation raises `CancelledError`.
+Startup calls `operations.factories`, which starts `run_sqlite_backup`. That loop calls `run_backup_clock` for one wait. When `backup_enabled` is false that wait is 3600 seconds and then returns to the loop. Otherwise it sleeps until `backup_time` in `backup_timezone`, then calls `run_backup_once`. `run_backup_clock` is not a second loop. Cancellation during the wait raises `CancelledError` and skips the backup. Cancellation after `run_backup_once` has started can still race and is not exactly-once.
 
 A later job engine can call `run_backup_once` or `run_sqlite_backup` without reading `backup_url`.
 

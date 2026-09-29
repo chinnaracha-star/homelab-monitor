@@ -1,10 +1,54 @@
 # RFC-0003 — Backup clock ownership
 
-**Status:** Accepted
+**Status:** Implemented
 **Sprint:** 13.13
 **Date:** 2026-09-28
 
-Scheduler refactor phase 3 from [refactor-scheduler.md](../refactor-scheduler.md). Status is Accepted. It is not Implemented. Nothing below the current-behavior section is running in production.
+Scheduler refactor phase 3 from [refactor-scheduler.md](../refactor-scheduler.md). Implemented in commit `477a355`. Natural backup production validation passed. The accepted design below is unchanged.
+
+## Implementation
+
+`JobExecutionWrapper` starts one `sqlite_backup` factory. That factory calls `run_sqlite_backup`, which is the lifecycle loop. Each pass calls `run_backup_clock` once. `run_backup_clock` does not contain a second infinite loop and does not call `create_task`. After the wait it calls `run_backup_once` in a thread. The registry stays six jobs. `sqlite_backup` stays one registry name and one factory.
+
+```text
+JobExecutionWrapper
+    ↓
+sqlite_backup
+    ↓
+run_sqlite_backup          (lifecycle loop)
+    ↓
+run_backup_clock           (one iteration)
+    ↓
+run_backup_once            (operation boundary)
+```
+
+`next_scheduled` keeps `candidate <= clock`. The candidate uses `backup_time` in `backup_timezone` (default `Asia/Bangkok`) with second 0 and microsecond 0. Now before the candidate stays on today. Now equal to the candidate, or later than it, selects the next day. `seconds_until_next` is `max(1.0, ...)`. Disabled backup sleeps 3600 seconds and returns to the loop. It does not stop the lifecycle, run a backup, queue a catch-up, or start a second task.
+
+`restart_scheduler` calls `restart_background("sqlite_backup")` only. The replacement recalculates the next time. Restart alone does not call `run_backup_once`. Equality still selects the next day.
+
+Cancel while waiting propagates and the backup does not run. Cancel after `run_backup_once` has started can still race. This is not exactly-once. No lock, ledger, or persistent queue was added.
+
+Tests at the implementation checkpoint: 40 focused tests passed; full backend 388 passed, 0 failed, 0 skipped, with `HOMELAB_INFRASTRUCTURE_MOCK=true` and live QNAP values isolated. `ruff check`, `ruff format --check`, and `git diff --check` passed. Those suites did not exercise live QNAP.
+
+The first Phase 13.13 API image was `sha256:ed87de5f751a0bca2690c2ad778e458c0bc051af725ed6d5afaf759fcfea487b`, tagged `homelab-monitor-api:phase13.13-477a355`. The image before that deploy was `sha256:a53e9a0b0c0b7453370eb9a33b2eef2874217c84b17a4a4ca8caccc6f8b47b36`, tagged `homelab-monitor-api:rollback-phase13.13-predeploy`. Later unrelated Telegram and dashboard work replaced the running container. The natural backup was observed on container `bee766186df8`, image `sha256:9f2518a3734436b06286d86dde11e10dc7b9d7290beea3bc3b9078124dc272f2`, started `2026-09-28T15:48:17Z`. That image is not the initial `ed87de5f` image.
+
+Early soak at `2026-09-28T16:02:45Z`: API healthy, restart count 0, `/health` HTTP 200, database up, registry 6/6. `sqlite_backup_scheduler_started` once, then `sqlite_backup_sleep seconds=11498`, targeting `2026-09-28T19:00:00Z` (`2026-09-29 02:00` Asia/Bangkok). Deploy and restart did not run a backup immediately.
+
+Natural hourly reports continued. First observed after that deploy: `2026-09-28 16:00:32` UTC, status `sent`. Later hours continued through `2026-09-29 02:00:44` UTC, one row per due window. Daily report `2026-09-29 01:00:31` UTC, status `sent`. Report clock is still Phase 4.
+
+Natural backup executed once. Completion `2026-09-28T19:00:04Z`. State `created_at` `2026-09-29T02:00:00.005079+07:00`. Result `ok=True`, status `healthy`, integrity `PASS`, duration 3.51 seconds. Artifact `/var/lib/homelab-monitor/backups/homelab-monitor-2026-09-29-020000.sqlite3.gz`, 11,770,422 bytes, non-zero gzip, one file for that due time. Status metadata has integrity `PASS` and does not store `gzip_ok`. Files for 23, 24, 25, 27, and 28 September remained. The 26 September file was already absent. This run did not wipe the set and did not write a duplicate. Why 26 September is absent is not recorded here.
+
+No `backup_telegram_failed` or `backup_telegram_unavailable`. A Telegram button log at about `19:00:03Z` sat next to completion at `19:00:04Z`. No duplicate notification was seen. This path does not write a notification-history row.
+
+The same lifecycle then logged `sqlite_backup_sleep seconds=86396` at `2026-09-28T19:00:04.465Z`, targeting about `2026-09-29T19:00:00Z` (`2026-09-30 02:00` Asia/Bangkok). Scheduler start count stayed 1. API restart count stayed 0. No second scheduler start was required.
+
+A single `sqlite_backup` lifecycle is inferred from registry 6/6, one factory, one scheduler-start, one natural backup, one next-day sleep, no duplicate execution, and restart count 0. Production did not dump asyncio tasks.
+
+Photo watcher stayed up with baseline loaded. Latest scan in that check was `2026-09-29T02:41:29Z`. A natural event was `2026-09-29T01:57:03`. No stop or failure was seen around the backup. `home-srv-01` was online at `2026-09-29 02:41:41`.
+
+That runtime had `infrastructure_mock` true and no live QNAP address. Live QNAP continuity was not exercised. That does not change the backup-clock pass.
+
+A separate database-lock observation was seen during soak and is outside RFC-0003 scope; it did not prevent the validated natural backup execution. Four HTTP tracebacks around `2026-09-29T01:58:13Z` reported `database is locked`. They were not in the `19:00Z` backup window. The API stayed healthy with restart count 0. Root cause was not established and was not fixed here.
 
 ## Problem
 

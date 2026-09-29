@@ -14,7 +14,7 @@
 | telegram_reports | `run_telegram_reports` |
 | notification_worker | `run_notification_worker` |
 | photo_watcher | `run_photo_watcher` |
-| sqlite_backup | `run_sqlite_backup` |
+| sqlite_backup | `run_sqlite_backup` loop, `run_backup_clock` once per pass, then `run_backup_once` |
 
 Lifespan calls `jobs.start(settings)` before `yield`. Shutdown is `hub.stop()`, then `await jobs.stop()`. A second `start()` while that start is active does not create more tasks and does not revive a finished or failed task. `stop()` cancels the tasks from the successful start and the current `runtime_control` task for each of those names, including one replaced by `restart_background`. One running task failure does not cancel the others. There is no `TaskGroup`, retry loop, or persistent scheduler.
 
@@ -75,13 +75,17 @@ Today every factory job is started with the process. Pause, stop, and disable ar
 
 1. Metadata registry. Done in Phase 13.5.
 2. Startup checks registry names and still calls the same factories. Done in Phase 13.12 as `JobExecutionWrapper`.
-3. Move intervals into one scheduler only after a later accepted RFC. Not started.
+3. Backup clock only. Done in Phase 13.13 under [RFC-0003](rfc/RFC-0003-backup-clock-ownership.md). Report clock and photo interval stay in their own loops.
 
 ## Phase 13.12 production checkpoint
 
 Complete, deployed, and soak passed. Commit `f9e1375`. API image `sha256:a53e9a0b0c0b7453370eb9a33b2eef2874217c84b17a4a4ca8caccc6f8b47b36`, deployed `2026-09-28T04:36:32Z`. Soak at `2026-09-28T05:13:17Z` (about 37 minutes): API healthy, restart count 0, registry 6/6, startup once, no lifecycle traceback. One natural `hourly_report` at `2026-09-28 05:01:02` UTC, status `sent`, with no second row in that window. The notification row does not store the message body.
 
 Live task count is inferred from the health registry, a single startup, and that one report. It was not read from an asyncio task dump. The soak did not call `restart_background`; tests cover shutdown of a replaced task. Photo watcher kept ticking and had no new photo event. Backup logged one start and a sleep of about 51802 seconds, so a backup run was not due. `home-srv-01` stayed online. QNAP stayed healthy as `Chin-HomeNas` / `TS-X53B`, four disks, thresholds 55°C / 60°C, with storage percent, SMART, manufacturer, disk model, and capacity still null. Dashboard stayed on `sha256:0e5486e2f0379c3a3f30b21d16538b518c85427cdc714cec716800472ad201f8`. Rollback image `homelab-monitor-api:rollback-phase13.12-predeploy` is `sha256:27eadf9bfa71e3b53dce7bd6d55e21b72083bede444b4e5a974d99ea6a965916`. Phase 13.11 rollback tags and the QNAP recovery copies under `/tmp/homelab-qnap-recovery` and `~/homelab-qnap-recovery` stay in place. No credential leak was seen in post-deploy logs. No manual report, backup, photo scan, or Docker prune was used for the soak.
+
+## Phase 13.13 production checkpoint
+
+Backup clock is implemented in commit `477a355`. Natural backup production validation passed. The running API at that check was container `bee766186df8`, image `sha256:9f2518a3734436b06286d86dde11e10dc7b9d7290beea3bc3b9078124dc272f2`, not the first Phase 13.13 image `sha256:ed87de5f751a0bca2690c2ad778e458c0bc051af725ed6d5afaf759fcfea487b`. One natural backup completed `2026-09-28T19:00:04Z`, integrity `PASS`, artifact 11,770,422 bytes, then the same lifecycle slept `86396` seconds. Scheduler start count stayed 1 and API restart count stayed 0. A single lifecycle is inferred. Report clock and photo interval are not migrated. Live QNAP was not configured in that runtime. Details are in [RFC-0003](rfc/RFC-0003-backup-clock-ownership.md).
 
 ## Future scheduler replacement
 
