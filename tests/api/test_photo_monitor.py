@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import os
 import sys
 from collections.abc import Callable
@@ -13,7 +14,12 @@ from homelab_monitor.database import get_engine
 from homelab_monitor.photo_events import PhotoEventRepository, apply_watch_folders
 from homelab_monitor.photo_folders import display_folder_name
 from homelab_monitor.photo_telegram import format_new_photo_message
-from homelab_monitor.photo_watcher import PhotoWatcherService, is_image_file, run_photo_watcher
+from homelab_monitor.photo_watcher import (
+    PhotoWatcherService,
+    is_image_file,
+    run_photo_watcher,
+    run_photo_watcher_interval,
+)
 from homelab_monitor.settings import get_settings
 
 
@@ -276,6 +282,93 @@ def test_run_photo_watcher_keeps_looping_after_scan(monkeypatch) -> None:
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(run_photo_watcher(_monitor_settings(photo_watcher_enabled=True)))
     assert scans["count"] >= 2
+
+
+def test_photo_watcher_interval_scans_then_sleeps_once() -> None:
+    events: list[str] = []
+
+    async def operation() -> int:
+        events.append("scan")
+        return 10
+
+    async def sleep(seconds: float) -> None:
+        events.append(f"sleep:{seconds}")
+
+    asyncio.run(run_photo_watcher_interval(operation, sleep=sleep))
+
+    assert events == ["scan", "sleep:10"]
+    assert "while True" not in inspect.getsource(run_photo_watcher_interval)
+    assert "while True" in inspect.getsource(run_photo_watcher)
+
+
+@pytest.mark.parametrize(("interval", "expected"), [(5, 5), (10, 10), (30, 30), (60, 60), (999, 5)])
+def test_photo_watcher_interval_uses_normalized_dynamic_delay(interval: int, expected: int) -> None:
+    slept: list[float] = []
+
+    async def operation() -> int:
+        return interval
+
+    async def sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    asyncio.run(run_photo_watcher_interval(operation, sleep=sleep))
+
+    assert slept == [expected]
+
+
+def test_photo_watcher_interval_preserves_shorter_batch_delay() -> None:
+    slept: list[float] = []
+
+    async def operation() -> int:
+        return 5
+
+    async def sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    asyncio.run(run_photo_watcher_interval(operation, sleep=sleep))
+
+    assert slept == [5]
+
+
+def test_photo_watcher_interval_cancellation_propagates() -> None:
+    async def operation() -> int:
+        return 10
+
+    async def cancelled_sleep(_seconds: float) -> None:
+        raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(run_photo_watcher_interval(operation, sleep=cancelled_sleep))
+
+
+def test_photo_watcher_failure_uses_recovery_delay_and_continues(monkeypatch, caplog) -> None:
+    import homelab_monitor.photo_watcher as module
+
+    scans = {"count": 0}
+    slept: list[float] = []
+
+    def flaky_scan(_settings: object, _service: object) -> int:
+        scans["count"] += 1
+        if scans["count"] == 1:
+            raise RuntimeError("scan failed")
+        return 10
+
+    async def fake_sleep(seconds: float) -> None:
+        slept.append(seconds)
+        if scans["count"] >= 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(module, "_scan_and_interval", flaky_scan)
+    monkeypatch.setattr(module.asyncio, "sleep", fake_sleep)
+    with (
+        caplog.at_level("ERROR", logger="homelab_monitor.photo_watcher"),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        asyncio.run(run_photo_watcher(_monitor_settings(photo_watcher_enabled=True)))
+
+    assert scans["count"] == 2
+    assert slept == [5, 10]
+    assert "photo_watcher_failed" in caplog.text
 
 
 def test_legacy_watch_folder_migrates_into_watch_folders() -> None:

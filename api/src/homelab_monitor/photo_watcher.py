@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -873,6 +873,18 @@ def _next_interval(value: object) -> int:
     return 5
 
 
+async def run_photo_watcher_interval(
+    operation: Callable[[], Awaitable[int]],
+    *,
+    sleep: Callable[[float], Awaitable[None]] | None = None,
+) -> None:
+    interval = await operation()
+    delay = max(_next_interval(interval), 5)
+    logger.info("photo_watcher_sleep seconds=%s", delay)
+    sleeper = asyncio.sleep if sleep is None else sleep
+    await sleeper(delay)
+
+
 async def run_photo_watcher(settings: Settings) -> None:
     logger.info("photo_watcher_started")
     try:
@@ -883,7 +895,9 @@ async def run_photo_watcher(settings: Settings) -> None:
 
         service = get_photo_watcher_service(settings)
         last_health = 0.0
-        while True:
+
+        async def scan_for_interval() -> int:
+            nonlocal last_health
             interval = 5
             try:
                 interval = await asyncio.to_thread(_scan_and_interval, settings, service)
@@ -892,18 +906,15 @@ async def run_photo_watcher(settings: Settings) -> None:
                 if last_health == 0.0 or now - last_health >= 60:
                     service.log_health()
                     last_health = now
-            except asyncio.CancelledError:
-                logger.info("photo_watcher_cancelled")
-                logger.info("scan_ended reason=cancelled")
-                raise
             except Exception:
                 logger.exception("photo_watcher_failed")
                 logger.info("scan_ended reason=scan_exception")
                 interval = 5
-            delay = max(_next_interval(interval), 5)
-            logger.info("photo_watcher_sleep seconds=%s", delay)
+            return interval
+
+        while True:
             try:
-                await asyncio.sleep(delay)
+                await run_photo_watcher_interval(scan_for_interval)
             except asyncio.CancelledError:
                 logger.info("photo_watcher_cancelled")
                 logger.info("scan_ended reason=cancelled")
