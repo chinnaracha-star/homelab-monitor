@@ -23,10 +23,11 @@ from homelab_monitor.insights import InsightService
 from homelab_monitor.models import Notification
 from homelab_monitor.notifications.config import load_payload, save_payload
 from homelab_monitor.notifications.dispatcher import dispatch_telegram_report
-from homelab_monitor.ops_history import _start_of_local_day, _status_from_payload
+from homelab_monitor.ops_history import _start_of_local_day
 from homelab_monitor.photo_events import PhotoEventRepository
 from homelab_monitor.qnap_disks import format_qnap_report_section
-from homelab_monitor.settings import Settings
+from homelab_monitor.settings import Settings, get_settings
+from homelab_monitor.sqlite_backup import sqlite_status_payload
 from homelab_monitor.telegram_links import resolve_dashboard_url
 from homelab_monitor.trends import TrendService
 
@@ -221,6 +222,19 @@ def _format_last_backup_time(value: str, tz: tzinfo) -> str:
     return parsed.astimezone(tz).strftime("%H:%M")
 
 
+def _sqlite_backup_report() -> tuple[str, str]:
+    payload = sqlite_status_payload(get_settings())
+    raw = str(payload.get("status") or "").strip().lower()
+    labels = {
+        "healthy": "Success",
+        "success": "Success",
+        "failed": "Failed",
+        "disabled": "Disabled",
+        "idle": "Idle",
+    }
+    return labels.get(raw, "Unknown"), str(payload.get("latest_at") or "")
+
+
 def _backup_status_label(status: str) -> str:
     normalized = (status or "Unknown").strip() or "Unknown"
     lowered = normalized.lower()
@@ -279,10 +293,9 @@ def _executive_header(subtitle: str) -> list[str]:
 
 
 def _compact_metric(emoji_label: str, value: str, bar: str | None = None) -> list[str]:
-    lines = [emoji_label, "", value, ""]
     if bar:
-        lines[2:2] = [bar, ""]
-    return lines
+        return [f"{emoji_label} {value}", bar, ""]
+    return [emoji_label, "", value, ""]
 
 
 def _recommendation_block(recommendation: str) -> list[str]:
@@ -562,12 +575,7 @@ class TelegramReportService:
         backup = self.analytics.backup(db, now=now)
         storage = self.trends.storage(db, now=now)
         system = self.capacity.system(db, now=now)
-        snapshots = self.analytics.backup_snapshots(db)
-        latest_backup = snapshots[-1] if snapshots else None
-        backup_status = "Unknown"
-        if latest_backup is not None:
-            status = _status_from_payload(latest_backup.payload)
-            backup_status = "Success" if status == "success" else status.title()
+        backup_status, sqlite_last_backup = _sqlite_backup_report()
         alerts = list_alert_history(db, status="active", now=now)
         current_photos, _, _ = self.analytics.photo_detail(db, now=now)
         return {
@@ -580,6 +588,7 @@ class TelegramReportService:
             "storage": storage,
             "score": system.overall_score,
             "backup_status": backup_status,
+            "sqlite_last_backup": sqlite_last_backup,
             "alerts": alerts,
             "indexed_photos": current_photos,
         }
@@ -588,7 +597,7 @@ class TelegramReportService:
         data = self._snapshot(db, now)
         tz = report_timezone(str(reports_payload(load_payload(db))["timezone"]))
         local = now.astimezone(tz)
-        last_backup = getattr(data["backup"], "last_backup", "") or ""
+        last_backup = str(data.get("sqlite_last_backup") or "")
         insight = self.insights.overview(db).recommendation
         return format_hourly_report(
             local=local,
@@ -617,7 +626,7 @@ class TelegramReportService:
         data = self._snapshot(db, clock)
         tz = report_timezone(str(reports_payload(load_payload(db))["timezone"]))
         local = clock.astimezone(tz)
-        last_backup = getattr(data["backup"], "last_backup", "") or ""
+        last_backup = str(data.get("sqlite_last_backup") or "")
         insight = self.insights.overview(db).recommendation
         return format_hourly_report(
             title="🧪 Test Report",

@@ -1,19 +1,24 @@
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta, timezone
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from homelab_monitor.analytics import AnalyticsService
 from homelab_monitor.database import get_engine
 from homelab_monitor.models import Agent, Alert, Notification
 from homelab_monitor.notifications.config import load_payload, save_payload
 from homelab_monitor.notifications.service import NotificationService
+from homelab_monitor.schemas import AnalyticsBackupResponse
 from homelab_monitor.security import hash_agent_token
 from homelab_monitor.settings import get_settings
 from homelab_monitor.telegram_reports import (
     TelegramReportService,
+    format_daily_report,
     format_hourly_report,
+    format_weekly_report,
     process_due_reports,
     reports_payload,
 )
@@ -420,6 +425,134 @@ def test_hourly_format_unknown_and_missing_values() -> None:
     assert "Photos Today" in body
     assert "—" in body
     assert "⚪" in body
+
+
+def _line_after(body: str, label: str) -> str:
+    lines = body.splitlines()
+    return lines[lines.index(label) + 1]
+
+
+def test_hourly_compact_metrics_put_percent_on_the_label_line() -> None:
+    body = _sample_hourly(health_score=54.0, cpu=57.0, memory=32.0, storage_percent=1.0)
+    assert _line_after(body, "🟡 Health 54%") == "█████░░░░░"
+    assert _line_after(body, "🖥 CPU 57%") == "██████░░░░"
+    assert _line_after(body, "🧠 Memory 32%") == "███░░░░░░░"
+    assert _line_after(body, "💾 Storage 1%") == "░░░░░░░░░░"
+    assert "📷 Photos Today\n\n9" in body
+
+
+def test_daily_and_weekly_compact_bars_keep_analytics_backup_wording() -> None:
+    local = datetime(2026, 9, 10, 8, 0, tzinfo=timezone(timedelta(hours=7)))
+    daily = format_daily_report(
+        local=local,
+        cpu_average=40.0,
+        memory_average=20.0,
+        temperature_average=36.0,
+        storage_growth="+1%",
+        photo_growth="+3",
+        backup_success="12%",
+        alerts_yesterday=0,
+        health_score=54.0,
+        recommendation="Everything looks healthy.",
+        dashboard_url="http://127.0.0.1:18081",
+    )
+    weekly = format_weekly_report(
+        local=local,
+        cpu_average=40.0,
+        memory_average=20.0,
+        storage_growth="+1%",
+        photo_growth="+3",
+        backup_success="12%",
+        forecast="Stable",
+        recommendation="Everything looks healthy.",
+        dashboard_url="http://127.0.0.1:18081",
+    )
+    assert _line_after(daily, "🟡 Health 54%") == "█████░░░░░"
+    assert _line_after(daily, "🖥 CPU 40%") == "████░░░░░░"
+    assert _line_after(daily, "🧠 Memory 20%") == "██░░░░░░░░"
+    assert _line_after(weekly, "🖥 CPU 40%") == "████░░░░░░"
+    assert _line_after(weekly, "🧠 Memory 20%") == "██░░░░░░░░"
+    assert "💾 Backup\n\n12%" in daily
+    assert "💾 Backup\n\n12%" in weekly
+    assert "✅ Success" not in daily
+    assert "✅ Success" not in weekly
+
+
+@pytest.mark.parametrize(
+    ("raw_status", "label"),
+    [
+        ("healthy", "✅ Success"),
+        ("success", "✅ Success"),
+        ("failed", "❌ Failed"),
+        ("disabled", "Disabled"),
+        ("idle", "Idle"),
+        ("mystery", "Unknown"),
+    ],
+)
+def test_hourly_backup_status_uses_sqlite_payload_not_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+    raw_status: str,
+    label: str,
+) -> None:
+    monkeypatch.setattr(
+        AnalyticsService,
+        "backup",
+        lambda self, db, now=None: AnalyticsBackupResponse(
+            last_backup="2020-01-01T00:00:00+00:00",
+            success_rate=0,
+        ),
+    )
+    monkeypatch.setattr(
+        "homelab_monitor.telegram_reports.sqlite_status_payload",
+        lambda settings: {"status": raw_status, "latest_at": "2026-09-29T02:00:00+07:00"},
+    )
+    with Session(get_engine()) as db:
+        body = TelegramReportService().build(db, "hourly_report")
+    assert f"💾 Backup\n\n{label}" in body
+    assert "🕒 Last Backup\n\n02:00" in body
+    assert "07:00" not in body
+
+
+def test_test_report_last_backup_uses_sqlite_latest_at(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        AnalyticsService,
+        "backup",
+        lambda self, db, now=None: AnalyticsBackupResponse(
+            last_backup="2020-01-01T00:00:00+00:00",
+            success_rate=0,
+        ),
+    )
+    monkeypatch.setattr(
+        "homelab_monitor.telegram_reports.sqlite_status_payload",
+        lambda settings: {"status": "healthy", "latest_at": "2026-09-29T02:00:00+07:00"},
+    )
+    with Session(get_engine()) as db:
+        body = TelegramReportService().build(db, "test_report")
+    assert "🧪 Test Report" in body
+    assert "✅ Success" in body
+    assert "🕒 Last Backup\n\n02:00" in body
+    assert "07:00" not in body
+
+
+def test_daily_report_keeps_analytics_success_rate_when_sqlite_disagrees(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        AnalyticsService,
+        "backup",
+        lambda self, db, now=None: AnalyticsBackupResponse(
+            last_backup="2020-01-01T00:00:00+00:00",
+            success_rate=12,
+        ),
+    )
+    monkeypatch.setattr(
+        "homelab_monitor.telegram_reports.sqlite_status_payload",
+        lambda settings: {"status": "failed", "latest_at": "2026-09-29T02:00:00+07:00"},
+    )
+    with Session(get_engine()) as db:
+        body = TelegramReportService().build(db, "daily_report")
+    assert "💾 Backup\n\n12%" in body
+    assert "❌ Failed" not in body
 
 
 def test_telegram_inline_keyboard_uses_configured_urls(monkeypatch) -> None:
