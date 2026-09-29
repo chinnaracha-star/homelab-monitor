@@ -75,7 +75,8 @@ Today every factory job is started with the process. Pause, stop, and disable ar
 
 1. Metadata registry. Done in Phase 13.5.
 2. Startup checks registry names and still calls the same factories. Done in Phase 13.12 as `JobExecutionWrapper`.
-3. Backup clock only. Done in Phase 13.13 under [RFC-0003](rfc/RFC-0003-backup-clock-ownership.md). Report clock and photo interval stay in their own loops.
+3. Backup clock only. Done in Phase 13.13 under [RFC-0003](rfc/RFC-0003-backup-clock-ownership.md).
+4. Report clock only. Done in Phase 13.14 under [RFC-0004](rfc/RFC-0004-report-clock-ownership.md). Photo interval stays in its own loop.
 
 ## Phase 13.12 production checkpoint
 
@@ -86,6 +87,10 @@ Live task count is inferred from the health registry, a single startup, and that
 ## Phase 13.13 production checkpoint
 
 Backup clock is implemented in commit `477a355`. Natural backup production validation passed. The running API at that check was container `bee766186df8`, image `sha256:9f2518a3734436b06286d86dde11e10dc7b9d7290beea3bc3b9078124dc272f2`, not the first Phase 13.13 image `sha256:ed87de5f751a0bca2690c2ad778e458c0bc051af725ed6d5afaf759fcfea487b`. One natural backup completed `2026-09-28T19:00:04Z`, integrity `PASS`, artifact 11,770,422 bytes, then the same lifecycle slept `86396` seconds. Scheduler start count stayed 1 and API restart count stayed 0. A single lifecycle is inferred. Report clock and photo interval are not migrated. Live QNAP was not configured in that runtime. Details are in [RFC-0003](rfc/RFC-0003-backup-clock-ownership.md).
+
+## Phase 13.14 production checkpoint
+
+Report clock is implemented in commit `ab23831`. Natural hourly production validation passed. API image `sha256:afd8282c119ae07f490c72c2587be860d0453889365ff06401bdeaf9c25414ed`, deployed `2026-09-29T05:07:37Z`. The 13:00 Asia/Bangkok slot produced one `sent` hourly row, `cbb105d3-c470-4f59-91f0-feb3722f5a24`, at `2026-09-29 06:01:06` UTC. The 14:00 slot produced one `sent` row at `2026-09-29 07:00:30` UTC. Hourly `last_sent` advanced from `2026-09-29T05:00:39.335089+00:00` to `2026-09-29T07:00:07.045860+00:00`. Container `f135f0e4812d`, started `2026-09-29T07:10:27Z` for an unrelated dashboard URL change, stayed healthy with restart count 0 and did not resend the 14:00 slot. No `report_clock` job was added. Photo interval is not migrated. Details are in [RFC-0004](rfc/RFC-0004-report-clock-ownership.md).
 
 ## Future scheduler replacement
 

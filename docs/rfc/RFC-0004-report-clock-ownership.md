@@ -1,10 +1,32 @@
 # RFC-0004 — Report clock ownership
 
-**Status:** Accepted
+**Status:** Implemented
 **Sprint:** 13.14
 **Date:** 2026-09-29
 
-Scheduler refactor phase 4 from [refactor-scheduler.md](../refactor-scheduler.md). Status is Accepted. It is not Implemented. Due rules stay in `telegram_reports.py`.
+Scheduler refactor phase 4 from [refactor-scheduler.md](../refactor-scheduler.md). Implemented in commit `ab23831`. Natural hourly production validation passed. The accepted design below is unchanged. Due rules stay in `telegram_reports.py`.
+
+## Implementation
+
+`JobExecutionWrapper` starts one `telegram_reports` factory. That factory calls `run_telegram_reports`, which remains the lifecycle loop. Each pass calls `run_report_clock` once. `run_report_clock` sleeps `TICK_SECONDS` (60) and then runs one tick. It does not contain `while True`, `create_task`, or a second lifecycle. `SQLAlchemyError` stays on the lifecycle and is logged as `telegram_report_tick_failed`. `CancelledError` is not swallowed. The registry stays six jobs. There is no `report_clock` job.
+
+```text
+run_telegram_reports      (lifecycle loop)
+    ↓
+run_report_clock          (one sleep, then one tick)
+```
+
+The Phase 13.14 API image is `sha256:afd8282c119ae07f490c72c2587be860d0453889365ff06401bdeaf9c25414ed`. Controlled deploy was `2026-09-29T05:07:37Z` (`2026-09-29 12:07:37` Asia/Bangkok). The API was healthy with restart count 0. The already-sent 12:00 Asia/Bangkok hourly slot was not sent again.
+
+Natural hourly rows, each status `sent` and one row per slot:
+
+- 12:00 Asia/Bangkok: `2026-09-29 05:01:03` UTC
+- 13:00 Asia/Bangkok / 06:00 UTC: notification `cbb105d3-c470-4f59-91f0-feb3722f5a24`, `2026-09-29 06:01:06` UTC, exactly one row, no duplicate
+- 14:00 Asia/Bangkok: `2026-09-29 07:00:30` UTC, one row
+
+Hourly `last_sent` moved from `2026-09-29T05:00:39.335089+00:00` to `2026-09-29T07:00:07.045860+00:00`. Daily stayed `2026-09-29T01:00:07.300723+00:00`. Weekly stayed `2026-09-27T01:00:24.224692+00:00`.
+
+An unrelated API recreate at `2026-09-29T07:10:27Z` (container `f135f0e4812d`, same Phase 13.14 image) did not resend the 14:00 slot. That container was healthy, restart count 0, and its logs had no `telegram_report_tick_failed`, traceback, `CancelledError`, or `database is locked`. Phase 13.14 needs no further runtime work. Phase 5 and phase 6 stay open.
 
 ## Problem
 
