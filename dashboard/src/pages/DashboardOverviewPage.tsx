@@ -128,7 +128,8 @@ export const DashboardOverviewPage = memo(function DashboardOverviewPage() {
   const memoryStatus = metricStatus('memory', memory.data?.current)
   const temperatureStatus = metricStatus('temperature', temperature.data?.current)
   const storageStatus = metricStatus('storage', storagePercent)
-  const photosToday = photos.data?.today ?? analytics.data?.photos_today ?? 0
+  const photosToday =
+    photoMonitor.data?.today_count ?? photos.data?.today ?? analytics.data?.photos_today ?? 0
   const estimatedFull =
     storage.data?.estimated_full_in ||
     estimatedFullLabel(storage.data?.estimated_days_remaining, storage.data?.average_daily_growth ?? 0)

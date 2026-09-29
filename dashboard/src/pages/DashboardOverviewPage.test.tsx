@@ -197,9 +197,24 @@ describe('Dashboard overview backup cards', () => {
     expect(screen.getByLabelText(/Memory 42% Status: Normal/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Temperature 46°C Status: Normal/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Overall Health Excellent 95 \/ 100 Status: Excellent/)).toBeInTheDocument()
-    expect(screen.getByLabelText(/Photos Today \+12/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Photos Today \+128/)).toBeInTheDocument()
     expect(screen.getByText('Total Photos')).toBeInTheDocument()
     expect(screen.getByText(Number(79119).toLocaleString())).toBeInTheDocument()
+  })
+
+  it('falls back to analytics photos today when the monitor count is missing', async () => {
+    vi.mocked(getPhotoMonitorStats).mockResolvedValue({
+      last_photo: null,
+      last_folder: null,
+      last_update: null,
+      watch_folder: '/mnt/picture-all',
+      watch_folders: ['/mnt/picture-all'],
+      watch_folder_labels: ['Pictures-All'],
+      indexed_files: 0,
+      enabled: true,
+    } as never)
+    renderPage()
+    expect(await screen.findByLabelText(/Photos Today \+12/)).toBeInTheDocument()
   })
 
   it('shows health and capacity forecast cards', async () => {
