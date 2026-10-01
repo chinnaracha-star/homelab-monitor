@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 
 from homelab_monitor.infrastructure import get_infrastructure_service
 from homelab_monitor.ops_history import record_backup_snapshot, record_photo_snapshot
@@ -10,13 +11,25 @@ from homelab_monitor.settings import Settings, get_settings
 logger = logging.getLogger("homelab_monitor.infrastructure")
 
 
+async def run_infrastructure_monitor_interval(
+    settings: Settings,
+    *,
+    sleep: Callable[[float], Awaitable[None]] | None = None,
+    refresh: Callable[[], None] | None = None,
+) -> None:
+    """One infrastructure pass: sleep, then refresh. Does not loop."""
+    sleeper = asyncio.sleep if sleep is None else sleep
+    operation = refresh_infrastructure if refresh is None else refresh
+    await sleeper(settings.infrastructure_refresh_seconds)
+    try:
+        await asyncio.to_thread(operation)
+    except Exception:
+        logger.exception("infrastructure_refresh_failed")
+
+
 async def run_infrastructure_monitor(settings: Settings) -> None:
     while True:
-        await asyncio.sleep(settings.infrastructure_refresh_seconds)
-        try:
-            await asyncio.to_thread(refresh_infrastructure)
-        except Exception:
-            logger.exception("infrastructure_refresh_failed")
+        await run_infrastructure_monitor_interval(settings)
 
 
 def refresh_infrastructure() -> None:
