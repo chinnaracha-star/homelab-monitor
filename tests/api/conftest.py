@@ -28,17 +28,24 @@ os.environ["HOMELAB_BOOTSTRAP_VIEWER_PASSWORD"] = ""
 os.environ["HOMELAB_DASHBOARD_PUBLIC_URL"] = ""
 os.environ["HOMELAB_IMMICH_PUBLIC_URL"] = ""
 os.environ["HOMELAB_QNAP_PUBLIC_URL"] = ""
+os.environ["HOMELAB_QNAP_URL"] = ""
+os.environ["HOMELAB_INFRASTRUCTURE_MOCK"] = "true"
 os.environ["HOMELAB_API_HEALTH_URL"] = ""
 os.environ["HOMELAB_DASHBOARD_HEALTH_URL"] = ""
 
 from homelab_monitor.alert_stability import reset_stability_windows  # noqa: E402
 from homelab_monitor.auth.passwords import hash_password  # noqa: E402
 from homelab_monitor.database import Base, get_engine  # noqa: E402
+from homelab_monitor.infrastructure import reset_infrastructure_service  # noqa: E402
 from homelab_monitor.main import app  # noqa: E402
 from homelab_monitor.models import PhotoEvent, PhotoMonitorSettings, User  # noqa: E402
 from homelab_monitor.notification_history import reset_notification_history  # noqa: E402
 from homelab_monitor.notification_queue import reset_notification_queue  # noqa: E402
 from homelab_monitor.photo_watcher import reset_photo_watcher_service  # noqa: E402
+from homelab_monitor.settings import get_settings  # noqa: E402
+
+get_settings.cache_clear()
+reset_infrastructure_service()
 
 
 def _remove_sqlite(path: Path) -> None:
