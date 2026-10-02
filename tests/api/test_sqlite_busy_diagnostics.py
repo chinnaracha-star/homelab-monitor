@@ -174,9 +174,8 @@ def test_directory_walk_is_not_a_writer_mark() -> None:
     assert 'writer_operation("photo_prune")' in source
     insert = inspect.getsource(PhotoWatcherService._handle_discovered)
     assert 'writer_operation("photo_event_insert")' in insert
-    assert 'writer_operation("photo_notification_flush")' in inspect.getsource(
-        PhotoWatcherService.flush_photo_notifications
-    )
+    flush = inspect.getsource(PhotoWatcherService.flush_photo_notifications)
+    assert 'writer_operation("photo_notification_mark_sent")' in flush
 
 
 def test_session_type_unchanged() -> None:

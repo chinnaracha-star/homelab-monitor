@@ -763,7 +763,7 @@ class PhotoWatcherService:
             messages += 1
             self.telegram_ok_total += 1
             self.last_successful_telegram = datetime.now(UTC)
-        with writer_operation("photo_notification_flush"):
+        with writer_operation("photo_notification_mark_sent"):
             repo.mark_telegram_sent(sent_ids)
         sent = set(sent_ids)
         self._pending = [item for item in self._pending if item.event_id not in sent]
