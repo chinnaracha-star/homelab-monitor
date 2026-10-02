@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from homelab_monitor.jobs.repetition import run_repeated
 from homelab_monitor.notifications.service import NotificationService
 from homelab_monitor.settings import Settings
 from homelab_monitor.telegram import TelegramNotificationError
@@ -409,8 +410,7 @@ async def run_backup_clock(
 async def run_sqlite_backup(settings: Settings) -> None:
     logger.info("sqlite_backup_scheduler_started")
     try:
-        while True:
-            await run_backup_clock(settings)
+        await run_repeated(lambda: run_backup_clock(settings))
     except asyncio.CancelledError:
         logger.info("sqlite_backup_scheduler_cancelled")
         raise

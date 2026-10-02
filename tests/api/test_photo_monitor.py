@@ -298,7 +298,8 @@ def test_photo_watcher_interval_scans_then_sleeps_once() -> None:
 
     assert events == ["scan", "sleep:10"]
     assert "while True" not in inspect.getsource(run_photo_watcher_interval)
-    assert "while True" in inspect.getsource(run_photo_watcher)
+    assert "while True" not in inspect.getsource(run_photo_watcher)
+    assert "run_repeated" in inspect.getsource(run_photo_watcher)
 
 
 @pytest.mark.parametrize(("interval", "expected"), [(5, 5), (10, 10), (30, 30), (60, 60), (999, 5)])

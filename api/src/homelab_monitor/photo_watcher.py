@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from homelab_monitor.database import get_engine
+from homelab_monitor.jobs.repetition import run_repeated
 from homelab_monitor.notifications.retry import retry_transient
 from homelab_monitor.notifications.service import NotificationService
 from homelab_monitor.photo_baseline import baseline_file_path, load_baseline, save_baseline
@@ -912,13 +913,12 @@ async def run_photo_watcher(settings: Settings) -> None:
                 interval = 5
             return interval
 
-        while True:
-            try:
-                await run_photo_watcher_interval(scan_for_interval)
-            except asyncio.CancelledError:
-                logger.info("photo_watcher_cancelled")
-                logger.info("scan_ended reason=cancelled")
-                raise
+        try:
+            await run_repeated(lambda: run_photo_watcher_interval(scan_for_interval))
+        except asyncio.CancelledError:
+            logger.info("photo_watcher_cancelled")
+            logger.info("scan_ended reason=cancelled")
+            raise
     finally:
         logger.info("photo_watcher_stopped")
 

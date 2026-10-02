@@ -21,6 +21,7 @@ from homelab_monitor.capacity_planning import CapacityPlanningService, _bytes_la
 from homelab_monitor.database import get_engine
 from homelab_monitor.history import as_utc
 from homelab_monitor.insights import InsightService
+from homelab_monitor.jobs.repetition import run_repeated
 from homelab_monitor.models import Notification
 from homelab_monitor.notifications.config import load_payload, save_payload
 from homelab_monitor.notifications.dispatcher import dispatch_telegram_report
@@ -827,8 +828,10 @@ async def run_report_clock(
 
 
 async def run_telegram_reports(settings: Settings) -> None:
-    while True:
+    async def report_pass() -> None:
         try:
             await run_report_clock(settings)
         except SQLAlchemyError:
             logger.exception("telegram_report_tick_failed")
+
+    await run_repeated(report_pass)

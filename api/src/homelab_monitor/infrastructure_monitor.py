@@ -3,6 +3,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from homelab_monitor.infrastructure import get_infrastructure_service
+from homelab_monitor.jobs.repetition import run_repeated
 from homelab_monitor.ops_history import record_backup_snapshot, record_photo_snapshot
 from homelab_monitor.photo_stats import build_photo_stats
 from homelab_monitor.realtime import hub
@@ -28,8 +29,7 @@ async def run_infrastructure_monitor_interval(
 
 
 async def run_infrastructure_monitor(settings: Settings) -> None:
-    while True:
-        await run_infrastructure_monitor_interval(settings)
+    await run_repeated(lambda: run_infrastructure_monitor_interval(settings))
 
 
 def refresh_infrastructure() -> None:

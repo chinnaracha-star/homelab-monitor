@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from homelab_monitor.alert_engine import AlertEngine
 from homelab_monitor.database import get_engine
+from homelab_monitor.jobs.repetition import run_repeated
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
 
@@ -30,8 +31,7 @@ async def run_offline_monitor_interval(
 
 
 async def run_offline_monitor(settings: Settings) -> None:
-    while True:
-        await run_offline_monitor_interval(settings)
+    await run_repeated(lambda: run_offline_monitor_interval(settings))
 
 
 def evaluate_offline_agents(settings: Settings) -> None:
