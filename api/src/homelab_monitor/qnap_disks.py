@@ -287,7 +287,9 @@ def sync_qnap_disk_alerts(summary: dict[str, Any]) -> None:
     hostname = pending[0]["hostname"]
     observed_at = datetime.now(UTC)
     try:
-        with Session(get_engine()) as db:
+        from homelab_monitor.sqlite_diagnostics import writer_operation
+
+        with writer_operation("qnap_disk_alert_update"), Session(get_engine()) as db:
             agent = db.scalar(select(Agent).where(Agent.name == hostname))
             if agent is None:
                 return

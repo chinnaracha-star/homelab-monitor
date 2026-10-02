@@ -315,29 +315,30 @@ class PhotoWatcherService:
         self._cycle_db_ms = 0.0
         self._cycle_telegram_ms = 0.0
         repo = PhotoEventRepository(db)
-        config = repo.ensure_settings(self._settings)
-        folders = _priority_watch_folders(
-            [os.path.normpath(item) for item in resolved_watch_folders(config)]
-        )
-        self.last_folders = folders
-        self.sync_watch_roots(folders)
-        if not config.enabled:
-            if self._logged_enabled is not False:
-                logger.info("Photo Monitor disabled")
-                self._logged_enabled = False
-            self.indexed_files = 0
+        with writer_operation("photo_settings_update"):
+            config = repo.ensure_settings(self._settings)
+            folders = _priority_watch_folders(
+                [os.path.normpath(item) for item in resolved_watch_folders(config)]
+            )
+            self.last_folders = folders
+            self.sync_watch_roots(folders)
+            if not config.enabled:
+                if self._logged_enabled is not False:
+                    logger.info("Photo Monitor disabled")
+                    self._logged_enabled = False
+                self.indexed_files = 0
+                db.commit()
+                logger.info("scan_ended reason=disabled")
+                return 0
+            if not folders:
+                db.commit()
+                logger.info("scan_ended reason=no_watch_folders")
+                return 0
+            if self._logged_enabled is not True:
+                self._log_startup(folders)
+                self._logged_enabled = True
+            logger.info("recursive=%s folders=%s", config.recursive, len(folders))
             db.commit()
-            logger.info("scan_ended reason=disabled")
-            return 0
-        if not folders:
-            db.commit()
-            logger.info("scan_ended reason=no_watch_folders")
-            return 0
-        if self._logged_enabled is not True:
-            self._log_startup(folders)
-            self._logged_enabled = True
-        logger.info("recursive=%s folders=%s", config.recursive, len(folders))
-        db.commit()
         self._restore_unsent(repo)
         created = 0
         scanned = 0

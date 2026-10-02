@@ -5,6 +5,7 @@ from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from homelab_monitor.settings import get_settings
+from homelab_monitor.sqlite_diagnostics import install_connection_diagnostics
 
 
 class Base(DeclarativeBase):
@@ -39,6 +40,7 @@ def get_engine() -> Engine:
                 cursor.close()
 
         _session_factory = sessionmaker(bind=_engine, expire_on_commit=False)
+        install_connection_diagnostics(_engine, _session_factory)
 
     return _engine
 
