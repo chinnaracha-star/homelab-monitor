@@ -96,10 +96,10 @@ moved job by job:
 | 13.13 | Backup clock | Complete |
 | 13.14 | Report clock | Complete |
 | 13.15 | Photo watcher interval | Complete |
-| 13.16 | Next scheduler phase | Not started |
+| 13.16 | Shared repetition ownership | Complete |
 
 Decisions are recorded under [docs/rfc](docs/rfc/) (RFC-0001 through
-RFC-0005).
+RFC-0007).
 
 ## Telegram
 
@@ -189,7 +189,7 @@ Governance for scheduler ownership lives in [docs/rfc](docs/rfc/).
 | Work | State |
 | --- | --- |
 | Phases 13.11–13.15 | Complete |
-| Phase 13.16 | Not started |
+| Phase 13.16 | Complete |
 | Backup / DR discovery | Complete |
 | Essential Backup v1 | Complete |
 | Isolated restore test | Passed |
@@ -199,7 +199,7 @@ Governance for scheduler ownership lives in [docs/rfc](docs/rfc/).
 
 ## Roadmap
 
-Phase 13.16, the next scheduler refactor, is paused.
+Phase 13.16 is complete. Scheduler phases 3–6 are complete. `run_repeated` repeats the five periodic jobs. Each helper still owns its own wait. The notification worker still drains its queue.
 
 A later Phase 14 idea is advisory AI: read HomeLab data, explain and
 diagnose, suggest an action plan, and wait for approval before any

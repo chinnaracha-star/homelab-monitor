@@ -1,10 +1,54 @@
 # RFC-0007 — Shared repetition ownership
 
-**Status:** Accepted
+**Status:** Implemented
 **Sprint:** 13.16
 **Date:** 2026-10-02
 
-Scheduler refactor phase 6 from [refactor-scheduler.md](../refactor-scheduler.md). [RFC-0006](RFC-0006-retire-private-loops.md) extracted timing for `offline_monitor` and `infrastructure_monitor` and left their lifecycle `while True` in place. This RFC proposes who owns repetition for the five periodic jobs. It does not implement that owner. Accepting it does not complete Phase 13.16.
+Scheduler refactor phase 6 from [refactor-scheduler.md](../refactor-scheduler.md). [RFC-0006](RFC-0006-retire-private-loops.md) extracted timing for `offline_monitor` and `infrastructure_monitor`. This RFC moves repetition for the five periodic jobs into one shared primitive. Implemented in commit `339d15a`. Production validation passed. The accepted design below is unchanged. Phase 13.16 and roadmap phase 6 are complete.
+
+## Implementation
+
+`run_repeated` in `api/src/homelab_monitor/jobs/repetition.py` is the only shared repetition owner. It awaits one operation, then awaits it again. It does not sleep, catch `Exception`, retry, or call `create_task`. It is not a seventh job and it does not own intervals.
+
+```text
+JobExecutionWrapper          task start and stop
+    ↓
+run_* lifecycle              factory entry, logs, and job-specific cancel handling
+    ↓
+run_repeated                 repetition only
+    ↓
+one-iteration helper         timing and order
+    ↓
+domain operation             the work
+```
+
+`run_notification_worker` stays a queue worker. Its `while True`, empty-queue sleep, and batch drain stay. WebSocket receive loops and the realtime heartbeat stay. Phase 6 does not mean every `while True` in the repository is gone. It means the five scheduler lifecycles no longer each own repetition.
+
+| Lifecycle | Repeated operation |
+| --- | --- |
+| `run_offline_monitor` | `run_offline_monitor_interval` directly |
+| `run_infrastructure_monitor` | `run_infrastructure_monitor_interval` directly |
+| `run_telegram_reports` | `report_pass`: `run_report_clock`, and on `SQLAlchemyError` log `telegram_report_tick_failed` and return |
+| `run_photo_watcher` | `run_photo_watcher_interval(scan_for_interval)` after the disabled return |
+| `run_sqlite_backup` | `run_backup_clock` directly |
+
+Before deploy, the backend suite was 435 passed, 0 failed. Ruff, format, and `git diff --check` passed. Focused tests cover repetition, the report catch inside the pass, and the five lifecycles no longer containing `while True`.
+
+Production image `homelab-monitor-api:phase13.16-339d15a`, id `sha256:6e178cc41530d73aa0a166f2f36c9c8ba42652ea143fe91cce927fd16998800c`. Predeploy image `sha256:2ed9e6b7fadaf90992d776facf60e06815274a244f0f2788828f7c0150cf3ad9`, tagged `homelab-monitor-api:rollback-phase13.16-rfc0007-predeploy`. API-only recreate `2026-10-02T10:49:03+07:00` through `2026-10-02T10:49:04+07:00`. Container start `2026-10-02T03:49:04Z`. API stayed healthy with restart count 0. Registry remained six jobs. Rollback was not required.
+
+Configured intervals were 30 seconds for offline and 3600 seconds for infrastructure. Offline success ticks are silent, so this soak does not record timestamps of successful evaluations. The process stayed up with restart count 0 well past two 30-second intervals. No offline error and no duplicate offline execution were seen. Sleep-before stayed consistent with that observation.
+
+Infrastructure did not refresh at startup. The first natural refresh was `2026-10-02T04:49:12Z`, about 3608 seconds after start. The second was `2026-10-02T05:49:15Z`, 3603 seconds later. No duplicate refresh and no infrastructure logger error. QNAP monitoring stayed healthy.
+
+Telegram sent one notification at `2026-10-02T04:00:34Z` and one at `2026-10-02T05:00:57Z`. No duplicate. No `telegram_report_tick_failed` in this window. Production did not exercise the `SQLAlchemyError` recovery path. Tests and the guarded `report_pass` cover that path.
+
+Photo watcher ticked at `2026-10-02T03:49:09Z`, before the first `photo_watcher_sleep` at `2026-10-02T03:52:06Z`. Later logs show 116 `photo_watcher_scan_finished` lines and sleeps of 10 seconds. One scanner started. No tight loop and no `photo_watcher_failed`. Production did not exercise the 5-second scan-failure delay. That delay remains inside `scan_for_interval` plus `run_photo_watcher_interval`, and tests cover it.
+
+SQLite backup logged `sqlite_backup_scheduler_started` and `sqlite_backup_sleep seconds=54651` at `2026-10-02T03:49:09Z`. That wait targets the next 02:00 Asia/Bangkok, which was outside this window. No natural backup ran during Step 10. No duplicate backup and no scheduler error. The scheduler stayed alive.
+
+`notification_worker` logged neither disabled nor crashed. The API process did not restart.
+
+Three `POST /api/v1/agent/check-ins` responses returned HTTP 500 with SQLite `database is locked` while the photo watcher was scanning. Scheduler loggers did not record a task failure. Restart count stayed 0. The same class of lock was seen before this RFC. No evidence attributes it to `run_repeated`. It stays a separate follow-up. This closure does not change pool size or transactions.
 
 ## Context
 
@@ -256,7 +300,7 @@ Leave the five `while True` loops. Rejected. That does not finish "Retire privat
 
 ## Completion criteria
 
-This RFC is Accepted. Implementation has not started. Acceptance does not complete Phase 13.16.
+This RFC is Implemented in commit `339d15a`. Phase 13.16 and roadmap phase 6 are complete. `run_repeated` is not an interval or cron engine.
 
 Phase 13.16 does not mean every `while True` in the repository is gone. It means the five scheduler-style lifecycle functions no longer implement their own repetition. After completion, repetition may remain only as: one shared `run_repeated` loop, the `notification_worker` queue loop, WebSocket receive loops, and the realtime heartbeat. Those last three are not scheduler loops.
 
@@ -272,4 +316,4 @@ Phase 13.16 may be closed only after a later implementation step, and only when 
 - Production validation passes, including two natural intervals of each in-scope monitor at the configured values, with no duplicate task and no startup drift.
 - Documentation records the implementation and does not claim an interval or cron engine exists.
 
-Until that implementation is accepted, implemented, and validated, Phase 13.16 and roadmap phase 6 stay open.
+Those criteria are met. Phase 13.16 and roadmap phase 6 are complete. Completing them does not remove `run_notification_worker`, the notification batch drain, WebSocket receive loops, or the realtime heartbeat.
