@@ -1,10 +1,42 @@
 # RFC-0006 — Retire private loops
 
-**Status:** Accepted
+**Status:** Implemented
 **Sprint:** 13.16
 **Date:** 2026-10-01
 
-Scheduler refactor phase 6 from [refactor-scheduler.md](../refactor-scheduler.md). This RFC is the timing-extraction prerequisite inside Phase 13.16. It is not a new phase number. Implementing it does not retire lifecycle loops and does not complete Phase 13.16. A later RFC is required before any central scheduler owns repetition. [RFC-0002](RFC-0002-job-engine-execution-wrapper.md) requires phases 3–6 to have their own RFC before code changes.
+Scheduler refactor phase 6 from [refactor-scheduler.md](../refactor-scheduler.md). This RFC is the timing-extraction prerequisite inside Phase 13.16. It is not a new phase number. Implementing it does not retire lifecycle loops and does not complete Phase 13.16. A later RFC is required before any central scheduler owns repetition. [RFC-0002](RFC-0002-job-engine-execution-wrapper.md) requires phases 3–6 to have their own RFC before code changes. Implemented in commit `ec9768e`. Production validation passed. The accepted design below is unchanged.
+
+## Implementation
+
+`run_offline_monitor` remains the lifecycle loop and calls `run_offline_monitor_interval` once per pass. One helper call sleeps `alert_evaluation_interval_seconds`, then evaluates. `run_infrastructure_monitor` remains the lifecycle loop and calls `run_infrastructure_monitor_interval` once per pass. One helper call sleeps `infrastructure_refresh_seconds`, then refreshes. Neither helper loops or registers a job. The registry stays six names. `notification_worker`, `JobExecutionWrapper`, `run_backup_clock`, `run_report_clock`, and `run_photo_watcher_interval` were not changed.
+
+```text
+run_offline_monitor
+    ↓
+run_offline_monitor_interval
+    ↓
+sleep, then evaluate_offline_agents
+
+run_infrastructure_monitor
+    ↓
+run_infrastructure_monitor_interval
+    ↓
+sleep, then refresh_infrastructure
+```
+
+Test isolation for live local settings is commit `081d1f2` (`tests/api/conftest.py` only). Before deploy, focused checks passed: monitor intervals 12, JobExecutionWrapper 12, backup clock 11, report clock 21, photo watcher 38. Full backend was 429 passed, 0 failed. Ruff, format, and `git diff --check` passed.
+
+Production image `homelab-monitor-api:phase13.16-ec9768e`, id `sha256:2ed9e6b7fadaf90992d776facf60e06815274a244f0f2788828f7c0150cf3ad9`. Predeploy image `sha256:02ea247ed246d1c0865b39817b9a7608e177f04dc856d59c90f9ad637f8b1290`, tagged `homelab-monitor-api:rollback-phase13.16-rfc0006-predeploy`. API-only recreate `2026-10-01T21:02:02+07:00` through `2026-10-01T21:02:05+07:00`. Container start `2026-10-01T14:02:04Z`. API stayed healthy with restart count 0. Registry remained six jobs. Rollback was not required.
+
+Configured production intervals were 30 seconds for offline and 3600 seconds for infrastructure. Offline success ticks are silent, so two successful offline iterations were not read from logs. No offline error appeared in the first 30 seconds. The task stayed in the same process. No duplicate offline execution was seen. One contained `SQLAlchemyError` (`offline_evaluation_failed`) occurred at `2026-10-01T15:11:50Z`, long after startup. Existing handling logged it and the loop continued.
+
+Infrastructure did not refresh at startup. The first natural refresh was `2026-10-01T15:02:12Z`. The second was `2026-10-01T16:02:16Z`. Later refreshes stayed about one hour apart through `2026-10-02T01:02:47Z`. No second monitor loop was seen. QNAP monitoring stayed healthy. One contained `infrastructure_refresh_failed` at `2026-10-02T02:02:59Z` was SQLite `database is locked` while writing a photo snapshot. Existing handling logged it.
+
+`telegram_reports`, `photo_watcher`, `sqlite_backup`, and `notification_worker` stayed alive. SQLite backup completed naturally at `2026-10-01T19:00:05Z` as `homelab-monitor-2026-10-02-020000.sqlite3.gz`.
+
+Production validation also saw contained SQLite contention: a QueuePool timeout around `2026-10-01T15:11–15:12Z` (offline monitor, telegram report tick, and photo watcher) and the lock above. Existing error boundaries recovered without an API restart. No causal link to RFC-0006 was established. That contention is a follow-up candidate only. It is not Phase 13.16 scope.
+
+RFC-0006 implementation is complete. Phase 13.16 is not complete. `run_offline_monitor`, `run_infrastructure_monitor`, `run_telegram_reports`, `run_photo_watcher`, and `run_sqlite_backup` still own lifecycle repetition. This RFC extracted the remaining monitor timing. It did not move that repetition to a central scheduler. Lifecycle-loop retirement stays future work under a separate RFC. That RFC is not created here.
 
 ## Context
 
