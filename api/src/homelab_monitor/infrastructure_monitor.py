@@ -8,6 +8,7 @@ from homelab_monitor.ops_history import record_backup_snapshot, record_photo_sna
 from homelab_monitor.photo_stats import build_photo_stats
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings, get_settings
+from homelab_monitor.sqlite_diagnostics import writer_operation
 
 logger = logging.getLogger("homelab_monitor.infrastructure")
 
@@ -36,11 +37,12 @@ def refresh_infrastructure() -> None:
     service = get_infrastructure_service()
     snapshots = service.refresh()
     by_name = {item.service: item for item in snapshots}
-    if not get_settings().infrastructure_mock:
-        record_photo_snapshot(build_photo_stats(by_name))
-    backup = by_name.get("backup")
-    if backup is not None:
-        record_backup_snapshot(backup)
+    with writer_operation("infrastructure_snapshot"):
+        if not get_settings().infrastructure_mock:
+            record_photo_snapshot(build_photo_stats(by_name))
+        backup = by_name.get("backup")
+        if backup is not None:
+            record_backup_snapshot(backup)
     qnap = by_name.get("qnap")
     if qnap is not None:
         try:

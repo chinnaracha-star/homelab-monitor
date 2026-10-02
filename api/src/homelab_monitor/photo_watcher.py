@@ -20,6 +20,7 @@ from homelab_monitor.photo_folders import inspect_watch_folder
 from homelab_monitor.photo_telegram import format_new_photo_message
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
+from homelab_monitor.sqlite_diagnostics import writer_operation
 from homelab_monitor.telegram import TelegramNotificationError, TelegramNotifier
 
 logger = logging.getLogger("homelab_monitor.photo_watcher")
@@ -403,18 +404,19 @@ class PhotoWatcherService:
             except Exception:
                 logger.exception("scan_ended reason=folder_exception folder=%s", watch_root)
         self.indexed_files = scanned
-        try:
-            prune_started = time.perf_counter()
-            repo.prune(max_events=config.max_events, auto_delete_days=config.auto_delete_days)
-            self._cycle_db_ms += (time.perf_counter() - prune_started) * 1000
-        except Exception:
-            logger.exception("photo_watcher_prune_failed")
-        commit_started = time.perf_counter()
-        if created:
-            db.commit()
-            hub.notify_ingest(reason="photo_monitor", agent_id=None, alerts_changed=False)
-        else:
-            db.commit()
+        with writer_operation("photo_prune"):
+            try:
+                prune_started = time.perf_counter()
+                repo.prune(max_events=config.max_events, auto_delete_days=config.auto_delete_days)
+                self._cycle_db_ms += (time.perf_counter() - prune_started) * 1000
+            except Exception:
+                logger.exception("photo_watcher_prune_failed")
+            commit_started = time.perf_counter()
+            if created:
+                db.commit()
+                hub.notify_ingest(reason="photo_monitor", agent_id=None, alerts_changed=False)
+            else:
+                db.commit()
         telegram_ok += self.flush_photo_notifications(
             db, repo, send_text=send_text, now=datetime.now(UTC)
         )
@@ -643,16 +645,17 @@ class PhotoWatcherService:
         logger.info("insert_begin folder=%s file=%s", folder, filename)
         try:
             insert_started = time.perf_counter()
-            with db.begin_nested():
-                event = repo.add(
-                    filename=filename,
-                    folder=folder,
-                    size_bytes=size_bytes,
-                    created_at=created_at,
-                    telegram_sent=False,
-                )
-            self._cycle_db_ms += (time.perf_counter() - insert_started) * 1000
-            db.commit()
+            with writer_operation("photo_event_insert"):
+                with db.begin_nested():
+                    event = repo.add(
+                        filename=filename,
+                        folder=folder,
+                        size_bytes=size_bytes,
+                        created_at=created_at,
+                        telegram_sent=False,
+                    )
+                self._cycle_db_ms += (time.perf_counter() - insert_started) * 1000
+                db.commit()
         except IntegrityError:
             _skip("repo.exists=True", path, reason="integrity_error")
             seen.add(key)
@@ -760,7 +763,8 @@ class PhotoWatcherService:
             messages += 1
             self.telegram_ok_total += 1
             self.last_successful_telegram = datetime.now(UTC)
-        repo.mark_telegram_sent(sent_ids)
+        with writer_operation("photo_notification_flush"):
+            repo.mark_telegram_sent(sent_ids)
         sent = set(sent_ids)
         self._pending = [item for item in self._pending if item.event_id not in sent]
         if not self._pending:

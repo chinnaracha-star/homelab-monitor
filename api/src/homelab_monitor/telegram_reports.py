@@ -30,6 +30,7 @@ from homelab_monitor.photo_events import PhotoEventRepository
 from homelab_monitor.qnap_disks import format_qnap_report_section
 from homelab_monitor.settings import Settings, get_settings
 from homelab_monitor.sqlite_backup import sqlite_status_payload
+from homelab_monitor.sqlite_diagnostics import writer_operation
 from homelab_monitor.telegram_links import resolve_dashboard_url
 from homelab_monitor.trends import TrendService
 
@@ -811,7 +812,7 @@ def process_due_reports(
 
 
 def tick_telegram_reports(settings: Settings, *, now: datetime | None = None) -> None:
-    with Session(get_engine()) as db:
+    with writer_operation("telegram_report_update"), Session(get_engine()) as db:
         process_due_reports(db, settings, now=now)
 
 

@@ -24,6 +24,7 @@ from homelab_monitor.notification_queue import (
 from homelab_monitor.notifications.service import NotificationService
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
+from homelab_monitor.sqlite_diagnostics import writer_operation
 
 logger = logging.getLogger("homelab_monitor.notification_worker")
 
@@ -172,7 +173,7 @@ class NotificationWorker:
 
 def _record_delivery(job: NotificationJob, *, recipient: str, error: str) -> None:
     try:
-        with Session(get_engine()) as db:
+        with writer_operation("notification_worker_update"), Session(get_engine()) as db:
             db.add(
                 Notification(
                     alert_id=None,

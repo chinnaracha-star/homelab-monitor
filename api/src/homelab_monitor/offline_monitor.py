@@ -10,6 +10,7 @@ from homelab_monitor.database import get_engine
 from homelab_monitor.jobs.repetition import run_repeated
 from homelab_monitor.realtime import hub
 from homelab_monitor.settings import Settings
+from homelab_monitor.sqlite_diagnostics import writer_operation
 
 logger = logging.getLogger("homelab_monitor.offline_monitor")
 
@@ -35,7 +36,7 @@ async def run_offline_monitor(settings: Settings) -> None:
 
 
 def evaluate_offline_agents(settings: Settings) -> None:
-    with Session(get_engine()) as db:
+    with writer_operation("offline_alert_update"), Session(get_engine()) as db:
         events, status_changed = AlertEngine(settings).evaluate_offline_agents(db)
         db.commit()
     if events or status_changed:

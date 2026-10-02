@@ -1,12 +1,13 @@
 import hashlib
 import json
 import secrets
+import time
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from homelab_monitor.alert_engine import AlertEngine
@@ -26,6 +27,11 @@ from homelab_monitor.schemas import (
 )
 from homelab_monitor.security import create_agent_token, get_current_agent, hash_agent_token
 from homelab_monitor.settings import Settings, get_settings
+from homelab_monitor.sqlite_diagnostics import (
+    is_database_locked,
+    log_sqlite_busy,
+    writer_operation,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["agents"])
 
@@ -90,12 +96,19 @@ def check_in(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AgentControlResponse:
-    observed_at = datetime.now(UTC)
-    agent.version = payload.version
-    agent.last_seen_at = observed_at
-    agent.status = "online"
-    AlertEngine(settings).mark_agent_online(db, agent, observed_at)
-    db.commit()
+    started = time.monotonic()
+    with writer_operation("agent_check_in"):
+        try:
+            observed_at = datetime.now(UTC)
+            agent.version = payload.version
+            agent.last_seen_at = observed_at
+            agent.status = "online"
+            AlertEngine(settings).mark_agent_online(db, agent, observed_at)
+            db.commit()
+        except OperationalError as error:
+            if is_database_locked(error):
+                log_sqlite_busy(error, operation="agent_check_in", session=db, started=started)
+            raise
     db.refresh(agent)
     hub.notify_ingest(reason="check_in", agent_id=agent.id)
     return build_agent_control(agent, settings, payload.config_revision)
@@ -133,11 +146,12 @@ def upload_report(
                 "report_id_conflict",
                 "This report ID was already used with different content",
             )
-        observed_at = datetime.now(UTC)
-        agent.last_seen_at = observed_at
-        agent.status = "online"
-        AlertEngine(settings).mark_agent_online(db, agent, observed_at)
-        db.commit()
+        with writer_operation("metric_report_ingest"):
+            observed_at = datetime.now(UTC)
+            agent.last_seen_at = observed_at
+            agent.status = "online"
+            AlertEngine(settings).mark_agent_online(db, agent, observed_at)
+            db.commit()
         hub.notify_ingest(reason="report_duplicate", agent_id=agent.id)
         return MetricReportResponse(
             accepted=True,
@@ -146,34 +160,35 @@ def upload_report(
             control=build_agent_control(agent, settings, payload.config_revision),
         )
 
-    db.add(
-        MetricReport(
-            agent_id=agent.id,
-            report_id=payload.report_id,
-            schema_version=payload.schema_version,
-            content_hash=content_hash,
-            observed_at=payload.observed_at,
-            payload=report_payload,
+    with writer_operation("metric_report_ingest"):
+        db.add(
+            MetricReport(
+                agent_id=agent.id,
+                report_id=payload.report_id,
+                schema_version=payload.schema_version,
+                content_hash=content_hash,
+                observed_at=payload.observed_at,
+                payload=report_payload,
+            )
         )
-    )
-    observed_at = datetime.now(UTC)
-    agent.last_seen_at = observed_at
-    agent.status = "online"
-    alert_engine = AlertEngine(settings)
-    alert_engine.mark_agent_online(db, agent, observed_at)
-    alert_engine.evaluate_report(
-        db,
-        agent,
-        report_payload,
-        payload.observed_at,
-    )
-    record_metric_history(
-        db,
-        agent_id=agent.id,
-        payload=report_payload,
-        observed_at=payload.observed_at,
-    )
-    db.commit()
+        observed_at = datetime.now(UTC)
+        agent.last_seen_at = observed_at
+        agent.status = "online"
+        alert_engine = AlertEngine(settings)
+        alert_engine.mark_agent_online(db, agent, observed_at)
+        alert_engine.evaluate_report(
+            db,
+            agent,
+            report_payload,
+            payload.observed_at,
+        )
+        record_metric_history(
+            db,
+            agent_id=agent.id,
+            payload=report_payload,
+            observed_at=payload.observed_at,
+        )
+        db.commit()
     db.refresh(agent)
     hub.notify_ingest(reason="report", agent_id=agent.id, alerts_changed=True)
 
